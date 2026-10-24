@@ -9,6 +9,8 @@ param(
   [string]$Ip = '192.168.1.164',
   [string]$Mac = 'd4:f9:21:c9:79:23',
   [string]$VideoId = 'X4nGU4DZUwE',
+  # Roku can't set an exact volume, only press up/down, so: down to 0, then up this many times. -1 skips it.
+  [int]$Volume = 70,
   [string]$Log = (Join-Path (Split-Path -Parent $PSScriptRoot) 'data\roku-wake.log')
 )
 
@@ -70,9 +72,17 @@ try {
   # Launching YouTube also turns the TV on if it's still in standby.
   $r = Invoke-WebRequest -UseBasicParsing -Method Post "http://${ip}:8060/launch/837?contentId=$VideoId&mediaType=live" -TimeoutSec 10
   Write-Log "Asked YouTube to play $VideoId (HTTP $($r.StatusCode))"
-  Start-Sleep -Seconds 20
+  Start-Sleep -Seconds 12
   $after = Get-RokuInfo $ip
   Write-Log ("Power after launch: " + $after.'device-info'.'power-mode')
+
+  if ($Volume -ge 0) {
+    $fails = 0
+    $press = { param($key) try { [void](Invoke-WebRequest -UseBasicParsing -Method Post "http://${ip}:8060/keypress/$key" -TimeoutSec 3) } catch { $script:fails++ }; Start-Sleep -Milliseconds 150 }
+    for ($i = 0; $i -lt 100; $i++) { & $press 'VolumeDown' }
+    for ($i = 0; $i -lt $Volume; $i++) { & $press 'VolumeUp' }
+    Write-Log "Set volume to $Volume (down 100, up $Volume; $fails presses failed)"
+  }
   exit 0
 } catch {
   Write-Log "Failed: $($_.Exception.Message)"
