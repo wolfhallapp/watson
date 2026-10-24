@@ -124,3 +124,24 @@ test('listening log records starts, ends, finals and what was sent', async () =>
   assert.ok(restart && typeof restart.gapMs === 'number');
   v.setEnabled(false);
 });
+
+test('a long sentence after "Watson" alone is not dropped when the wake window runs out', async () => {
+  const { v, sent } = make();
+  say('Watson');
+  v.awakeUntil = Date.now() + 40; // short window for the test
+  for (let i = 0; i < 5; i++) { say('it says speech recognition needs', false); await wait(20); } // 100 ms of talking
+  say('it says speech recognition needs an internet connection');
+  await wait(90);
+  assert.deepEqual(sent, ['it says speech recognition needs an internet connection']);
+});
+
+test('one network hiccup stays quiet; three in a row are reported', () => {
+  const errors = [];
+  const v = new Voice({ onCommand: () => {}, onState: () => {}, onError: (m) => errors.push(m) });
+  v.setEnabled(true);
+  rec.onerror({ error: 'network' });
+  assert.equal(errors.length, 0);
+  rec.onerror({ error: 'network' }); rec.onerror({ error: 'network' });
+  assert.equal(errors.length, 1);
+  v.setEnabled(false);
+});

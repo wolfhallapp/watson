@@ -103,7 +103,10 @@ export class Voice {
       }
       this.lastInterim = interim.trim();
       if (this.lastInterim) {
+        this.netErrors = 0;
         if (this.heard) this.#waitForPause(); // still talking: keep collecting
+        // Still talking after "Watson": keep the wake window open until the sentence is finished.
+        else if (this.isAwake()) this.awakeUntil = Math.max(this.awakeUntil, Date.now() + this.endPauseMs + 1000);
         this.h.onInterim?.(this.heard ? this.heard + ' ' + this.lastInterim : this.lastInterim);
         // Barge-in: start talking over Watson to cut it off.
         if (this.speaking && this.bargeIn && STOP_SPEAKING.test(this.lastInterim)) this.stopSpeaking();
@@ -115,7 +118,10 @@ export class Voice {
         this.enabled = false;
         this.h.onError?.('Microphone access was blocked. Allow the microphone for this page in the browser\'s address bar, then switch the mic back on.');
       } else if (e.error === 'network') {
-        this.h.onError?.('Speech recognition needs an internet connection (the browser sends audio to its speech service).');
+        // The browser's speech service (Google's, in Chrome) drops a session now and then and
+        // recovers on the next restart. Only say something if it keeps failing.
+        this.netErrors = (this.netErrors || 0) + 1;
+        if (this.netErrors === 3) this.h.onError?.('Speech recognition can\'t reach the browser\'s speech service right now. Watson keeps retrying; check the internet if this keeps happening.');
         this.restartDelay = Math.min(this.restartDelay * 2, 8000);
       } else if (e.error === 'audio-capture') {
         this.h.onError?.('No microphone was found.');
@@ -156,6 +162,7 @@ export class Voice {
 
   #final(text) {
     if (!text) return;
+    this.netErrors = 0;
     this.#diag('final', { text });
     if (this.ptt || this.flushOnEnd) {
       const m = mergePiece(this.pttBuffer, this.pttLast, text);
