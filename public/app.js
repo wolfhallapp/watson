@@ -15,8 +15,9 @@ const hashToken = hashParams.get('token');
 if (hashToken) { token = hashToken; store.set('token', token); }
 if (location.hash) history.replaceState(null, '', location.pathname);
 
-const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 1.8, micOn: false }, store.get('settings', {}));
+const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, micOn: false }, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
+if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); } // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
 if (hashParams.get('listen') === '1') { settings.mode = 'handsfree'; settings.micOn = true; saveSettings(); }
 
@@ -498,7 +499,7 @@ $('set-voice').onchange = (e) => { settings.voice = voice.voiceName = e.target.v
 $('set-rate').oninput = (e) => { settings.rate = voice.rate = Number(e.target.value); $('rate-out').textContent = settings.rate.toFixed(2) + '×'; saveSettings(); };
 $('set-follow').onchange = (e) => { settings.follow = Math.max(0, Math.min(30, Number(e.target.value) || 0)); voice.followUpMs = settings.follow * 1000; saveSettings(); };
 $('set-settle').onchange = (e) => { settings.settle = Math.max(0, Math.min(4, Number(e.target.value) || 0)); voice.settleMs = settings.settle * 1000; saveSettings(); };
-$('set-endpause').onchange = (e) => { settings.endPause = Math.max(0.5, Math.min(5, Number(e.target.value) || 1.8)); voice.endPauseMs = settings.endPause * 1000; saveSettings(); };
+$('set-endpause').onchange = (e) => { settings.endPause = Math.max(0.5, Math.min(5, Number(e.target.value) || 3)); voice.endPauseMs = settings.endPause * 1000; saveSettings(); };
 $('test-voice').onclick = () => voice.speak('Good day. Watson here, ready when you are.', { wakeAfter: false });
 $('btn-pair').onclick = () => send({ type: 'pair_start' });
 $('btn-logout').onclick =() => { store.del('token'); token = ''; ws?.close(); location.reload(); };

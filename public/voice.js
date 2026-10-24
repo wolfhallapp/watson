@@ -51,7 +51,7 @@ export class Voice {
     this.micReleasedAt = 0;
     // Phone browsers end a "final" result at every short pause, which cut sentences into
     // pieces. Hands-free commands are collected until this much silence, then sent.
-    this.endPauseMs = 1800;
+    this.endPauseMs = 3000;
     this.heard = ''; // command collected so far
     this.heardTimer = null;
     this.audio = hasWindow && typeof Audio !== 'undefined' ? new Audio() : null;
