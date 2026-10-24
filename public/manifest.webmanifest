@@ -1,0 +1,12 @@
+{
+  "name": "Watson",
+  "short_name": "Watson",
+  "description": "Your voice-controlled assistant and coding partner",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1320",
+  "theme_color": "#0d1320",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
