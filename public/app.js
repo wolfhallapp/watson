@@ -15,7 +15,7 @@ const hashToken = hashParams.get('token');
 if (hashToken) { token = hashToken; store.set('token', token); }
 if (location.hash) history.replaceState(null, '', location.pathname);
 
-const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, micOn: false }, store.get('settings', {}));
+const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, headset: true, micOn: false }, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
 if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); } // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
@@ -205,6 +205,7 @@ const voice = new Voice({
   onError: (msg) => { addMsg('error', msg); renderState(); },
   onVoices: () => fillVoices(),
   onCloudOff: (msg) => addMsg('system', msg),
+  onDiag: (e) => logDiag(e),
 });
 voice.mode = settings.mode;
 voice.speakEnabled = settings.speak;
@@ -279,6 +280,20 @@ $('ap-no').onclick = () => approvals[0] && answerApproval(approvals[0].id, false
 $('ap-always').onclick = () => approvals[0] && answerApproval(approvals[0].id, true, true);
 
 // ── Server connection ──
+// Listening log: speech-recognition events go to the server in small batches (data/voice-log.jsonl),
+// so a cut-off sentence can be explained afterwards.
+const diagQueue = [];
+function logDiag(e) {
+  diagQueue.push(e);
+  if (diagQueue.length >= 25) flushDiag();
+}
+function flushDiag() {
+  if (!diagQueue.length || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'voicelog', events: diagQueue.splice(0, 200) }));
+}
+setInterval(flushDiag, 10000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDiag(); });
+
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg)); return true; }
   addMsg('error', 'Not connected to Watson. Is it running?');
@@ -412,6 +427,7 @@ function unlockAudio() {
   try { if (speechSupported.speak) speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch {}
   try { audioCtx = audioCtx || new AudioContext(); audioCtx.resume(); } catch {}
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  if (settings.headset) setHeadsetButton(true);
 }
 document.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
 document.addEventListener('keydown', unlockAudio, { once: true, capture: true });
@@ -441,6 +457,43 @@ orb.addEventListener('pointerup', () => {
 });
 orb.addEventListener('pointercancel', () => { tapToggle = false; voice.pttEnd(); });
 orb.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Headset button: play/pause on Bluetooth headphones works like tapping the orb (press to
+// start talking, press again to send). Browsers only pass media keys to a page that is
+// playing audio, so a silent loop keeps Watson's media session alive. If another app (say,
+// music) played something more recently, that app gets the button instead.
+let keepAlive = null;
+function silentWavUrl(seconds = 2, rate = 8000) {
+  const n = seconds * rate, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+function headsetPress(action) {
+  logDiag({ ev: 'headset', action });
+  keepAlive?.play().catch(() => {}); // stay the active media session
+  if (tapToggle) { tapToggle = false; voice.pttEnd(); beep(523, 90, 0.06); }
+  else { voice.pttStart(); tapToggle = voice.ptt; if (tapToggle) beep(988, 90, 0.06); }
+  renderState();
+}
+function setHeadsetButton(on) {
+  if (!('mediaSession' in navigator)) return;
+  const actions = ['play', 'pause', 'togglemicrophone'];
+  if (!on) {
+    keepAlive?.pause();
+    for (const a of actions) { try { navigator.mediaSession.setActionHandler(a, null); } catch {} }
+    return;
+  }
+  if (!keepAlive) { keepAlive = new Audio(silentWavUrl()); keepAlive.loop = true; }
+  keepAlive.play().catch(() => {}); // needs a tap or key press first; unlockAudio retries
+  for (const a of actions) { try { navigator.mediaSession.setActionHandler(a, () => headsetPress(a)); } catch {} }
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: 'Watson', artist: 'Press play/pause on your headset to talk' });
+    navigator.mediaSession.playbackState = 'playing';
+  } catch {}
+}
 
 // Keyboard: hold Space to talk, Esc to stop.
 const typingTarget = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
@@ -489,6 +542,7 @@ $('btn-settings').onclick = () => {
   $('set-follow').value = settings.follow;
   $('set-settle').value = settings.settle;
   $('set-endpause').value = settings.endPause;
+  $('set-headset').checked = settings.headset;
   fillVoices();
   $('settings').showModal();
 };
@@ -500,6 +554,7 @@ $('set-rate').oninput = (e) => { settings.rate = voice.rate = Number(e.target.va
 $('set-follow').onchange = (e) => { settings.follow = Math.max(0, Math.min(30, Number(e.target.value) || 0)); voice.followUpMs = settings.follow * 1000; saveSettings(); };
 $('set-settle').onchange = (e) => { settings.settle = Math.max(0, Math.min(4, Number(e.target.value) || 0)); voice.settleMs = settings.settle * 1000; saveSettings(); };
 $('set-endpause').onchange = (e) => { settings.endPause = Math.max(0.5, Math.min(5, Number(e.target.value) || 3)); voice.endPauseMs = settings.endPause * 1000; saveSettings(); };
+$('set-headset').onchange = (e) => { settings.headset = e.target.checked; setHeadsetButton(settings.headset); saveSettings(); };
 $('test-voice').onclick = () => voice.speak('Good day. Watson here, ready when you are.', { wakeAfter: false });
 $('btn-pair').onclick = () => send({ type: 'pair_start' });
 $('btn-logout').onclick =() => { store.del('token'); token = ''; ws?.close(); location.reload(); };
@@ -508,3 +563,4 @@ $('btn-logout').onclick =() => { store.del('token'); token = ''; ws?.close(); lo
 renderState();
 connect();
 if (settings.micOn && settings.mode === 'handsfree') voice.setEnabled(true);
+if (settings.headset) setHeadsetButton(true); // may wait for the first tap if the browser blocks autoplay

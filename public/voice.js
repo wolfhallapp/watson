@@ -35,9 +35,12 @@ export class Voice {
     this.awakeUntil = 0;
     this.ptt = false; // holding / toggled push-to-talk
     this.pttBuffer = '';
+    this.pttLast = ''; // last piece merged into pttBuffer (see mergePiece)
     this.lastInterim = '';
     this.flushOnEnd = false;
     this.speaking = false;
+    this.startedAt = 0; // when the current recognition session started / the last one ended (listening log)
+    this.endedAt = 0;
     this.queue = [];
     this.restartDelay = 250;
     this.awakeTimer = null;
@@ -107,6 +110,7 @@ export class Voice {
       }
     };
     r.onerror = (e) => {
+      this.#diag('error', { code: e.error });
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         this.enabled = false;
         this.h.onError?.('Microphone access was blocked. Allow the microphone for this page in the browser\'s address bar, then switch the mic back on.');
@@ -121,11 +125,18 @@ export class Voice {
     };
     r.onend = () => {
       this.running = false;
+      this.#diag('end', { durMs: this.startedAt ? Date.now() - this.startedAt : null, ptt: this.ptt, collecting: !!this.heard });
+      this.endedAt = Date.now();
       if (this.flushOnEnd) this.#flushPtt();
       if (this.#shouldListen()) setTimeout(() => this.#startRecognition(), this.restartDelay);
       this.#emitState();
     };
-    r.onstart = () => { this.running = true; this.restartDelay = 250; this.#emitState(); };
+    r.onstart = () => {
+      this.running = true; this.restartDelay = 250;
+      this.startedAt = Date.now();
+      this.#diag('start', { gapMs: this.endedAt ? this.startedAt - this.endedAt : null, ptt: this.ptt, collecting: !!this.heard });
+      this.#emitState();
+    };
     this.r = r;
   }
 
@@ -145,7 +156,12 @@ export class Voice {
 
   #final(text) {
     if (!text) return;
-    if (this.ptt || this.flushOnEnd) { this.pttBuffer += (this.pttBuffer ? ' ' : '') + text; this.lastInterim = ''; return; }
+    this.#diag('final', { text });
+    if (this.ptt || this.flushOnEnd) {
+      const m = mergePiece(this.pttBuffer, this.pttLast, text);
+      this.pttBuffer = m.buf; this.pttLast = m.last; this.lastInterim = '';
+      return;
+    }
     if (this.speaking) {
       if (STOP_SPEAKING.test(text)) { this.stopSpeaking(); this.h.onStopWord?.(text); }
       return; // otherwise it's probably Watson hearing itself
@@ -160,18 +176,14 @@ export class Voice {
       return;
     }
     if (this.isAwake()) { this.#collect(text); return; }
+    this.#diag('ignored', { text });
     this.h.onIgnored?.(text);
   }
+  #diag(ev, data = {}) { this.h.onDiag?.({ t: Date.now(), ev, mode: this.mode, ...data }); }
   #collect(text) {
-    // Android re-sends the whole growing sentence as each new "final" ("I need", "Watson I
-    // need to", ...). A piece that extends the previous one replaces it; a repeat is dropped.
-    const piece = text.replace(new RegExp('^' + WAKE.source, 'i'), '').trim() || text;
-    const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-    const last = this.lastPiece || '';
-    if (last && norm(piece).startsWith(norm(last))) this.heard = this.heard.slice(0, this.heard.length - last.length) + piece;
-    else if (last && norm(last).startsWith(norm(piece))) return this.#waitForPause();
-    else this.heard += (this.heard ? ' ' : '') + piece;
-    this.lastPiece = piece;
+    const m = mergePiece(this.heard, this.lastPiece, text);
+    this.heard = m.buf;
+    this.lastPiece = m.last;
     this.h.onInterim?.(this.heard);
     this.#waitForPause();
     this.#emitState();
@@ -186,7 +198,7 @@ export class Voice {
     this.heard = '';
     this.lastPiece = '';
     this.sleep();
-    if (cmd) this.h.onCommand?.(cmd);
+    if (cmd) { this.#diag('sent', { via: 'pause', text: cmd }); this.h.onCommand?.(cmd); }
   }
 
   /** Switch the always-on mic on or off (hands-free mode). */
@@ -209,6 +221,7 @@ export class Voice {
     this.ptt = true;
     clearTimeout(this.heardTimer);
     this.pttBuffer = this.heard; // keep anything said hands-free just before
+    this.pttLast = this.lastPiece;
     this.heard = '';
     this.lastPiece = '';
     this.lastInterim = '';
@@ -228,9 +241,15 @@ export class Voice {
   #flushPtt() {
     if (!this.flushOnEnd) return;
     this.flushOnEnd = false;
-    const text = (this.pttBuffer || this.lastInterim).trim();
-    this.pttBuffer = ''; this.lastInterim = '';
-    if (text) this.h.onCommand?.(text.replace(WAKE, (s, w, i) => (i === 0 ? '' : s)).trim() || text);
+    // Words still unconfirmed when you tapped to send are kept too, not just the confirmed ones.
+    const all = this.lastInterim ? mergePiece(this.pttBuffer, this.pttLast, this.lastInterim).buf : this.pttBuffer;
+    const text = all.trim();
+    this.pttBuffer = ''; this.pttLast = ''; this.lastInterim = '';
+    if (text) {
+      const cmd = text.replace(WAKE, (s, w, i) => (i === 0 ? '' : s)).trim() || text;
+      this.#diag('sent', { via: 'tap', text: cmd });
+      this.h.onCommand?.(cmd);
+    }
     if (this.#shouldListen()) setTimeout(() => this.#startRecognition(), 200);
   }
 
@@ -350,6 +369,19 @@ export class Voice {
     if (speechSupported.speak) speechSynthesis.cancel();
     if (this.speaking) { this.speaking = false; this.wake(); this.#startRecognition(); this.#emitState(); }
   }
+}
+
+/**
+ * Add a newly recognized piece of speech to what's been heard so far. Android re-sends the
+ * whole growing sentence as each new result ("I need", "Watson I need to", ...): a piece that
+ * extends the previous one replaces it, and a repeat is dropped. Returns { buf, last }.
+ */
+export function mergePiece(buf = '', last = '', text = '') {
+  const piece = text.replace(new RegExp('^' + WAKE.source, 'i'), '').trim() || text.trim();
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  if (last && norm(piece).startsWith(norm(last))) return { buf: buf.slice(0, buf.length - last.length) + piece, last: piece };
+  if (last && norm(last).startsWith(norm(piece))) return { buf, last };
+  return { buf: buf + (buf ? ' ' : '') + piece, last: piece };
 }
 
 /** If the text contains the wake word, returns { command } (empty when it was just "Watson"). */

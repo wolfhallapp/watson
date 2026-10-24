@@ -140,6 +140,19 @@ function phoneUrl() {
   } catch { return null; }
 }
 
+// Listening log: what the browser's speech recognition did (starts, stops, gaps, errors,
+// what it heard), so a cut-off sentence can be explained afterwards. data/ is never pushed.
+const VOICE_LOG = path.join(DATA_DIR, 'voice-log.jsonl');
+function saveVoiceLog(clientId, userAgent, events) {
+  if (!Array.isArray(events) || !events.length) return;
+  const device = /Android/i.test(userAgent || '') ? 'android' : /iPhone|iPad/i.test(userAgent || '') ? 'ios' : 'pc';
+  const lines = events.slice(0, 200).map((e) => JSON.stringify({ client: clientId, device, ...e }).slice(0, 2000)).join('\n') + '\n';
+  try {
+    if (fs.existsSync(VOICE_LOG) && fs.statSync(VOICE_LOG).size > 2_000_000) fs.renameSync(VOICE_LOG, VOICE_LOG + '.1');
+    fs.appendFileSync(VOICE_LOG, lines);
+  } catch (e) { console.warn('  Voice log:', e.message); }
+}
+
 wss.on('connection', (ws, req) => {
   let authed = false;
   ws.clientId = null;
@@ -185,6 +198,7 @@ wss.on('connection', (ws, req) => {
       case 'approve': answerApproval(msg.id, msg.approved, msg.always); break;
       case 'reminders': ws.send(JSON.stringify({ type: 'reminders', reminders: reminders.all().filter((r) => !r.fired) })); break;
       case 'ping': ws.send('{"type":"pong"}'); break;
+      case 'voicelog': saveVoiceLog(ws.clientId, req.headers['user-agent'], msg.events); break;
       case 'pair_start': {
         const p = startPairing();
         ws.send(JSON.stringify({ type: 'pairing', code: p.code, expires: new Date(p.expires).toISOString(), phoneUrl: phoneUrl() }));
