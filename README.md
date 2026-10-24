@@ -8,6 +8,15 @@ Double-click **`Watson.cmd`** in this folder. It starts Watson in a minimized WS
 
 To stop Watson, close that minimized window or press Ctrl+C in it.
 
+### Always on
+Watson starts by itself when you log in to Windows. It opens its own window with the mic on, listening for "Watson", and keeps listening while that window is minimized or covered. If Watson crashes, it restarts itself.
+- Watson's window uses its own browser profile. The first time, allow the microphone when the browser asks.
+- If you close Watson's window, it stops listening. Double-click `Watson.cmd` to bring it back.
+- To stop starting at login: `powershell -ExecutionPolicy Bypass -File scripts\install-startup.ps1 -Remove`. Run it without `-Remove` to turn it back on.
+
+### GitHub and the knowledge folder
+Watson's code is a git repo, and `knowledge/` holds anything you want Watson to know. Add or edit files there on this PC or on GitHub. Watson pulls from GitHub each time it starts, and before each request it checks for new or changed knowledge files and Claude Code memory notes. See `knowledge/README.md`. Never put passwords or card numbers in it. `.env` and `data/` (token, history, memory, backups) are never committed.
+
 ## Talking to Watson
 
 | Do this | What happens |
