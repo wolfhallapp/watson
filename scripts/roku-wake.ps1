@@ -52,13 +52,14 @@ try {
   Write-Log "Waking $Name"
   for ($n = 0; $n -lt 3; $n++) { Send-WakePacket; Start-Sleep -Milliseconds 500 }
 
-  # Wait up to 90 seconds for the TV to answer and report it's on.
+  # Wait up to 90 seconds for the TV to answer. In standby ("Ready") it still answers, and the
+  # launch below turns it on (tested 2026-10-24), so there's no need to wait for "PowerOn".
   $ip = $null; $mode = ''
   for ($t = 0; $t -lt 45; $t++) {
     if (-not $ip) { $ip = Find-Roku }
     if ($ip) {
       $info = Get-RokuInfo $ip
-      if ($info) { $mode = $info.'device-info'.'power-mode'; if ($mode -eq 'PowerOn') { break } }
+      if ($info) { $mode = $info.'device-info'.'power-mode'; break }
     }
     if ($t % 5 -eq 4) { Send-WakePacket }
     Start-Sleep -Seconds 2
