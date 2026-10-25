@@ -89,7 +89,7 @@ export function createWatsonTools(send, currentSessionId = () => null) {
       ),
       tool(
         'wolf_hall',
-        'Read live data from the Wolf Hall budget app\'s worker with a GET request, for quick budget answers. Useful paths: /pool (money in the pool), /upcoming (bills coming up), /bills2 (bills with paid status), /savings (goals), /credit-accounts (cards), /payday-helper, /notifications/needs-attention, /week-budget?offset=-1 (last week), /health (version). Only GET; this tool can never pay, log or change anything. Two paths do write to Notion and will stop for Horace\'s yes: /forecast (rewrites the Forecast Snapshot) and /week-budget for the current week (writes rollover balances). Check your memory notes for hazards before asking for those.',
+        'Read live data from the Wolf Hall budget app\'s worker with a GET request, for quick budget answers. Useful paths: /pool (money in the pool), /upcoming (bills coming up), /bills2 (bills with paid status), /savings (goals), /credit-accounts (cards), /payday-helper, /notifications/needs-attention, /week-budget?offset=-1 (last week), /gambling/bonus-run (daily free casino bonuses: ready now, streaks, SC collected), /health (version). Only GET; this tool can never pay, log or change anything. Two paths do write to Notion and will stop for Horace\'s yes: /forecast (rewrites the Forecast Snapshot) and /week-budget for the current week (writes rollover balances). Check your memory notes for hazards before asking for those.',
         { path: z.string().describe('Path with optional query string, e.g. /upcoming or /week-budget?offset=-1') },
         async ({ path: p }) => {
           try {
