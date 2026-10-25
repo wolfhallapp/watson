@@ -12,6 +12,7 @@ import { startReminderLoop } from './tools.js';
 import { history, reminders, state } from './store.js';
 import { listVoices, synthesize, ttsEnabled } from './tts.js';
 import { windowsNotify } from './notify.js';
+import { startRoutines } from './routines.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -220,6 +221,8 @@ startReminderLoop((r) => {
   broadcast({ type: 'reminder', id: r.id, text: r.text });
   return true;
 });
+
+startRoutines(agent);
 
 server.listen(config.port, config.host, () => {
   console.log(`\n  Watson is listening on http://localhost:${config.port}`);

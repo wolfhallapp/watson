@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { memory, reminders, state } from './store.js';
-import { claudeMemories, searchSessions, workerGet, workerGetWrites } from './knowledge.js';
+import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling } from './knowledge.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
@@ -98,6 +98,55 @@ export function createWatsonTools(send, currentSessionId = () => null) {
             return { ...text(`HTTP ${status}${workerGetWrites(p) ? ' (this call also wrote to Notion)' : ''}\n${shown}`), ...(status >= 400 ? { isError: true } : {}) };
           } catch (e) {
             return { ...text(`Could not reach the worker: ${e.message}`), isError: true };
+          }
+        },
+      ),
+      tool(
+        'casino',
+        'Update Horace\'s casino Bonus Run in the Wolf Hall app (Gambling screen). Actions: '
+          + 'claim {site} = he collected that site\'s daily bonus; '
+          + 'ten_plus {site, on} = the site\'s balance passed 10 SC (on:true) or was played down (on:false); '
+          + 'play_run {results:[{site, won}]} = he did 10 spins at 1 SC on each listed site and won that many SC (this also takes them off 10+); '
+          + 'add_offers {offers:[{site, what, expires?, link?, emailId?, notes?}]} = truly free (no purchase) bonuses found in his casino emails; expires is ISO 8601 with offset if the email gives an end time; link is the email\'s Gmail viewUrl; emailId is the Gmail message id (repeats are skipped). '
+          + 'Site names are matched loosely ("chumba" finds Chumba Casino). This never touches the Pool or any money data.',
+        {
+          action: z.enum(['claim', 'ten_plus', 'play_run', 'add_offers']),
+          site: z.string().optional(),
+          on: z.boolean().optional(),
+          results: z.array(z.object({ site: z.string(), won: z.number().min(0) })).optional(),
+          offers: z.array(z.object({
+            site: z.string(), what: z.string(), expires: z.string().optional(), link: z.string().optional(),
+            emailId: z.string().optional(), notes: z.string().optional(),
+          })).optional(),
+        },
+        async ({ action, site, on, results, offers }) => {
+          try {
+            const post = async (p, b) => {
+              const r = await workerPostGambling(p, b);
+              return { ...text(`HTTP ${r.status}\n${r.body.slice(0, 4000)}`), ...(r.status >= 400 || (r.json && r.json.ok === false) ? { isError: true } : {}) };
+            };
+            if (action === 'add_offers') {
+              if (!offers?.length) return { ...text('Give offers.'), isError: true };
+              return post('/gambling/offers', { offers });
+            }
+            const run = JSON.parse((await workerGet('/gambling/bonus-run')).body);
+            const all = [...(run.sites || []), ...(run.paused || [])];
+            const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const find = (name) => all.find((x) => norm(x.name) === norm(name))
+              || all.find((x) => norm(x.name).startsWith(norm(name)) || norm(x.name).includes(norm(name)));
+            if (action === 'play_run') {
+              if (!results?.length) return { ...text('Give results.'), isError: true };
+              const mapped = results.map((r) => ({ hit: find(r.site), r }));
+              const missing = mapped.filter((m) => !m.hit).map((m) => m.r.site);
+              if (missing.length) return { ...text(`No site matched: ${missing.join(', ')}. Sites: ${all.map((x) => x.name).join(', ')}`), isError: true };
+              return post('/gambling/play-run', { results: mapped.map((m) => ({ siteId: m.hit.id, won: m.r.won })) });
+            }
+            const hit = find(site);
+            if (!hit) return { ...text(`No site matched "${site}". Sites: ${all.map((x) => x.name).join(', ')}`), isError: true };
+            if (action === 'claim') return post('/gambling/claim', { siteId: hit.id });
+            return post('/gambling/site', { siteId: hit.id, tenPlus: on !== false });
+          } catch (e) {
+            return { ...text(`Could not reach the app: ${e.message}`), isError: true };
           }
         },
       ),
