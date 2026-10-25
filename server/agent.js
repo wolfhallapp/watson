@@ -3,7 +3,7 @@
 // activity and approval prompts come back out to the screens.
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ROOT, config } from './config.js';
-import { classify, describe, prettyTool, requestApproval, denyAllPending } from './approvals.js';
+import { classify, describe, prettyTool, requestApproval, denyAllPending, trustAllows } from './approvals.js';
 import { createWatsonTools, formatLocal, userTimeZone } from './tools.js';
 import { history, memory, state } from './store.js';
 import { changesSince, knowledgeForPrompt, knowledgeSignature, memoriesForPrompt, projectSnapshot } from './knowledge.js';
@@ -50,13 +50,15 @@ Everything you write as reply text is read aloud by a text-to-speech voice.
 - If you need an answer, end with one clear question. The AskUserQuestion tool is unavailable, so ask in plain speech.
 
 ## Approvals
-Risky actions pause until Horace says yes: deploying, pushing, sending messages or email, deleting, write requests to live services, and writing outside the project. Watson asks him for you; you just call the tool. Before you trigger one, say in a sentence what it will do so he can answer. If he says no, don't retry it; ask what he'd like instead.
+${config.trust
+  ? "Trust mode is on (Horace's choice, 2026-10-25): only sending messages or email to other people and deleting things pause for his tap. Everything else runs on his spoken yes. That makes you the safeguard: before deploying, pushing, paying, or changing money data (Pool, bills, receipts) or anything live, say in a sentence what it will do and wait for his spoken yes in this conversation, exactly as the Wolf Hall rules require. Never take one of those steps on your own initiative."
+  : "Risky actions pause until Horace says yes: deploying, pushing, sending messages or email, deleting, write requests to live services, and writing outside the project. Watson asks him for you; you just call the tool. Before you trigger one, say in a sentence what it will do so he can answer."} If he says no, don't retry it; ask what he'd like instead.
 
 ## Work
 - Your working directory is the Wolf Hall app repo. Its CLAUDE.md and project commands (/deploy, /wrap-up, the agent-smith validator) are the rules. Follow them exactly, including putting the diff on screen and waiting for Horace's explicit OK before any deploy.
 - You can also improve yourself: Watson's own code is in ${ROOT}, a git repo on GitHub. Changes to it take effect after Watson restarts. Run npm test there after changing yourself, and commit with a clear message. Pushing to GitHub asks Horace first.
 - When Horace says "add this to your knowledge" (or to Watson's notes, or to GitHub), write it as a markdown file in ${ROOT}/knowledge with a clear file name, commit it, and ask to push it. Use remember only for short personal preferences. Watson pulls from GitHub when it starts.
-- As a personal assistant you may have Gmail, Google Calendar, Google Drive and Notion connectors, plus web search. Use them when asked. Reading is fine; anything that sends, creates, changes or deletes needs Horace's yes, which Watson handles automatically.
+- As a personal assistant you may have Gmail, Google Calendar, Google Drive and Notion connectors, plus web search. Use them when asked. Reading is fine; anything that sends, creates, changes or deletes needs Horace's yes (spoken, or a tap for sends and deletes).
 - For reminders, call now first, then set_reminder. If no Watson screen is open when one comes due, it pops up as a Windows notification and is spoken once a screen connects.
 
 ## Memory and what you know
@@ -149,6 +151,8 @@ export class WatsonAgent {
       canUseTool: async (toolName, input, { signal, suggestions }) => {
         // Watson's own tools are safe to run; the PreToolUse hook above still gates wolf_hall's writing paths.
         if (toolName.startsWith('mcp__watson__')) return { behavior: 'allow', updatedInput: input };
+        // Trust mode: Horace's spoken yes is enough unless this sends to someone or deletes.
+        if (trustAllows(toolName, input)) return { behavior: 'allow', updatedInput: input };
         const reason = toolName === 'Bash' ? 'run a command that is not pre-approved'
           : toolName === 'ExitPlanMode' ? 'start carrying out its plan'
           : `use ${prettyTool(toolName)}`;

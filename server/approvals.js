@@ -6,22 +6,26 @@ import crypto from 'node:crypto';
 import { ROOT, config } from './config.js';
 import { workerGetWrites } from './knowledge.js';
 
-// [pattern, level, plain-English reason]. Checked against Bash commands.
+// [pattern, level, plain-English reason, keep]. Checked against Bash commands.
+// keep = still asks in trust mode (it deletes or discards something).
 const BASH_RULES = [
-  [/\bwrangler\b(?![^|;&]*--dry-run)[^|;&]*\b(deploy|rollback|delete|publish)\b/, 'high', 'deploy or change the live Cloudflare worker'],
+  [/\bwrangler\b[^|;&]*\bdelete\b/, 'high', 'delete something on Cloudflare', true],
+  [/\bwrangler\b(?![^|;&]*--dry-run)[^|;&]*\b(deploy|rollback|publish)\b/, 'high', 'deploy or change the live Cloudflare worker'],
   [/\bwrangler\b[^|;&]*\bsecret\b/, 'high', 'change a Cloudflare worker secret'],
   [/\bwrangler\b[^|;&]*\b(kv|r2|d1)\b[^|;&]*\b(put|delete|execute|create)\b/, 'high', 'change Cloudflare storage'],
   [/\bnetlify\b[^|;&]*\bdeploy\b/, 'high', 'deploy the site to Netlify'],
   [/\bgit\s+push\b/, 'high', 'push code to GitHub'],
-  [/\bgit\s+(reset\s+--hard|clean\s+-\w*f|branch\s+-D|rebase|filter-branch|stash\s+(drop|clear))\b/, 'medium', 'discard or rewrite git history or changes'],
-  [/\bgit\s+(checkout|restore)\s+(--\s+)?\.(\s|$)/, 'medium', 'discard uncommitted changes'],
-  [/\brm\s+-\w*[rR]/, 'high', 'delete files or folders'],
+  [/\bgit\s+(reset\s+--hard|clean\s+-\w*f|branch\s+-D|rebase|filter-branch|stash\s+(drop|clear))\b/, 'medium', 'discard or rewrite git history or changes', true],
+  [/\bgit\s+(checkout|restore)\s+(--\s+)?\.(\s|$)/, 'medium', 'discard uncommitted changes', true],
+  [/\brm\s+-\w*[rR]/, 'high', 'delete files or folders', true],
+  [/\bcurl\b[^|;&]*(-X\s*['"]?DELETE|--request\s+['"]?DELETE)/i, 'high', 'send a delete request', true],
   [/\bcurl\b[^|;&]*(-X\s*['"]?(POST|PUT|PATCH|DELETE)|--request\s+['"]?(POST|PUT|PATCH|DELETE)|\s(-d|--data[\w-]*|-F|--form|-T|--upload-file)(\s|=))/i, 'high', 'send data that can change something (a write request)'],
   [/\b(wget|http)\b[^|;&]*\b(--post|POST|PUT|PATCH|DELETE)\b/, 'high', 'send a write request'],
   // Two Wolf Hall GETs write to Notion: /forecast (Forecast Snapshot) and this week's /week-budget (rollover balances).
   [/\b(curl|wget|http|fetch)\b[^|;&]*workers\.dev\/(forecast|week-budget(?![^\s'"]*offset=(-\d|[1-9])))/, 'medium', 'load a Wolf Hall screen that writes to Notion (forecast snapshot or this week\'s rollover)'],
   [/\bsudo\b/, 'high', 'run a command as administrator'],
-  [/\b(shutdown|reboot|mkfs|dd\s+if=)\b/, 'high', 'run a system-level command'],
+  [/\b(shutdown|reboot|mkfs|dd\s+if=)\b/, 'high', 'run a system-level command', true],
+  [/\bgh\s+repo\s+delete\b/, 'high', 'delete a GitHub repo', true],
   [/\bnpm\s+publish\b/, 'high', 'publish a package'],
   [/\bgh\s+(pr\s+(create|merge|close)|release|repo\s+(create|delete|edit)|issue\s+(create|close|comment)|api\s+-X)/, 'medium', 'change something on GitHub'],
   [/\bclaude\s+mcp\s+(add|remove)\b/, 'medium', 'change Claude Code connectors'],
@@ -30,6 +34,8 @@ const BASH_RULES = [
 
 // MCP tools (Notion, Gmail, Calendar, Drive...). Read-only verbs pass; the rest ask.
 const MCP_HIGH = /(send|reply|forward|delete|trash|share|cancel|publish|spam|remove|stop)/i;
+// In trust mode these still ask: anything that messages other people or deletes.
+const MCP_KEEP = /(send|reply|forward|share|respond|delete|trash|remove|cancel)/i;
 const MCP_WRITE = /(create|update|move|duplicate|upload|label|archive|restore|set|copy|apply|post|respond|edit|write|convert|spawn)/i;
 
 const SCHEDULING_TOOLS = new Set(['CronCreate', 'CronDelete', 'RemoteTrigger', 'ScheduleWakeup']);
@@ -40,11 +46,27 @@ function insideDir(file, dir) {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-/** Returns null when the call is fine to run, or { level, reason } when it needs a yes. */
-export function classify(toolName, input = {}) {
+/**
+ * Returns null when the call is fine to run, or { level, reason } when it needs a yes.
+ * Trust mode (WATSON_TRUST=on, Horace's choice 2026-10-25) only stops calls that
+ * message other people or delete something; his spoken yes covers the rest.
+ */
+export function classify(toolName, input = {}, { trust = config.trust } = {}) {
+  const risk = classifyAll(toolName, input);
+  if (!risk || !trust) return risk;
+  return risk.keep ? risk : null;
+}
+
+/** For tools Claude Code itself would ask about: null in trust mode unless it sends or deletes. */
+export function trustAllows(toolName, input = {}) {
+  if (!config.trust) return false;
+  return classify(toolName, input) === null;
+}
+
+function classifyAll(toolName, input) {
   if (toolName === 'Bash') {
     const cmd = String(input.command || '');
-    for (const [re, level, reason] of BASH_RULES) if (re.test(cmd)) return { level, reason };
+    for (const [re, level, reason, keep] of BASH_RULES) if (re.test(cmd)) return { level, reason, keep: !!keep };
     return null;
   }
   if (FILE_TOOLS.has(toolName)) {
@@ -63,8 +85,8 @@ export function classify(toolName, input = {}) {
   }
   if (toolName.startsWith('mcp__') && !toolName.startsWith('mcp__watson__')) {
     const action = toolName.split('__').slice(2).join('__');
-    if (MCP_HIGH.test(action)) return { level: 'high', reason: `use ${prettyTool(toolName)}, which sends or deletes something` };
-    if (MCP_WRITE.test(action)) return { level: 'medium', reason: `use ${prettyTool(toolName)}, which changes your data` };
+    if (MCP_HIGH.test(action)) return { level: 'high', reason: `use ${prettyTool(toolName)}, which sends or deletes something`, keep: MCP_KEEP.test(action) };
+    if (MCP_WRITE.test(action)) return { level: 'medium', reason: `use ${prettyTool(toolName)}, which changes your data`, keep: MCP_KEEP.test(action) };
   }
   return null;
 }
