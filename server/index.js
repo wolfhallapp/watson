@@ -108,6 +108,17 @@ function noteUsage(info) {
   if (!Object.keys(fresh).length) return;
   usage = { ...usage, ...fresh, at: new Date().toISOString() };
   state.set({ usage });
+  // Per Horace (2026-10-26): once a window is 80% used, a reminder says when it refills.
+  for (const [kind, w] of Object.entries(fresh)) {
+    if (!(w.utilization >= 0.8) || !w.resetsAt) continue;
+    const due = new Date(w.resetsAt > 1e12 ? w.resetsAt : w.resetsAt * 1000);
+    if (!(due > new Date())) continue;
+    const tag = `usage:${kind}:${due.toISOString()}`;
+    if (reminders.all().some((r) => r.tag === tag)) continue;
+    const label = kind === 'five_hour' ? 'Your 5-hour Claude session' : kind === 'seven_day' ? 'Your weekly Claude allowance' : `Claude usage (${kind})`;
+    reminders.add({ id: crypto.randomUUID().slice(0, 8), tag, text: `${label} has refilled. The Oracle and the Architect are back at full strength.`, due: due.toISOString(), created: new Date().toISOString() });
+    broadcastTo(channels.oracle, { type: 'reminders_changed' });
+  }
   broadcastTo(channels.oracle, { type: 'usage', usage });
 }
 function agentSend(key) {

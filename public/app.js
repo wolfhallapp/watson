@@ -33,7 +33,11 @@ function renderUsage(u) {
   if (!$('hourglass')) return;
   const w = usage?.five_hour;
   if (typeof w?.utilization !== 'number') return;
-  const used = Math.min(1, Math.max(0, w.utilization)); // Claude reports 0 to 1
+  // Claude only reports usage when one of us answers; once the reset time passes, the old reading is stale,
+  // so show the glass full again until the next reading arrives.
+  const resetMs = w.resetsAt ? (w.resetsAt > 1e12 ? w.resetsAt : w.resetsAt * 1000) : 0;
+  const refilled = resetMs && resetMs <= Date.now();
+  const used = refilled ? 0 : Math.min(1, Math.max(0, w.utilization)); // Claude reports 0 to 1
   // Heights by area: the top bulb drains toward its neck, the bottom fills from its base.
   const H = 41, top = H * Math.sqrt(1 - used), bot = H * (1 - Math.sqrt(1 - used));
   $('hg-sand-top').setAttribute('y', 49 - top); $('hg-sand-top').setAttribute('height', top);
@@ -42,7 +46,8 @@ function renderUsage(u) {
   $('hourglass').dataset.level = used >= 0.9 ? 'low' : used >= 0.7 ? 'mid' : 'ok';
   $('hg-left').textContent = `${Math.round((1 - used) * 100)}% of this session left`;
   const parts = [];
-  if (w.resetsAt) {
+  if (refilled) parts.push('Refilled (new reading on your next message)');
+  else if (w.resetsAt) {
     const ms = (w.resetsAt > 1e12 ? w.resetsAt : w.resetsAt * 1000) - Date.now();
     const mins = Math.max(0, Math.round(ms / 60000));
     parts.push(mins ? `Refills in ${mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`}` : 'Refilling now');
