@@ -52,7 +52,7 @@
       ${e.briefing ? `<section class="mn-brief"><h5>📡 Today's briefing <small>${clock(e.briefingAt)}</small></h5><p>${esc(e.briefing)}</p></section>` : ''}
       <section class="mn-grid">
         <div class="mn-card"><h5>😴 Sleep</h5><div class="mn-two">${field('bedtime', 'Bedtime', 'time')}${field('wake', 'Woke up', 'time')}</div>
-          <div class="mn-big">${e.sleepHours != null ? e.sleepHours + ' hours' : '—'}</div>${scale(SCALES[0])}</div>
+          <div class="mn-big">${e.sleepHours != null ? e.sleepHours + ' hours' : '—'}</div>${e.watchSleep ? `<div class="mn-sub">⌚ ${esc(e.watchSleep)}</div>` : ''}${scale(SCALES[0])}</div>
         <div class="mn-card"><h5>⚡ How you feel</h5>${scale(SCALES[1])}${scale(SCALES[2])}</div>
         <div class="mn-card"><h5>⚖️ Body</h5>${field('weight', 'Weight (lb)', 'number', 'also goes to the Health log')}
           <label class="mn-check"><input type="checkbox" data-bool="meds" ${e.meds ? 'checked' : ''}> 💊 Meds &amp; vitamins taken</label>${field('medsNote', 'Which ones', 'text', 'optional')}</div>
