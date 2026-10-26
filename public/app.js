@@ -16,6 +16,8 @@ const P = AGENT === 'architect' ? {
   newChat: 'Start a new conversation? The Oracle will forget this chat (but keep what she remembered about you).',
 };
 if (AGENT === 'architect') setWakeWord(ARCHITECT_WAKE);
+// The other agent, so this page can say when they're working or have something for Horace.
+const PEERS = { oracle: { name: 'The Oracle', href: '/', her: 'her' }, architect: { name: 'The Architect', href: 'architect.html', her: 'him' } };
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -300,6 +302,52 @@ $('ap-yes').onclick = () => approvals[0] && answerApproval(approvals[0].id, true
 $('ap-no').onclick = () => approvals[0] && answerApproval(approvals[0].id, false);
 $('ap-always').onclick = () => approvals[0] && answerApproval(approvals[0].id, true, true);
 
+// ── The other agent ──
+// Each page hears when the other agent is working and when it has replied. A banner and a chime (plus a
+// short spoken line from this page's agent) tell Horace to switch over; the link replays the reply there.
+const peer = { from: AGENT === 'oracle' ? 'architect' : 'oracle', busy: false, last: null };
+const seenKey = (k) => 'seen.' + k;
+const unread = () => !!peer.last && peer.last.at > (store.get(seenKey(peer.from), '') || '');
+function renderPeer() {
+  let bar = $('peer-banner');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'peer-banner';
+    bar.className = 'peer-banner';
+    bar.setAttribute('role', 'status');
+    document.querySelector('.top').after(bar);
+  }
+  const P2 = PEERS[peer.from];
+  const link = document.querySelector('.navlink');
+  link?.classList.toggle('has-news', unread());
+  if (unread()) {
+    const q = /\?\s*$/.test(peer.last.text);
+    bar.className = 'peer-banner news';
+    bar.innerHTML = `<span class="peer-dot"></span><span class="peer-text"><b>${esc(P2.name)} has ${q ? 'a question' : 'an answer'} for you.</b> <span class="peer-preview">“${esc(peer.last.text.length > 140 ? peer.last.text.slice(0, 140) + '…' : peer.last.text)}”</span></span><a class="peer-go" href="${P2.href}#replay=1">Go to ${P2.her}</a><button class="peer-x" type="button" aria-label="Dismiss">✕</button>`;
+    bar.querySelector('.peer-x').onclick = () => { store.set(seenKey(peer.from), peer.last.at); renderPeer(); };
+    bar.hidden = false;
+  } else if (peer.busy) {
+    bar.className = 'peer-banner busy';
+    bar.innerHTML = `<span class="spinner"></span><span class="peer-text">${esc(P2.name)} is working on something for you. You'll hear when it's ready.</span><a class="peer-go" href="${P2.href}">Go to ${P2.her}</a>`;
+    bar.hidden = false;
+  } else bar.hidden = true;
+}
+function onPeer(ev) {
+  if (ev.kind === 'busy') { peer.busy = !!ev.busy; renderPeer(); return; }
+  if (ev.kind !== 'say') return;
+  peer.last = { at: ev.at, text: ev.text };
+  renderPeer();
+  const name = PEERS[peer.from].name;
+  const q = /\?\s*$/.test(ev.text);
+  beep(659, 110, 0.06); setTimeout(() => beep(880, 160, 0.06), 140);
+  if (document.visibilityState === 'visible') {
+    if (settings.speak && voiceState !== 'speaking' && !busy) voice.speak(`${name} has ${q ? 'a question' : 'an answer'} for you.`, { wakeAfter: false });
+  } else if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(`${name} has ${q ? 'a question' : 'an answer'}`, { body: ev.text.slice(0, 180), icon: 'icon.svg' });
+  }
+}
+const replayOnOpen = hashParams.get('replay') === '1';
+
 // ── Server connection ──
 // Listening log: speech-recognition events go to the server in small batches (data/voice-log.jsonl),
 // so a cut-off sentence can be explained afterwards.
@@ -377,6 +425,18 @@ function onEvent(ev) {
       approvals = ev.approvals || [];
       showApproval();
       renderReminders(ev.reminders || []);
+      if (ev.lastSay?.at) {
+        // Came over from the other page's banner: say what was missed.
+        const missed = ev.lastSay.at > (store.get(seenKey(AGENT), '') || '');
+        if (replayOnOpen && missed && settings.speak) voice.speak(ev.lastSay.text);
+        store.set(seenKey(AGENT), ev.lastSay.at);
+      }
+      if (ev.peer) {
+        peer.from = ev.peer.from; peer.busy = !!ev.peer.busy; peer.last = ev.peer.last || null;
+        // First visit: what the other agent said before doesn't count as news.
+        if (peer.last && store.get(seenKey(peer.from), null) == null) store.set(seenKey(peer.from), peer.last.at);
+        renderPeer();
+      }
       busy = !!ev.status?.busy;
       setStatusLine(ev.status);
       renderState();
@@ -386,6 +446,7 @@ function onEvent(ev) {
     case 'status': setStatusLine(ev); break;
     case 'heard': addMsg('you', ev.text); break;
     case 'say':
+      if (ev.at) store.set(seenKey(AGENT), ev.at);
       addMsg('watson', ev.text);
       if (shouldSpeakFor(ev.origin)) voice.speak(ev.text);
       break;
@@ -404,6 +465,7 @@ function onEvent(ev) {
       if (shouldSpeakFor(ev.origin)) voice.speak(ev.message);
       break;
     case 'screen': addScreen(ev); break;
+    case 'peer': onPeer(ev); break;
     case 'approval':
       if (!approvals.some((a) => a.id === ev.id)) approvals.push(ev);
       showApproval();

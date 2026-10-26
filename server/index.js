@@ -81,11 +81,35 @@ function broadcastTo(ch, event) {
   const data = JSON.stringify(event);
   for (const ws of ch.clients) if (ws.readyState === ws.OPEN) ws.send(data);
 }
-const broadcast = (event) => broadcastTo(channels.oracle, event);
 const allClients = () => channels.oracle.clients.size + channels.architect.clients.size;
+const otherOf = (key) => (key === 'oracle' ? 'architect' : 'oracle');
+
+// Each agent's page also hears, in short, what the other is doing: "working" and "has a reply", so
+// Horace knows to switch back when he's on the other page. Quiet routines don't ring.
+const lastSay = {}; // agent -> { at, text } of its newest reply (seeded from its history after a restart)
+function lastSayOf(key) {
+  if (!(key in lastSay)) {
+    const h = channels[key].agent.history.recent(40).filter((m) => m.role === 'watson').pop();
+    lastSay[key] = h ? { at: h.at, text: String(h.text).slice(0, 280) } : null;
+  }
+  return lastSay[key];
+}
+function agentSend(key) {
+  return (event) => {
+    broadcastTo(channels[key], event);
+    const other = channels[otherOf(key)];
+    if (event.type === 'say' && event.origin !== 'routine') {
+      lastSay[key] = { at: event.at || new Date().toISOString(), text: String(event.text).slice(0, 280) };
+      broadcastTo(other, { type: 'peer', from: key, kind: 'say', ...lastSay[key] });
+    } else if (event.type === 'busy') {
+      broadcastTo(other, { type: 'peer', from: key, kind: 'busy', busy: event.busy });
+    }
+  };
+}
+const broadcast = agentSend('oracle');
 
 const agent = new WatsonAgent(broadcast);
-const architect = new WatsonAgent((event) => broadcastTo(channels.architect, event), ARCHITECT);
+const architect = new WatsonAgent(agentSend('architect'), ARCHITECT);
 channels.oracle.agent = agent;
 channels.architect.agent = architect;
 // Approvals are shared: whichever screen is open can answer them.
@@ -203,6 +227,8 @@ wss.on('connection', (ws, req) => {
         screens: ch.screens,
         reminders: reminders.all().filter((r) => !r.fired),
         ...(ch.key === 'architect' ? { construct: construct.summary() } : {}),
+        lastSay: lastSayOf(ch.key),
+        peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) },
       }));
       return;
     }

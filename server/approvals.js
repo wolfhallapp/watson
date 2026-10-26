@@ -128,11 +128,11 @@ export function onApprovalEvent(fn) { broadcast = fn; }
  * Ask the person. Resolves { approved, always } once someone answers from any
  * connected device, or { approved: false } after the timeout / abort.
  */
-export function requestApproval({ toolName, input, level, reason, canAlways = false, signal }) {
+export function requestApproval({ toolName, input, level, reason, canAlways = false, signal, who = 'Watson' }) {
   const id = crypto.randomUUID();
   const info = {
-    id, toolName, level, reason, canAlways,
-    title: `Watson wants to ${reason}`,
+    id, toolName, level, reason, canAlways, who,
+    title: `${who} wants to ${reason}`,
     detail: describe(toolName, input),
     at: new Date().toISOString(),
   };
@@ -159,4 +159,5 @@ export function answerApproval(id, approved, always = false) {
 }
 
 export function pendingApprovals() { return [...pending.values()].map((p) => p.info); }
-export function denyAllPending() { for (const p of [...pending.values()]) p.finish({ approved: false }); }
+/** Say no to everything still waiting, or only to what one agent asked (`who`, e.g. 'The Architect'). */
+export function denyAllPending(who) { for (const p of [...pending.values()]) if (!who || p.info.who === who) p.finish({ approved: false }); }

@@ -1,15 +1,5 @@
-/* The Architect: the Matrix palette cooled to his white room of monitors (silver-white on black,
-   green for what's live and earning). Loaded after style.css on architect.html only. */
-body.architect {
-  --gold: #e8fff0;
-  --gold-soft: rgba(232, 255, 240, .08);
-  --muted: #7fa592;
-  --text: #dff5e7;
-  --line: rgba(200, 255, 220, .16);
-}
-body.architect button.primary { color: #021006; }
-body.architect button.primary:hover:not(:disabled) { background: #ffffff; }
-
+/* The Architect's page: the same Matrix theme as the Oracle (style.css), plus the Construct's tree.
+   Loaded after style.css on architect.html only. */
 /* ── The tree ── */
 .cx { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
 .cx h4 { margin: 0 0 8px; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
@@ -51,7 +41,7 @@ body.architect button.primary:hover:not(:disabled) { background: #ffffff; }
 
 .cx-card { margin: 6px 8px 0; border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 8px; background: var(--card); }
 .cx-card.st-earning { border-left-color: var(--green); }
-.cx-card.st-started, .cx-card.st-researching { border-left-color: #e8fff0; }
+.cx-card.st-started, .cx-card.st-researching { border-left-color: #8cffaa; }
 .cx-card.st-paused { border-left-color: var(--amber); opacity: .8; }
 .cx-card.st-dropped { border-left-color: var(--red); opacity: .55; }
 .cx-head { width: 100%; text-align: left; background: transparent; padding: 9px 12px; display: flex; flex-direction: column; gap: 4px; }
@@ -59,7 +49,7 @@ body.architect button.primary:hover:not(:disabled) { background: #ffffff; }
 .cx-pills { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .cx-pill { font-size: 11px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
 .cx-pill.st-earning, .cx-pill.earned { color: var(--green); border-color: rgba(0, 255, 65, .5); }
-.cx-pill.st-started, .cx-pill.st-researching { color: #e8fff0; border-color: rgba(232, 255, 240, .5); }
+.cx-pill.st-started, .cx-pill.st-researching { color: #8cffaa; border-color: rgba(140, 255, 170, .5); }
 .cx-pill.st-paused { color: var(--amber); }
 .cx-pill.st-dropped { color: var(--red); }
 .cx-steps { font-size: 11px; color: var(--muted); }

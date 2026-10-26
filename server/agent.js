@@ -77,6 +77,9 @@ For quick money questions (what's in the pool, what bills are due, how the savin
 ## Casino Bonus Run
 Horace collects free daily casino bonuses with the Bonus Run on the Wolf Hall Gambling screen. Use the casino tool when he says he collected a site ("got Chumba"), that a site passed 10 SC ("Stake's over ten"), or gives play-run winnings ("did my run: Chumba won 7, Pulsz 12"). Free SC builds up on each site; once about 10 sites are at 10+, he does 10 spins at 1 SC each and logs what he won. Every morning at 7:30 you check his casino emails yourself (a routine message) and add only truly free bonuses. Never encourage buying coins or chasing losses; if he asks how he's doing, give the real numbers.
 
+## The Architect
+A second agent, the Architect, runs on his own page (architect.html, linked at the top of yours) with his own conversation. He is the brain of the Construct, Horace's tree of small legit ways to earn from home. Send Construct work to him ("that's the Architect's department; tap Architect at the top"). You both keep working when Horace is on the other page; each page shows a banner and chimes when the other has an answer or a question, so Horace knows to switch.
+
 ## Daily briefing
 When Horace says good morning or asks for a briefing or what's going on today: call now, then gather today's and tomorrow's calendar, important unread email from the last day, bills due in the next 7 days (/upcoming), the pool (/pool), the casino Bonus Run (/gambling/bonus-run: how many free bonuses are ready and any streak at risk; one short line, never a nudge to buy), and upcoming reminders. Say the four or five things that matter in a few sentences and put the details on screen.
 
@@ -146,7 +149,7 @@ export class WatsonAgent {
       if (input.hook_event_name !== 'PreToolUse') return {};
       const risk = classify(input.tool_name, input.tool_input);
       if (!risk) return {};
-      const d = await requestApproval({ toolName: input.tool_name, input: input.tool_input, ...risk, signal });
+      const d = await requestApproval({ toolName: input.tool_name, input: input.tool_input, ...risk, signal, who: this.p.label });
       return {
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
@@ -177,7 +180,7 @@ export class WatsonAgent {
         const reason = toolName === 'Bash' ? 'run a command that is not pre-approved'
           : toolName === 'ExitPlanMode' ? 'start carrying out its plan'
           : `use ${prettyTool(toolName)}`;
-        const d = await requestApproval({ toolName, input, level: 'medium', reason, canAlways: !!suggestions?.length, signal });
+        const d = await requestApproval({ toolName, input, level: 'medium', reason, canAlways: !!suggestions?.length, signal, who: this.p.label });
         if (d.approved) return { behavior: 'allow', updatedInput: input, ...(d.always ? { updatedPermissions: suggestions } : {}) };
         return { behavior: 'deny', message: d.timedOut ? 'Horace did not answer in time.' : 'Horace said no. Ask what he wants instead.' };
       },
@@ -195,7 +198,7 @@ export class WatsonAgent {
       if (this.q !== q) return; // a reset already replaced this session
       this.q = null;
       this.input = null;
-      denyAllPending();
+      denyAllPending(this.p.label);
       if (this.busy) this.#setBusy(false);
     });
   }
@@ -213,7 +216,7 @@ export class WatsonAgent {
         for (const block of m.message?.content || []) {
           if (block.type === 'text' && block.text.trim() && !sub) {
             this.history.append({ role: 'watson', text: block.text });
-            this.send({ type: 'say', text: block.text, origin: this.origin });
+            this.send({ type: 'say', text: block.text, origin: this.origin, at: new Date().toISOString() });
           } else if (block.type === 'tool_use') {
             this.send({ type: 'activity', text: describe(block.name, block.input), sub });
           }
@@ -253,7 +256,7 @@ export class WatsonAgent {
 
   /** Stop whatever Watson is doing right now (the session stays). */
   async interrupt() {
-    denyAllPending();
+    denyAllPending(this.p.label);
     if (this.q && this.busy) {
       try { await this.q.interrupt(); } catch (e) { console.error('[watson] interrupt failed:', e.message); }
     }
