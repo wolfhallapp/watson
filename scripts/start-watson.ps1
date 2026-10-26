@@ -1,7 +1,8 @@
 # Starts Watson (inside WSL) if it isn't already running, then opens it in the browser.
-# Usage: double-click Watson.cmd, or run:  powershell -ExecutionPolicy Bypass -File scripts\start-watson.ps1 [-NoBrowser] [-AtLogin]
+# Usage: double-click Watson.cmd (or Architect.cmd), or run:  powershell -ExecutionPolicy Bypass -File scripts\start-watson.ps1 [-NoBrowser] [-AtLogin] [-Architect]
 # -AtLogin (used by the Windows Startup shortcut) waits longer, since WSL is slow right after login.
-param([switch]$NoBrowser, [switch]$AtLogin)
+# -Architect opens the Architect's page (the Construct) instead of the Oracle's, with the mic left as he last had it.
+param([switch]$NoBrowser, [switch]$AtLogin, [switch]$Architect)
 
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root '.env'
@@ -35,7 +36,7 @@ if (-not $NoBrowser) {
   # Speech recognition needs Chrome or Edge, so prefer those over another default browser.
   $browser = @($chrome, $edge) | Where-Object { Test-Path $_ } | Select-Object -First 1
   # listen=1 turns the microphone on so Watson is always waiting for its name.
-  $page = "$url#token=$token&listen=1"
+  $page = if ($Architect) { "${url}architect.html#token=$token" } else { "$url#token=$token&listen=1" }
   if ($browser) {
     # Watson gets its own browser profile so these settings apply even when your normal browser is open:
     # play speech without a click, and keep listening while the window is minimized or covered.

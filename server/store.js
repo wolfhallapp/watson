@@ -21,19 +21,21 @@ export const state = {
   set(patch) { writeJson('state.json', { ...this.get(), ...patch }); },
 };
 
-// ── Conversation history shown in the UI ──
-const HISTORY = 'history.jsonl';
-export const history = {
-  append(entry) {
-    fs.appendFileSync(file(HISTORY), JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n');
-  },
-  recent(n = 150) {
-    try {
-      const lines = fs.readFileSync(file(HISTORY), 'utf8').trim().split('\n');
-      return lines.slice(-n).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-    } catch { return []; }
-  },
-};
+// ── Conversation history shown in the UI (one file per agent: the Oracle, the Architect) ──
+export function makeHistory(name) {
+  return {
+    append(entry) {
+      fs.appendFileSync(file(name), JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n');
+    },
+    recent(n = 150) {
+      try {
+        const lines = fs.readFileSync(file(name), 'utf8').trim().split('\n');
+        return lines.slice(-n).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+      } catch { return []; }
+    },
+  };
+}
+export const history = makeHistory('history.jsonl');
 
 // ── Long-term memory: one fact per line in data/memory.md ──
 const MEMORY = 'memory.md';

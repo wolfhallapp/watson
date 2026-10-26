@@ -100,20 +100,38 @@ This session started ${formatLocal(new Date())}, time zone ${userTimeZone()}.
 `;
 }
 
+// Who the agent is. The Oracle is the default; the Architect (server/architect.js) is a second persona
+// with its own conversation, tools, working folder and saved session.
+export const ORACLE = {
+  key: 'oracle',
+  label: 'The Oracle',
+  prompt: watsonPrompt,
+  cwd: () => config.projectDir,
+  additionalDirectories: () => [ROOT],
+  settingSources: ['user', 'project', 'local'],
+  mcpName: 'watson',
+  tools: (send, sessionId) => createWatsonTools(send, sessionId),
+  history,
+  sessionKey: 'sessionId',
+  knowledgeNotes: true,
+};
+
 export class WatsonAgent {
-  /** @param {(event: object) => void} send broadcast to all screens */
-  constructor(send) {
+  /** @param {(event: object) => void} send broadcast to this agent's screens */
+  constructor(send, persona = ORACLE) {
+    this.p = persona;
     this.send = send;
+    this.history = persona.history;
     this.q = null;
     this.input = null;
     this.busy = false;
     this.origin = null; // client that sent the latest request; only it speaks the reply
-    this.sessionId = state.get().sessionId || null;
-    this.tools = createWatsonTools(send, () => this.sessionId);
+    this.sessionId = state.get()[persona.sessionKey] || null;
+    this.tools = persona.tools(send, () => this.sessionId);
   }
 
   status() {
-    return { busy: this.busy, sessionId: this.sessionId, model: config.model, cwd: config.projectDir };
+    return { busy: this.busy, sessionId: this.sessionId, model: config.model, cwd: this.p.cwd(), agent: this.p.key };
   }
 
   #setBusy(busy) {
@@ -141,19 +159,19 @@ export class WatsonAgent {
     };
 
     const options = {
-      cwd: config.projectDir,
-      additionalDirectories: [ROOT],
+      cwd: this.p.cwd(),
+      additionalDirectories: this.p.additionalDirectories(),
       model: config.model,
       effort: config.effort,
       permissionMode: config.permissionMode,
-      settingSources: ['user', 'project', 'local'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: watsonPrompt() },
-      mcpServers: { watson: this.tools },
+      settingSources: this.p.settingSources,
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: this.p.prompt() },
+      mcpServers: { [this.p.mcpName]: this.tools },
       disallowedTools: ['AskUserQuestion'],
       hooks: { PreToolUse: [{ hooks: [gate], timeout: Math.ceil(config.approvalTimeoutMs / 1000) + 60 }] },
       canUseTool: async (toolName, input, { signal, suggestions }) => {
         // Watson's own tools are safe to run; the PreToolUse hook above still gates wolf_hall's writing paths.
-        if (toolName.startsWith('mcp__watson__')) return { behavior: 'allow', updatedInput: input };
+        if (toolName.startsWith(`mcp__${this.p.mcpName}__`)) return { behavior: 'allow', updatedInput: input };
         // Trust mode: Horace's spoken yes is enough unless this sends to someone or deletes.
         if (trustAllows(toolName, input)) return { behavior: 'allow', updatedInput: input };
         const reason = toolName === 'Bash' ? 'run a command that is not pre-approved'
@@ -171,8 +189,8 @@ export class WatsonAgent {
     const q = query({ prompt: this.input, options });
     this.q = q;
     this.#consume(q).catch((err) => {
-      console.error('[watson] agent error:', err);
-      this.send({ type: 'error', message: `Watson's agent stopped: ${err.message}` });
+      console.error(`[${this.p.key}] agent error:`, err);
+      this.send({ type: 'error', message: `${this.p.label}'s agent stopped: ${err.message}` });
     }).finally(() => {
       if (this.q !== q) return; // a reset already replaced this session
       this.q = null;
@@ -186,7 +204,7 @@ export class WatsonAgent {
     for await (const m of q) {
       if (m.type === 'system' && m.subtype === 'init') {
         this.sessionId = m.session_id;
-        state.set({ sessionId: m.session_id });
+        state.set({ [this.p.sessionKey]: m.session_id });
         const servers = (m.mcp_servers || []).map((s) => `${s.name} (${s.status})`);
         this.send({ type: 'status', ...this.status(), model: m.model, tools: m.tools?.length, servers });
       } else if (m.type === 'assistant') {
@@ -194,7 +212,7 @@ export class WatsonAgent {
         const sub = m.parent_tool_use_id != null;
         for (const block of m.message?.content || []) {
           if (block.type === 'text' && block.text.trim() && !sub) {
-            history.append({ role: 'watson', text: block.text });
+            this.history.append({ role: 'watson', text: block.text });
             this.send({ type: 'say', text: block.text, origin: this.origin });
           } else if (block.type === 'tool_use') {
             this.send({ type: 'activity', text: describe(block.name, block.input), sub });
@@ -217,17 +235,19 @@ export class WatsonAgent {
     const clean = String(text || '').trim();
     if (!clean) return;
     this.origin = origin || null;
-    history.append({ role: 'you', text: clean });
+    this.history.append({ role: 'you', text: clean });
     this.send({ type: 'heard', text: clean, origin });
     if (!this.q) this.#start();
     this.#setBusy(true);
     let content = clean;
-    try {
+    if (this.p.knowledgeNotes) try {
       // Memory files or knowledge saved since this conversation started (by another Claude session, GitHub, or Horace).
       const { text, now } = changesSince(this.seen);
       this.seen = now;
       if (text) content = `[Watson system note, not from Horace: these memory or knowledge files were added or changed since this conversation started. Take them into account.]\n${text}\n[End of note. Horace said:]\n${clean}`;
     } catch (e) { console.warn('  Could not check for new knowledge:', e.message); }
+    const extra = this.p.pendingNote?.();
+    if (extra) content = `${extra}\n[Horace said:]\n${content}`;
     this.input.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null });
   }
 
@@ -247,8 +267,8 @@ export class WatsonAgent {
     try { this.q?.close?.(); } catch {}
     this.q = null;
     this.sessionId = null;
-    state.set({ sessionId: null });
-    history.append({ role: 'system', text: 'New conversation started.' });
+    state.set({ [this.p.sessionKey]: null });
+    this.history.append({ role: 'system', text: 'New conversation started.' });
     this.send({ type: 'reset' });
   }
 

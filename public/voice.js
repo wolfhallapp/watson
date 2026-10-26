@@ -15,9 +15,14 @@ const SR = hasWindow && (window.SpeechRecognition || window.webkitSpeechRecognit
 // "Watson" and the ways speech recognition tends to mishear it. ("What's on"
 // is left out on purpose: it would wake Watson in everyday conversation.)
 // "Oracle" (her name since 2026-10-25) and how it gets misheard; "Watson" still works too.
-const WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(oracle|oracles|orakel|orical|oricle|auricle|aurical|watson|watsons|wattson|watsen|watts\s?on|what\s?son|whatson)\b[\s,.!?:-]*/i;
+export const ORACLE_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(oracle|oracles|orakel|orical|oricle|auricle|aurical|watson|watsons|wattson|watsen|watts\s?on|what\s?son|whatson)\b[\s,.!?:-]*/i;
+// The Architect (2026-10-25): the Construct's agent, on his own page.
+export const ARCHITECT_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(architect|architects|arkitect|archetect|archie\s?tect|r\s?kitect)\b[\s,.!?:-]*/i;
+let WAKE = ORACLE_WAKE;
+/** Which name wakes this page: ORACLE_WAKE (default) or ARCHITECT_WAKE. */
+export function setWakeWord(re) { WAKE = re; }
 
-const STOP_SPEAKING = /^(?:(?:oracle|watson|ok|okay)[\s,]+)?(stop|stop talking|quiet|be quiet|shut up|enough|that's enough|silence|pause)\b/i;
+const STOP_SPEAKING = /^(?:(?:oracle|watson|architect|ok|okay)[\s,]+)?(stop|stop talking|quiet|be quiet|shut up|enough|that's enough|silence|pause)\b/i;
 
 export const speechSupported = { listen: !!SR, speak: hasWindow && 'speechSynthesis' in window };
 
@@ -31,6 +36,10 @@ export class Voice {
     this.rate = 1.05;
     this.browserPitch = 0.75;     // 0-2, 1 = normal
     this.browserRateFactor = 0.88;
+    // The Oracle (2026-10-25): a mature woman's voice. Google's free UK female voice first, then other women's voices.
+    // The Architect's page swaps in a man's list.
+    this.voicePrefs = [/Google UK English Female/i, /Libby.*Natural/i, /Sonia.*Natural/i, /Maisie.*Natural/i, /Jenny.*Natural/i,
+      /Microsoft (Hazel|Susan)/i, /Google US English/i, /Microsoft Zira/i, /Samantha/i, /Karen/i, /female/i];
     this.followUpMs = 7000;
 
     this.enabled = false; // the user has switched the mic on
@@ -270,10 +279,7 @@ export class Voice {
   pickVoice() {
     const all = this.voices();
     if (this.voiceName) { const v = all.find((x) => x.name === this.voiceName); if (v) return v; }
-    // The Oracle (2026-10-25): a mature woman's voice. Google's free UK female voice first, then other women's voices.
-    const prefs = [/Google UK English Female/i, /Libby.*Natural/i, /Sonia.*Natural/i, /Maisie.*Natural/i, /Jenny.*Natural/i,
-      /Microsoft (Hazel|Susan)/i, /Google US English/i, /Microsoft Zira/i, /Samantha/i, /Karen/i, /female/i];
-    for (const p of prefs) { const v = all.find((x) => p.test(x.name)); if (v) return v; }
+    for (const p of this.voicePrefs) { const v = all.find((x) => p.test(x.name)); if (v) return v; }
     return all[0] || null;
   }
 
@@ -437,7 +443,7 @@ export function toSpeakable(text) {
 
 /** Interpret a spoken answer to an approval prompt. */
 export function parseYesNo(text) {
-  const t = String(text || '').toLowerCase().replace(/^(oracle|watson|ok|okay|um|uh)[\s,]+/g, '').trim();
+  const t = String(text || '').toLowerCase().replace(/^(oracle|watson|architect|ok|okay|um|uh)[\s,]+/g, '').trim();
   if (/^(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|approve|approved|confirm|confirmed|affirmative|please do|go for it|send it|ship it|deploy it)\b/.test(t)) {
     return { answer: true, always: /\b(always|every time|for (this|the) session|don't ask)\b/.test(t) };
   }

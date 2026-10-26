@@ -57,6 +57,14 @@ Say "Watson, good morning" for a briefing: calendar, important email, bills due 
 - "Watson, remind me at 5 to move the laundry."
 - "Watson, remember that I like answers short."
 
+## The Architect and the Construct
+A second agent shares Watson's server: **the Architect**, the brain of the Construct (Horace's tree of 1,000 small,
+legit ways to earn from home). Open http://localhost:8787/architect.html or double-click `Architect.cmd`, and say
+"Architect, ...". He has his own conversation and a screen with the whole tree: earnings, today's moves, branches,
+and a card per strategy with steps, payouts and notes. The tree is saved in `data/construct.json`. He writes drafts
+to `C:\Users\Owner\Documents\construct`. See `knowledge/the-construct.md`. Tip: leave hands-free listening on
+only one page at a time, since the browser gives the microphone to one page.
+
 ## Safety: what Watson asks before doing
 
 Anything risky stops and asks you. A card appears, Watson says what it wants to do, and you answer **"yes"** or **"no"** out loud or tap a button. This applies even when your Claude Code allow-list would let it through:

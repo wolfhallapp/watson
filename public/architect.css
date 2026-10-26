@@ -1,0 +1,85 @@
+/* The Architect: the Matrix palette cooled to his white room of monitors (silver-white on black,
+   green for what's live and earning). Loaded after style.css on architect.html only. */
+body.architect {
+  --gold: #e8fff0;
+  --gold-soft: rgba(232, 255, 240, .08);
+  --muted: #7fa592;
+  --text: #dff5e7;
+  --line: rgba(200, 255, 220, .16);
+}
+body.architect button.primary { color: #021006; }
+body.architect button.primary:hover:not(:disabled) { background: #ffffff; }
+
+/* ── The tree ── */
+.cx { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.cx h4 { margin: 0 0 8px; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
+.cx h5 { margin: 12px 0 6px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.cx-muted { color: var(--muted); font-size: 13px; margin: 4px 0; }
+.cx-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.cx input, .cx select { background: #000; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; color: var(--text); min-width: 0; }
+.cx input[name="amount"] { width: 110px; }
+.cx-row input[name="text"], .cx-plant input[name="name"] { flex: 1; min-width: 160px; }
+
+.cx-hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.cx-stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.cx-stat b { display: block; font-size: 22px; color: var(--green); text-shadow: 0 0 8px rgba(0, 255, 65, .35); }
+.cx-stat span { font-size: 12px; color: var(--muted); }
+.cx-goal { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.cx-goalline { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.cx-goalline b { color: var(--gold); font-size: 16px; }
+.cx-bar { height: 8px; background: #000; border: 1px solid var(--line); border-radius: 99px; margin-top: 8px; overflow: hidden; }
+.cx-bar i { display: block; height: 100%; background: linear-gradient(90deg, #0a7a2a, var(--green)); box-shadow: 0 0 10px rgba(0, 255, 65, .6); }
+
+.cx-moves { background: rgba(0, 255, 65, .05); border: 1px solid rgba(0, 255, 65, .25); border-radius: 10px; padding: 12px; }
+.cx-moves ul, .cx-recent ul, .cx-pays, .cx-notes { list-style: none; margin: 0; padding: 0; }
+.cx-moves li, .cx-recent li, .cx-pays li, .cx-notes li { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+.cx-moves li label { flex: 1; cursor: pointer; }
+.cx-notes time { color: var(--muted); margin-right: 6px; }
+
+.cx-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.cx-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cx-chip { background: transparent; border: 1px solid var(--line); border-radius: 99px; padding: 5px 11px; font-size: 13px; color: var(--muted); }
+.cx-chip.on { color: #021006; background: var(--gold); border-color: var(--gold); }
+#cx-search { flex: 1; max-width: 240px; }
+
+.cx-branch { border: 1px solid var(--line); border-radius: 10px; background: var(--bg2); }
+.cx-bhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 2px; }
+.cx-btoggle { flex: 1; text-align: left; background: transparent; padding: 8px 10px; font-size: 15px; color: var(--gold); }
+.cx-caret { display: inline-block; width: 14px; color: var(--muted); }
+.cx-count { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.cx-branch.open { padding-bottom: 8px; }
+
+.cx-card { margin: 6px 8px 0; border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 8px; background: var(--card); }
+.cx-card.st-earning { border-left-color: var(--green); }
+.cx-card.st-started, .cx-card.st-researching { border-left-color: #e8fff0; }
+.cx-card.st-paused { border-left-color: var(--amber); opacity: .8; }
+.cx-card.st-dropped { border-left-color: var(--red); opacity: .55; }
+.cx-head { width: 100%; text-align: left; background: transparent; padding: 9px 12px; display: flex; flex-direction: column; gap: 4px; }
+.cx-name { font-size: 15px; color: var(--text); }
+.cx-pills { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.cx-pill { font-size: 11px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.cx-pill.st-earning, .cx-pill.earned { color: var(--green); border-color: rgba(0, 255, 65, .5); }
+.cx-pill.st-started, .cx-pill.st-researching { color: #e8fff0; border-color: rgba(232, 255, 240, .5); }
+.cx-pill.st-paused { color: var(--amber); }
+.cx-pill.st-dropped { color: var(--red); }
+.cx-steps { font-size: 11px; color: var(--muted); }
+.cx-body { padding: 0 12px 12px; font-size: 14px; }
+.cx-body p { margin: 6px 0; }
+.cx-watch { color: var(--amber); }
+.cx-body a { color: var(--blue); }
+.cx-steplist { margin: 0; padding-left: 22px; }
+.cx-steplist li { padding: 4px 0; display: list-item; }
+.cx-steplist li label { cursor: pointer; }
+.cx-steplist li.done span { text-decoration: line-through; color: var(--muted); }
+.cx-steplist .cx-mini { margin-left: 8px; }
+.cx-mini { padding: 3px 9px; font-size: 12px; border-radius: 8px; background: transparent; border: 1px solid var(--line); color: var(--text); }
+.cx-mini.warn { color: #ffb3b3; border-color: rgba(255, 107, 107, .35); }
+.cx-recent { border-top: 1px solid var(--line); padding-top: 8px; }
+.cx-plant { border-top: 1px solid var(--line); padding-top: 12px; }
+.cx-toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 30; background: #021006; border: 1px solid rgba(0, 255, 65, .5); color: var(--text); padding: 9px 16px; border-radius: 10px; max-width: 90vw; box-shadow: 0 0 24px rgba(0, 255, 65, .25); }
+.cx-toast.bad { border-color: rgba(255, 79, 79, .6); color: #ffb3b3; }
+@media (max-width: 860px) {
+  .cx-hero { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .cx-stat b { font-size: 17px; }
+  #cx-search { max-width: none; }
+}

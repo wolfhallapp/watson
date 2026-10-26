@@ -54,6 +54,8 @@ export const config = {
   // Trust mode (default on, per Horace 2026-10-25): only sending messages to other
   // people and deleting things need a tap. Set WATSON_TRUST=off for the full gate.
   trust: env('WATSON_TRUST', 'on') !== 'off',
+  // The Architect's workshop: drafts, listings and research notes for the Construct (Windows side, so Horace can open them).
+  workshopDir: env('ARCHITECT_WORKSHOP', '/mnt/c/Users/Owner/Documents/construct'),
   // ElevenLabs voice. The key is read from ELEVENLABS_API_KEY or from keyFile
   // (shared with the Wolf Hall sound-effects work), so it isn't copied into .env.
   tts: {

@@ -236,3 +236,8 @@ button.ghost:hover { background: rgba(0, 255, 65, .08); }
   .tabs button { padding: 7px 4px; font-size: 12px; }
   #btn-new { white-space: nowrap; }
 }
+
+/* Link between the Oracle's and the Architect's pages */
+.navlink { color: var(--text); text-decoration: none; border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; font-size: 14px; white-space: nowrap; }
+.navlink:hover { background: rgba(255, 255, 255, .05); }
+@media (max-width: 860px) { .navlink { padding: 5px 8px; font-size: 12px; } }

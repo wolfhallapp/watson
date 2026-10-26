@@ -72,7 +72,7 @@ function classifyAll(toolName, input) {
   if (FILE_TOOLS.has(toolName)) {
     const file = String(input.file_path || input.notebook_path || '');
     if (/(^|\/)\.git(\/|$)/.test(file) || /(^|\/)\.env$/.test(file)) return { level: 'high', reason: 'edit a git-internal or secrets file' };
-    if (!insideDir(file, config.projectDir) && !insideDir(file, ROOT)) return { level: 'medium', reason: 'write a file outside the project' };
+    if (!insideDir(file, config.projectDir) && !insideDir(file, ROOT) && !insideDir(file, config.workshopDir)) return { level: 'medium', reason: 'write a file outside the project' };
     return null;
   }
   if (toolName === 'Read' && /(^|\/)(\.env|\.wolfhall_deploy_env|\.git-credentials)$/.test(String(input.file_path || ''))) {
@@ -83,7 +83,7 @@ function classifyAll(toolName, input) {
     const writes = workerGetWrites(String(input.path || '/'));
     return writes ? { level: 'medium', reason: writes } : null;
   }
-  if (toolName.startsWith('mcp__') && !toolName.startsWith('mcp__watson__')) {
+  if (toolName.startsWith('mcp__') && !toolName.startsWith('mcp__watson__') && !toolName.startsWith('mcp__architect__')) {
     const action = toolName.split('__').slice(2).join('__');
     if (MCP_HIGH.test(action)) return { level: 'high', reason: `use ${prettyTool(toolName)}, which sends or deletes something`, keep: MCP_KEEP.test(action) };
     if (MCP_WRITE.test(action)) return { level: 'medium', reason: `use ${prettyTool(toolName)}, which changes your data`, keep: MCP_KEEP.test(action) };

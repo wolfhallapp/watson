@@ -1,7 +1,7 @@
 // Checks the wake word, spoken yes/no answers and how replies are made speakable.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractWake, parseYesNo, toSpeakable } from '../public/voice.js';
+import { extractWake, parseYesNo, toSpeakable, setWakeWord, ARCHITECT_WAKE, ORACLE_WAKE } from '../public/voice.js';
 
 test('wake word', () => {
   assert.deepEqual(extractWake('Watson what bills are due this week'), { command: 'what bills are due this week' });
@@ -37,4 +37,16 @@ test('speakable text drops code, links and markdown', () => {
   assert.ok(!said.includes('https://'));
   assert.ok(said.includes('code is on screen'));
   assert.ok(toSpeakable('word '.repeat(400)).join(' ').endsWith('The rest is on screen.'));
+});
+
+test('the Architect page wakes on "Architect", not "Oracle"', () => {
+  setWakeWord(ARCHITECT_WAKE);
+  try {
+    assert.deepEqual(extractWake('Architect grow the found money branch'), { command: 'grow the found money branch' });
+    assert.deepEqual(extractWake('hey architect, where do I start'), { command: 'where do I start' });
+    assert.deepEqual(extractWake('Architect'), { command: '' });
+    assert.equal(extractWake('Oracle what is in the pool'), null);
+    assert.equal(extractWake('the architecture of the house'), null);
+    assert.deepEqual(parseYesNo('Architect, yes'), { answer: true, always: false });
+  } finally { setWakeWord(ORACLE_WAKE); }
 });

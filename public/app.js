@@ -1,4 +1,21 @@
-import { Voice, speechSupported, parseYesNo } from './voice.js';
+import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE } from './voice.js';
+
+// One script for both agents' pages: the Oracle (index.html) and the Architect (architect.html, <body data-agent="architect">).
+const AGENT = document.body.dataset.agent === 'architect' ? 'architect' : 'oracle';
+const P = AGENT === 'architect' ? {
+  name: 'The Architect', short: 'Architect', settingsKey: 'architect.settings', ws: '/ws?agent=architect', pronoun: 'he',
+  automatic: 'Automatic (free browser voice, a deep man\'s voice)',
+  test: 'I am the Architect. I created the Construct. Concordantly, we begin.',
+  newChat: 'Start a new conversation? The Architect will forget this chat (the tree stays).',
+  voicePrefs: [/Google UK English Male/i, /Ryan.*Natural/i, /Thomas.*Natural/i, /Guy.*Natural/i, /Microsoft (George|David|Mark)/i, /Daniel/i, /\bmale/i],
+  pitch: 0.7, rateFactor: 0.9,
+} : {
+  name: 'The Oracle', short: 'Oracle', settingsKey: 'settings', ws: '/ws', pronoun: 'she',
+  automatic: 'Automatic (free browser voice, an older woman)',
+  test: "I've been expecting you. The Oracle is here when you need her.",
+  newChat: 'Start a new conversation? The Oracle will forget this chat (but keep what she remembered about you).',
+};
+if (AGENT === 'architect') setWakeWord(ARCHITECT_WAKE);
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -15,8 +32,8 @@ const hashToken = hashParams.get('token');
 if (hashToken) { token = hashToken; store.set('token', token); }
 if (location.hash) history.replaceState(null, '', location.pathname);
 
-const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, headset: true, micOn: false }, store.get('settings', {}));
-const saveSettings = () => store.set('settings', settings);
+const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, headset: true, micOn: false }, store.get(P.settingsKey, AGENT === 'architect' ? { oracleVoice: 2 } : {}));
+const saveSettings = () => store.set(P.settingsKey, settings);
 if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
 if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
@@ -148,8 +165,9 @@ function addScreen(item, { quiet = false } = {}) {
 
 function renderReminders(list) {
   const ul = $('reminders');
+  if (!ul) return;
   ul.innerHTML = '';
-  if (!list.length) { ul.innerHTML = '<li class="empty">No reminders. Try "Oracle, remind me in 20 minutes to check the oven."</li>'; return; }
+  if (!list.length) { ul.innerHTML = `<li class="empty">No reminders. Try "${P.short}, remind me in 20 minutes to check the oven."</li>`; return; }
   for (const r of list.sort((a, b) => a.due.localeCompare(b.due))) {
     const li = document.createElement('li');
     const b = document.createElement('b');
@@ -164,19 +182,20 @@ function showTab(name) {
   // (On desktop the conversation panel stays visible whatever tab is active; see style.css.)
   document.querySelectorAll('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
   if (name === 'screen') $('screen-dot').hidden = true;
+  window.dispatchEvent(new CustomEvent('agent:tab', { detail: name }));
 }
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
 // ── Status display ──
 const LABELS = {
-  off: 'Mic is off', listening: 'Listening for "Oracle"', awake: "I'm listening", capturing: 'Listening…',
+  off: 'Mic is off', listening: `Listening for "${P.short}"`, awake: "I'm listening", capturing: 'Listening…',
   speaking: 'Speaking', 'ptt-idle': 'Hold to talk', thinking: 'Working on it…',
 };
 function hintFor(state) {
   if (!speechSupported.listen) return 'This browser has no speech recognition. Use Chrome or Edge on a computer, Chrome on Android, or Safari on iPhone. You can still type.';
   switch (state) {
-    case 'off': return 'Turn the mic on, then say "Oracle" and your request. Or hold the orb (or Space) to talk.';
-    case 'listening': return busy ? 'The Oracle is working. Say "Oracle, cancel" to stop it.' : 'Say "Oracle, …" anytime, or hold the orb.';
+    case 'off': return `Turn the mic on, then say "${P.short}" and your request. Or hold the orb (or Space) to talk.`;
+    case 'listening': return busy ? `${P.name} is working. Say "${P.short}, cancel" to stop it.` : `Say "${P.short}, …" anytime, or hold the orb.`;
     case 'awake': return approvals.length ? 'Say "yes" or "no".' : 'Go ahead.';
     case 'capturing': return tapToggle ? 'Listening… tap the orb again to send.' : 'Listening… let go to send.';
     case 'speaking': return 'Press Stop or Esc to cut me off.';
@@ -216,6 +235,7 @@ voice.rate = settings.rate;
 voice.followUpMs = settings.follow * 1000;
 voice.settleMs = settings.settle * 1000;
 voice.endPauseMs = settings.endPause * 1000;
+if (P.voicePrefs) { voice.voicePrefs = P.voicePrefs; voice.browserPitch = P.pitch; voice.browserRateFactor = P.rateFactor; }
 
 // ElevenLabs voices, spoken through Watson's server (which holds the API key).
 let cloudVoices = [];
@@ -297,7 +317,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg)); return true; }
-  addMsg('error', 'Not connected to the Oracle. Is it running?');
+  addMsg('error', `Not connected to ${P.name}. Is it running?`);
   return false;
 }
 function interrupt() { voice.stopSpeaking(); if (busy) send({ type: 'interrupt' }); }
@@ -312,7 +332,7 @@ let pairCode = ''; // a one-time 6-digit code from "Pair a phone", used instead 
 let authError = '';
 function connect() {
   if (!token && !pairCode) { $('login').hidden = false; setConn(false, 'Signed out'); return; }
-  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + P.ws;
   ws = new WebSocket(url);
   authError = '';
   ws.onopen = () => ws.send(JSON.stringify({
@@ -352,7 +372,7 @@ function onEvent(ev) {
       $('login').hidden = true;
       $('convo').innerHTML = '';
       for (const h of ev.history || []) addMsg(h.role, h.text, h.at);
-      $('screen').innerHTML = ev.screens?.length ? '' : '<p class="empty">Diffs, code and lists the Oracle shows you will appear here.</p>';
+      $('screen').innerHTML = ev.screens?.length ? '' : `<p class="empty">Diffs, code and lists ${P.name} shows you will appear here.</p>`;
       for (const s of ev.screens || []) addScreen(s, { quiet: true });
       approvals = ev.approvals || [];
       showApproval();
@@ -369,7 +389,7 @@ function onEvent(ev) {
       addMsg('watson', ev.text);
       if (shouldSpeakFor(ev.origin)) voice.speak(ev.text);
       break;
-    case 'busy': busy = ev.busy; if (!busy) $('working-text').textContent = 'The Oracle is working…'; renderState(); break;
+    case 'busy': busy = ev.busy; if (!busy) $('working-text').textContent = `${P.name} is working…`; renderState(); break;
     case 'activity':
       addActivity(ev.text, { sub: ev.sub });
       $('working-text').textContent = ev.text.length > 90 ? ev.text.slice(0, 90) + '…' : ev.text;
@@ -399,7 +419,7 @@ function onEvent(ev) {
       addMsg('system', '⏰ Reminder: ' + ev.text);
       beep(784, 150, 0.07); setTimeout(() => beep(988, 200, 0.07), 180);
       voice.speak('Reminder. ' + ev.text);
-      if ('Notification' in window && Notification.permission === 'granted') new Notification('The Oracle: reminder', { body: ev.text, icon: 'icon.svg' });
+      if ('Notification' in window && Notification.permission === 'granted') new Notification(`${P.name}: reminder`, { body: ev.text, icon: 'icon.svg' });
       send({ type: 'reminders' });
       break;
     case 'reminders_changed': send({ type: 'reminders' }); break;
@@ -409,7 +429,11 @@ function onEvent(ev) {
       addMsg('system', 'New conversation started.');
       break;
   }
+  // The Architect's tree (construct.js) listens for its own events, and for welcome.
+  window.dispatchEvent(new CustomEvent('agent:event', { detail: ev }));
 }
+// For page add-ons (construct.js): talk to the agent and send it events.
+window.agentApp = { send, ask: (text) => send({ type: 'ask', text }), agent: AGENT };
 
 function setStatusLine(s) {
   if (!s) return;
@@ -439,7 +463,7 @@ $('btn-mic').onclick = () => {
   renderState();
 };
 $('btn-stop').onclick = interrupt;
-$('btn-new').onclick = () => { if (confirm('Start a new conversation? The Oracle will forget this chat (but keep what she remembered about you).')) send({ type: 'reset' }); };
+$('btn-new').onclick = () => { if (confirm(P.newChat)) send({ type: 'reset' }); };
 
 // Orb: hold to talk, or tap once to start and tap again to send.
 let downAt = 0;
@@ -491,7 +515,7 @@ function setHeadsetButton(on) {
   keepAlive.play().catch(() => {}); // needs a tap or key press first; unlockAudio retries
   for (const a of actions) { try { navigator.mediaSession.setActionHandler(a, () => headsetPress(a)); } catch {} }
   try {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: 'The Oracle', artist: 'Press play/pause on your headset to talk' });
+    navigator.mediaSession.metadata = new MediaMetadata({ title: P.name, artist: 'Press play/pause on your headset to talk' });
     navigator.mediaSession.playbackState = 'playing';
   } catch {}
 }
@@ -528,7 +552,7 @@ function fillVoices() {
   const sel = $('set-voice');
   const voices = voice.voices();
   const opts = (list) => list.map((v) => `<option value="${esc(v.value)}">${esc(v.label)}</option>`).join('');
-  sel.innerHTML = `<option value="">Automatic (free browser voice, an older woman)</option>`
+  sel.innerHTML = `<option value="">${P.automatic}</option>`
     + (cloudVoices.length ? `<optgroup label="ElevenLabs">${opts(cloudVoices.map((v) => ({ value: 'el:' + v.id, label: v.name })))}</optgroup>` : '')
     + (voices.length ? `<optgroup label="Browser">${opts(voices.map((v) => ({ value: v.name, label: v.name })))}</optgroup>` : '');
   sel.value = settings.voice;
@@ -555,7 +579,7 @@ $('set-follow').onchange = (e) => { settings.follow = Math.max(0, Math.min(30, N
 $('set-settle').onchange = (e) => { settings.settle = Math.max(0, Math.min(4, Number(e.target.value) || 0)); voice.settleMs = settings.settle * 1000; saveSettings(); };
 $('set-endpause').onchange = (e) => { settings.endPause = Math.max(0.5, Math.min(5, Number(e.target.value) || 3)); voice.endPauseMs = settings.endPause * 1000; saveSettings(); };
 $('set-headset').onchange = (e) => { settings.headset = e.target.checked; setHeadsetButton(settings.headset); saveSettings(); };
-$('test-voice').onclick = () => voice.speak("I've been expecting you. The Oracle is here when you need her.", { wakeAfter: false });
+$('test-voice').onclick = () => voice.speak(P.test, { wakeAfter: false });
 $('btn-pair').onclick = () => send({ type: 'pair_start' });
 $('btn-logout').onclick =() => { store.del('token'); token = ''; ws?.close(); location.reload(); };
 

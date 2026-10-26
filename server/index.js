@@ -13,6 +13,7 @@ import { history, reminders, state } from './store.js';
 import { listVoices, synthesize, ttsEnabled } from './tts.js';
 import { windowsNotify } from './notify.js';
 import { startRoutines } from './routines.js';
+import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -70,17 +71,28 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
-// ── Clients ──
-const clients = new Set(); // authenticated sockets
-const screens = []; // last few show_on_screen items, replayed to new screens
-function broadcast(event) {
-  if (event.type === 'screen') { screens.push(event); if (screens.length > 8) screens.shift(); }
+// ── Clients: one channel per agent (the Oracle at /ws, the Architect at /ws?agent=architect) ──
+const channels = {
+  oracle: { key: 'oracle', clients: new Set(), screens: [] }, // screens: last few show_on_screen items, replayed to new screens
+  architect: { key: 'architect', clients: new Set(), screens: [] },
+};
+function broadcastTo(ch, event) {
+  if (event.type === 'screen') { ch.screens.push(event); if (ch.screens.length > 8) ch.screens.shift(); }
   const data = JSON.stringify(event);
-  for (const ws of clients) if (ws.readyState === ws.OPEN) ws.send(data);
+  for (const ws of ch.clients) if (ws.readyState === ws.OPEN) ws.send(data);
 }
+const broadcast = (event) => broadcastTo(channels.oracle, event);
+const allClients = () => channels.oracle.clients.size + channels.architect.clients.size;
 
 const agent = new WatsonAgent(broadcast);
-onApprovalEvent(broadcast);
+const architect = new WatsonAgent((event) => broadcastTo(channels.architect, event), ARCHITECT);
+channels.oracle.agent = agent;
+channels.architect.agent = architect;
+// Approvals are shared: whichever screen is open can answer them.
+onApprovalEvent((event) => { broadcastTo(channels.oracle, event); broadcastTo(channels.architect, event); });
+construct.onChange((summary) => broadcastTo(channels.architect, { type: 'construct', construct: summary }));
+// What Horace may change on the tree from the Architect's screen (the Architect is told on his next turn).
+const SCREEN_ACTIONS = new Set(['update', 'step', 'note', 'payout', 'undo_payout', 'add']);
 
 function tokenOk(given) {
   const a = Buffer.from(String(given || ''));
@@ -155,6 +167,7 @@ function saveVoiceLog(clientId, userAgent, events) {
 }
 
 wss.on('connection', (ws, req) => {
+  const ch = channels[new URL(req.url, 'http://x').searchParams.get('agent')] || channels.oracle;
   let authed = false;
   ws.clientId = null;
   const ip = clientIp(req);
@@ -180,22 +193,36 @@ wss.on('connection', (ws, req) => {
       clearTimeout(authTimer);
       ws.clientId = String(msg.clientId || crypto.randomUUID()).slice(0, 64);
       if (msg.timeZone && typeof msg.timeZone === 'string') state.set({ timeZone: msg.timeZone.slice(0, 64) });
-      clients.add(ws);
+      ch.clients.add(ws);
       ws.send(JSON.stringify({
         type: 'welcome',
-        status: agent.status(),
-        history: history.recent(),
+        agent: ch.key,
+        status: ch.agent.status(),
+        history: ch.agent.history.recent(),
         approvals: pendingApprovals(),
-        screens,
+        screens: ch.screens,
         reminders: reminders.all().filter((r) => !r.fired),
+        ...(ch.key === 'architect' ? { construct: construct.summary() } : {}),
       }));
       return;
     }
 
     switch (msg.type) {
-      case 'ask': agent.ask(String(msg.text || '').slice(0, 20000), ws.clientId); break;
-      case 'interrupt': await agent.interrupt(); break;
-      case 'reset': await agent.reset(); break;
+      case 'ask': ch.agent.ask(String(msg.text || '').slice(0, 20000), ws.clientId); break;
+      case 'interrupt': await ch.agent.interrupt(); break;
+      case 'reset': await ch.agent.reset(); break;
+      case 'construct_get': if (ch.key === 'architect') ws.send(JSON.stringify({ type: 'construct', construct: construct.summary() })); break;
+      case 'construct_do': {
+        if (ch.key !== 'architect' || !SCREEN_ACTIONS.has(msg.action)) break;
+        let reply;
+        try {
+          const r = construct.apply(msg.action, msg.args || {});
+          noteScreenEdit(r.message);
+          reply = { type: 'construct_result', ok: true, message: r.message, ref: msg.ref };
+        } catch (e) { reply = { type: 'construct_result', ok: false, message: e.message, ref: msg.ref }; }
+        ws.send(JSON.stringify(reply));
+        break;
+      }
       case 'approve': answerApproval(msg.id, msg.approved, msg.always); break;
       case 'reminders': ws.send(JSON.stringify({ type: 'reminders', reminders: reminders.all().filter((r) => !r.fired) })); break;
       case 'ping': ws.send('{"type":"pong"}'); break;
@@ -207,11 +234,11 @@ wss.on('connection', (ws, req) => {
       }
     }
   });
-  ws.on('close', () => { clients.delete(ws); clearTimeout(authTimer); });
+  ws.on('close', () => { ch.clients.delete(ws); clearTimeout(authTimer); });
 });
 
 startReminderLoop((r) => {
-  if (!clients.size) {
+  if (!allClients()) {
     // Nobody has Watson open: pop up a Windows notification once, and still speak it when a screen connects.
     if (r.toasted) return false;
     windowsNotify(`Reminder: ${r.text}`);
@@ -235,6 +262,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     console.log('\n  Watson is shutting down.');
     agent.shutdown();
+    architect.shutdown();
     server.close();
     setTimeout(() => process.exit(0), 500).unref();
   });

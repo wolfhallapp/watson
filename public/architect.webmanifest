@@ -1,0 +1,12 @@
+{
+  "name": "The Architect",
+  "short_name": "Architect",
+  "description": "The Construct: 1,000 small ways to earn from home",
+  "start_url": "/architect.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "architect.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
