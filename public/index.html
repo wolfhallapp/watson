@@ -9,8 +9,10 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="morning.css">
   <script type="module" src="app.js"></script>
   <script src="rain.js" defer></script>
+  <script src="morning.js" defer></script>
 </head>
 <body>
   <canvas id="rain" aria-hidden="true"></canvas>
@@ -40,6 +42,20 @@
           <button id="btn-stop" class="danger" disabled>Stop</button>
         </div>
         <p id="hint" class="hint"></p>
+        <div id="hourglass" class="hourglass" title="Your 5-hour Claude session: the sand falls as it's used">
+          <svg viewBox="0 0 60 100" aria-hidden="true">
+            <defs>
+              <clipPath id="hg-top"><path d="M10 8 H50 L30 49 Z"/></clipPath>
+              <clipPath id="hg-bot"><path d="M30 51 L50 92 H10 Z"/></clipPath>
+            </defs>
+            <rect id="hg-sand-top" class="hg-sand" x="0" y="49" width="60" height="0" clip-path="url(#hg-top)"/>
+            <rect id="hg-sand-bot" class="hg-sand" x="0" y="92" width="60" height="0" clip-path="url(#hg-bot)"/>
+            <line id="hg-stream" class="hg-stream" x1="30" y1="48" x2="30" y2="91" hidden/>
+            <path class="hg-glass" d="M10 8 H50 L30 49 L50 92 H10 L30 49 Z"/>
+            <path class="hg-frame" d="M6 5 H54 M6 95 H54"/>
+          </svg>
+          <div class="hg-text"><b id="hg-left">Session hourglass</b><span id="hg-detail">Waiting for Claude's first usage reading</span></div>
+        </div>
         <form id="type-form" class="type-form" autocomplete="off">
           <input id="type-input" type="text" placeholder="Or type to the Oracle…" aria-label="Message the Oracle">
           <button type="submit" class="ghost">Send</button>
@@ -49,8 +65,9 @@
       <nav class="tabs mobile-tabs" role="tablist">
         <button data-tab="convo" class="active" role="tab">Conversation</button>
         <button data-tab="screen" role="tab">Screen <b id="screen-dot" class="dot" hidden></b></button>
+        <button data-tab="morning" role="tab">Morning</button>
         <button data-tab="activity" role="tab">Activity</button>
-        <button data-tab="reminders" role="tab">Reminders</button>
+        <button data-tab="reminders" role="tab">Remind</button>
       </nav>
 
       <div id="tab-convo" class="panel convo tab-panel active">
@@ -62,11 +79,15 @@
     <section class="right">
       <nav class="tabs desktop-tabs" role="tablist">
         <button data-tab="screen" class="active" role="tab">Screen</button>
+        <button data-tab="morning" role="tab">Morning</button>
         <button data-tab="activity" role="tab">Activity</button>
         <button data-tab="reminders" role="tab">Reminders</button>
       </nav>
       <div id="tab-screen" class="panel tab-panel active">
         <div id="screen" class="screen"><p class="empty">Diffs, code and lists the Oracle shows you will appear here.</p></div>
+      </div>
+      <div id="tab-morning" class="panel tab-panel">
+        <div id="mn" class="mn"><p class="empty">Loading your morning…</p></div>
       </div>
       <div id="tab-activity" class="panel tab-panel">
         <ol id="activity" class="activity"><li class="empty">What the Oracle is doing (files read, commands run) shows up here.</li></ol>

@@ -88,6 +88,18 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-
 .caption { min-height: 24px; color: var(--muted); font-style: italic; margin: 6px auto 4px; max-width: 520px; overflow-wrap: anywhere; }
 .controls { display: flex; justify-content: center; gap: 10px; margin: 10px 0 6px; flex-wrap: wrap; }
 .hint { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
+.hourglass { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 0 0 12px; --sand: var(--green); }
+.hourglass[data-level="mid"] { --sand: var(--amber); }
+.hourglass[data-level="low"] { --sand: var(--red); }
+.hourglass svg { width: 34px; height: 56px; flex: none; }
+.hg-glass { fill: rgba(0, 255, 65, .04); stroke: var(--muted); stroke-width: 1.5; stroke-linejoin: round; }
+.hg-frame { stroke: var(--text); stroke-width: 3; stroke-linecap: round; }
+.hg-sand { fill: var(--sand); transition: y .8s ease, height .8s ease; }
+.hg-stream { stroke: var(--sand); stroke-width: 1.5; stroke-dasharray: 2 3; animation: hg-fall .6s linear infinite; }
+@keyframes hg-fall { to { stroke-dashoffset: -5; } }
+.hg-text { display: flex; flex-direction: column; text-align: left; font-size: 13px; }
+.hg-text b { color: var(--text); font-weight: normal; }
+.hg-text span { color: var(--muted); font-size: 12px; }
 .type-form { display: flex; gap: 8px; }
 .type-form input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
 .type-form input:focus { outline: 1px solid var(--gold); }

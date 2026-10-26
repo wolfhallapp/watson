@@ -8,6 +8,21 @@ const TZ = 'America/Chicago';
 // Morning casino email check (Wolf Hall v202): truly free bonuses -> the app's Email bonuses list.
 export const ROUTINES = [
   {
+    // Morning briefing (2026-10-26): ready before Horace's 7 AM wake-up, saved to the Morning Log so the
+    // Wolf Hall app's Morning screen shows it even if he has to leave before sitting down at the PC.
+    key: 'morningBriefing',
+    hour: 6, minute: 40, untilHour: 11,
+    prompt: [
+      '[Watson routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
+      'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
+      'calendar for today and tomorrow, important unread email from the last day, bills due in the next 7 days, the Pool,',
+      'the casino Bonus Run, the Architect\'s moves for today and upcoming reminders.',
+      'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
+      'Start each line with a small emoji label, for example "📅 Calendar:". Put the most important line first.',
+      'Save it with the morning tool, action briefing. Then reply with one line saying it is saved.',
+    ].join(' '),
+  },
+  {
     key: 'casinoOfferScan',
     hour: 7, minute: 30, untilHour: 12,
     prompt: [

@@ -14,6 +14,7 @@ import { listVoices, synthesize, ttsEnabled } from './tts.js';
 import { windowsNotify } from './notify.js';
 import { startRoutines } from './routines.js';
 import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
+import { workerGet, workerPostMorning } from './knowledge.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -94,8 +95,24 @@ function lastSayOf(key) {
   }
   return lastSay[key];
 }
+// The account's usage windows (five_hour, seven_day) as Claude last reported them to either agent.
+// They're shared by the whole account, so both agents feed them; only the Oracle's page shows the hourglass.
+let usage = state.get().usage || {};
+function noteUsage(info) {
+  const windows = info?.unifiedWindows
+    || (info?.rateLimitType ? { [info.rateLimitType]: { utilization: info.utilization, resetsAt: info.resetsAt, status: info.status } } : {});
+  const fresh = {};
+  for (const [kind, w] of Object.entries(windows)) {
+    if (typeof w?.utilization === 'number') fresh[kind] = { utilization: w.utilization, resetsAt: w.resetsAt ?? w.resets_at, status: w.status };
+  }
+  if (!Object.keys(fresh).length) return;
+  usage = { ...usage, ...fresh, at: new Date().toISOString() };
+  state.set({ usage });
+  broadcastTo(channels.oracle, { type: 'usage', usage });
+}
 function agentSend(key) {
   return (event) => {
+    if (event.type === 'usage') return noteUsage(event.info);
     broadcastTo(channels[key], event);
     const other = channels[otherOf(key)];
     if (event.type === 'say' && event.origin !== 'routine') {
@@ -117,6 +134,24 @@ onApprovalEvent((event) => { broadcastTo(channels.oracle, event); broadcastTo(ch
 construct.onChange((summary) => broadcastTo(channels.architect, { type: 'construct', construct: summary }));
 // What Horace may change on the tree from the Architect's screen (the Architect is told on his next turn).
 const SCREEN_ACTIONS = new Set(['update', 'step', 'note', 'payout', 'undo_payout', 'add']);
+// What the Oracle's Morning tab may send to the app's Morning Log (the worker checks every value).
+const MORNING_FIELDS = new Set(['bedtime', 'wake', 'sleepQuality', 'energy', 'mood', 'weight', 'meds', 'medsNote', 'water', 'caffeine',
+  'waterAdd', 'caffeineAdd', 'keto', 'gratitude', 'note', 'top1', 'top2', 'top3', 'top1Done', 'top2Done', 'top3Done', 'checkIn']);
+async function morningGet(ws) {
+  try {
+    const r = await workerGet('/morning?person=Horace');
+    ws.send(JSON.stringify({ type: 'morning', data: JSON.parse(r.body) }));
+  } catch (e) { ws.send(JSON.stringify({ type: 'morning_result', ok: false, message: `Couldn't load the morning: ${e.message}` })); }
+}
+async function morningDo(ws, body) {
+  const clean = Object.fromEntries(Object.entries(body || {}).filter(([k]) => MORNING_FIELDS.has(k)));
+  try {
+    const r = await workerPostMorning(clean);
+    if (!r.json?.ok) throw new Error(r.json?.error || `HTTP ${r.status}`);
+    broadcastTo(channels.oracle, { type: 'morning', data: r.json });
+    ws.send(JSON.stringify({ type: 'morning_result', ok: true, message: r.json.warning || (clean.checkIn ? 'Checked in.' : 'Saved') }));
+  } catch (e) { ws.send(JSON.stringify({ type: 'morning_result', ok: false, message: `Not saved: ${e.message}` })); }
+}
 
 function tokenOk(given) {
   const a = Buffer.from(String(given || ''));
@@ -226,7 +261,7 @@ wss.on('connection', (ws, req) => {
         approvals: pendingApprovals(),
         screens: ch.screens,
         reminders: reminders.all().filter((r) => !r.fired),
-        ...(ch.key === 'architect' ? { construct: construct.summary() } : {}),
+        ...(ch.key === 'architect' ? { construct: construct.summary() } : { usage }),
         lastSay: lastSayOf(ch.key),
         peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) },
       }));
@@ -237,6 +272,8 @@ wss.on('connection', (ws, req) => {
       case 'ask': ch.agent.ask(String(msg.text || '').slice(0, 20000), ws.clientId); break;
       case 'interrupt': await ch.agent.interrupt(); break;
       case 'reset': await ch.agent.reset(); break;
+      case 'morning_get': if (ch.key === 'oracle') morningGet(ws); break;
+      case 'morning_do': if (ch.key === 'oracle') morningDo(ws, msg.body); break;
       case 'construct_get': if (ch.key === 'architect') ws.send(JSON.stringify({ type: 'construct', construct: construct.summary() })); break;
       case 'construct_do': {
         if (ch.key !== 'architect' || !SCREEN_ACTIONS.has(msg.action)) break;

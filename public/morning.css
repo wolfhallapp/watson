@@ -1,0 +1,53 @@
+/* The Oracle's Morning tab ("Wake up, Neo"), in the Matrix theme of style.css. */
+.mn { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.mn h4 { margin: 0; font-size: 20px; letter-spacing: 3px; text-transform: uppercase; color: var(--green); text-shadow: 0 0 10px rgba(0, 255, 65, .6); }
+.mn h5 { margin: 0 0 8px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--green); }
+.mn h5 small { color: var(--muted); letter-spacing: 0; text-transform: none; margin-left: 6px; }
+.mn-sub { color: var(--muted); font-size: 13px; }
+.mn-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.mn-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.mn-badge { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.mn-badge.on { color: #00120a; background: var(--green); border-color: var(--green); box-shadow: 0 0 12px rgba(0, 255, 65, .5); }
+.mn-brief { background: rgba(0, 255, 65, .05); border: 1px solid rgba(0, 255, 65, .3); border-radius: 6px; padding: 12px; }
+.mn-brief p { margin: 0; white-space: pre-wrap; line-height: 1.55; }
+.mn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mn-card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.mn-wide { grid-column: 1 / -1; }
+.mn-two { display: flex; gap: 8px; }
+.mn-two > * { flex: 1; min-width: 0; }
+.mn-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.mn input[type="text"], .mn input[type="number"], .mn input[type="time"], .mn textarea { background: #000; border: 1px solid rgba(0, 255, 65, .25); border-radius: 4px; color: var(--text); padding: 7px 9px; font: inherit; font-size: 14px; min-width: 0; width: 100%; }
+.mn input:focus, .mn textarea:focus { outline: 1px solid var(--green); }
+.mn input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1) sepia(1) saturate(5) hue-rotate(80deg); }
+.mn-big { font-size: 22px; color: var(--green); text-shadow: 0 0 8px rgba(0, 255, 65, .4); }
+.mn-scale { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.mn-scale > div { display: flex; gap: 4px; }
+.mn-face { flex: 1; padding: 6px 0 3px; font-size: 18px; line-height: 1.1; background: transparent; border: 1px solid var(--line); border-radius: 4px; }
+.mn-face small { display: block; font-size: 10px; color: var(--muted); }
+.mn-face.on { background: rgba(0, 255, 65, .18); border-color: var(--green); box-shadow: 0 0 10px rgba(0, 255, 65, .45); }
+.mn-check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.mn-check input, .mn-top input[type="checkbox"] { width: 18px; height: 18px; accent-color: #00ff41; }
+.mn-counter { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.mn-counter > div { display: flex; align-items: center; gap: 10px; }
+.mn-counter b { font-size: 24px; color: var(--text); min-width: 28px; text-align: center; }
+.mn-counter button { padding: 3px 12px; background: transparent; border: 1px solid rgba(0, 255, 65, .3); color: var(--green); }
+.mn-top { display: flex; align-items: center; gap: 8px; }
+.mn-top.done input[type="text"] { text-decoration: line-through; color: var(--muted); }
+.mn-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mn-week { border-top: 1px solid var(--line); padding-top: 10px; }
+.mn-bars { display: flex; gap: 4px; }
+.mn-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 13px; }
+.mn-day small { font-size: 11px; color: var(--muted); }
+.mn-barbox { height: 70px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.mn-barbox i { display: block; width: 60%; background: rgba(0, 255, 65, .25); border-radius: 3px 3px 0 0; }
+.mn-day.in .mn-barbox i { background: var(--green); box-shadow: 0 0 8px rgba(0, 255, 65, .5); }
+.mn-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.mn-stat { display: flex; flex-direction: column; }
+.mn-stat b { font-size: 16px; color: var(--text); }
+.mn-stat span { font-size: 11px; color: var(--muted); }
+.mn-toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 30; background: #021006; border: 1px solid rgba(0, 255, 65, .5); color: var(--text); padding: 9px 16px; border-radius: 6px; max-width: 90vw; box-shadow: 0 0 24px rgba(0, 255, 65, .25); }
+.mn-toast.bad { border-color: rgba(255, 79, 79, .6); color: #ffb3b3; }
+@media (max-width: 860px) {
+  .mn-grid { grid-template-columns: minmax(0, 1fr); }
+  .mn-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

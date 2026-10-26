@@ -193,6 +193,17 @@ export async function workerPostGambling(p, body) {
   return { status: r.status, body: text, json };
 }
 
+/** POST /morning: Horace's Morning Log ("Wake up, Neo"), the same row the app's Morning screen writes. */
+export async function workerPostMorning(body) {
+  const r = await fetch(WORKER_URL + '/morning', {
+    method: 'POST', headers: { 'X-Worker-Key': workerKey(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ person: 'Horace', ...body, source: 'Oracle' }), signal: AbortSignal.timeout(60000),
+  });
+  const text = await r.text();
+  let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
+  return { status: r.status, body: text, json };
+}
+
 export async function workerGet(p) {
   if (!/^\/[\w\-/.]*(\?[\w\-=&%.]*)?$/.test(p)) throw new Error('Give a path like /pool or /upcoming?days=14');
   const r = await fetch(WORKER_URL + p, { method: 'GET', headers: { 'X-Worker-Key': workerKey() }, signal: AbortSignal.timeout(30000) });

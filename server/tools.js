@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { memory, reminders, state } from './store.js';
-import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling } from './knowledge.js';
+import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning } from './knowledge.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
@@ -145,6 +145,54 @@ export function createWatsonTools(send, currentSessionId = () => null) {
             if (!hit) return { ...text(`No site matched "${site}". Sites: ${all.map((x) => x.name).join(', ')}`), isError: true };
             if (action === 'claim') return post('/gambling/claim', { siteId: hit.id });
             return post('/gambling/site', { siteId: hit.id, tenPlus: on !== false });
+          } catch (e) {
+            return { ...text(`Could not reach the app: ${e.message}`), isError: true };
+          }
+        },
+      ),
+      tool(
+        'morning',
+        'Horace\'s morning check-in ("Wake up, Neo"): the Morning Log shared with the Wolf Hall app\'s Morning screen, shown live on the Morning tab of your screen. '
+          + 'view = today\'s entry, streak and last 7 days (call it first: he may have filled some on his phone). '
+          + 'save = set any fields he gave you (only what he said; never guess a number). Set checkIn:true once the check-in is complete. '
+          + 'briefing = save today\'s briefing text (plain sentences, no markdown) so his phone shows it. '
+          + 'Times like "11:30 pm" or "7:05" are fine. Scales are 1 to 5. A weight also goes to the Health log. Never touches money.',
+        {
+          action: z.enum(['view', 'save', 'briefing']),
+          focus: z.boolean().optional().describe('Switch his screen to the Morning tab (use at the start of the check-in)'),
+          date: z.string().optional().describe('YYYY-MM-DD, only to fill in a past day'),
+          bedtime: z.string().optional(), wake: z.string().optional(),
+          sleepQuality: z.number().int().min(1).max(5).optional(), energy: z.number().int().min(1).max(5).optional(), mood: z.number().int().min(1).max(5).optional(),
+          weight: z.number().min(50).max(700).optional(),
+          meds: z.boolean().optional(), medsNote: z.string().optional(),
+          water: z.number().int().min(0).max(40).optional(), caffeine: z.number().int().min(0).max(20).optional(),
+          waterAdd: z.number().int().min(-10).max(10).optional(), caffeineAdd: z.number().int().min(-10).max(10).optional(),
+          keto: z.string().optional(), gratitude: z.string().optional(), note: z.string().optional(),
+          top1: z.string().optional(), top2: z.string().optional(), top3: z.string().optional(),
+          top1Done: z.boolean().optional(), top2Done: z.boolean().optional(), top3Done: z.boolean().optional(),
+          checkIn: z.boolean().optional(),
+          text: z.string().optional().describe('For action briefing: the briefing'),
+        },
+        async ({ action, focus, text: briefingText, ...fields }) => {
+          try {
+            let data;
+            if (action === 'view') {
+              const r = await workerGet('/morning?person=Horace');
+              data = JSON.parse(r.body);
+              if (!data.ok) return { ...text(`Could not read the Morning Log: ${data.error}`), isError: true };
+            } else {
+              const body = action === 'briefing' ? { briefing: String(briefingText || '').trim() } : fields;
+              if (action === 'briefing' && !body.briefing) return { ...text('Give the briefing text.'), isError: true };
+              const r = await workerPostMorning(body);
+              data = r.json;
+              if (!data?.ok) return { ...text(`Not saved: ${data?.error || r.body.slice(0, 300)}`), isError: true };
+            }
+            send({ type: 'morning', data, focus: !!focus });
+            const e = data.entry || {};
+            const filled = Object.entries(e).filter(([k, v]) => !['id', 'day', 'person', 'edited', 'weightLogId', 'briefing', 'briefingAt'].includes(k) && v !== null && v !== '' && v !== false).map(([k, v]) => `${k}: ${v}`);
+            return text(`${action === 'view' ? 'Today' : 'Saved'} (${data.today}). Streak ${data.streak} days. ${data.entry ? '' : 'Nothing logged yet today. '}`
+              + (filled.length ? `Filled: ${filled.join('; ')}.` : '') + (e.briefing ? ` Briefing saved at ${e.briefingAt}.` : ' No briefing yet.')
+              + ` Week: ${JSON.stringify(data.week)}` + (data.warning ? ` Warning: ${data.warning}` : ''));
           } catch (e) {
             return { ...text(`Could not reach the app: ${e.message}`), isError: true };
           }

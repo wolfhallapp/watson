@@ -26,6 +26,32 @@ const store = {
   del(k) { try { localStorage.removeItem('watson.' + k); } catch {} },
 };
 
+// ── Session hourglass (the Oracle's page only): the 5-hour usage window as falling sand ──
+let usage = null;
+function renderUsage(u) {
+  if (u) usage = u;
+  if (!$('hourglass')) return;
+  const w = usage?.five_hour;
+  if (typeof w?.utilization !== 'number') return;
+  const used = Math.min(1, Math.max(0, w.utilization)); // Claude reports 0 to 1
+  // Heights by area: the top bulb drains toward its neck, the bottom fills from its base.
+  const H = 41, top = H * Math.sqrt(1 - used), bot = H * (1 - Math.sqrt(1 - used));
+  $('hg-sand-top').setAttribute('y', 49 - top); $('hg-sand-top').setAttribute('height', top);
+  $('hg-sand-bot').setAttribute('y', 92 - bot); $('hg-sand-bot').setAttribute('height', bot);
+  $('hg-stream').toggleAttribute('hidden', used <= 0 || used >= 1); // an SVG element has no .hidden property
+  $('hourglass').dataset.level = used >= 0.9 ? 'low' : used >= 0.7 ? 'mid' : 'ok';
+  $('hg-left').textContent = `${Math.round((1 - used) * 100)}% of this session left`;
+  const parts = [];
+  if (w.resetsAt) {
+    const ms = (w.resetsAt > 1e12 ? w.resetsAt : w.resetsAt * 1000) - Date.now();
+    const mins = Math.max(0, Math.round(ms / 60000));
+    parts.push(mins ? `Refills in ${mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`}` : 'Refilling now');
+  }
+  if (typeof usage.seven_day?.utilization === 'number') parts.push(`week ${Math.round(usage.seven_day.utilization * 100)}% used`);
+  $('hg-detail').textContent = parts.join(' · ');
+}
+setInterval(() => renderUsage(), 60000);
+
 // ── Identity ──
 const clientId = store.get('clientId') || (() => { const id = crypto.randomUUID(); store.set('clientId', id); return id; })();
 let token = store.get('token', '');
@@ -425,6 +451,7 @@ function onEvent(ev) {
       approvals = ev.approvals || [];
       showApproval();
       renderReminders(ev.reminders || []);
+      renderUsage(ev.usage);
       if (ev.lastSay?.at) {
         // Came over from the other page's banner: say what was missed.
         const missed = ev.lastSay.at > (store.get(seenKey(AGENT), '') || '');
@@ -465,6 +492,7 @@ function onEvent(ev) {
       if (shouldSpeakFor(ev.origin)) voice.speak(ev.message);
       break;
     case 'screen': addScreen(ev); break;
+    case 'usage': renderUsage(ev.usage); break;
     case 'peer': onPeer(ev); break;
     case 'approval':
       if (!approvals.some((a) => a.id === ev.id)) approvals.push(ev);
