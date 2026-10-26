@@ -29,6 +29,8 @@ export class Voice {
     this.speakEnabled = true;
     this.voiceName = '';
     this.rate = 1.05;
+    this.browserPitch = 0.75;     // 0-2, 1 = normal
+    this.browserRateFactor = 0.88;
     this.followUpMs = 7000;
 
     this.enabled = false; // the user has switched the mic on
@@ -268,8 +270,9 @@ export class Voice {
   pickVoice() {
     const all = this.voices();
     if (this.voiceName) { const v = all.find((x) => x.name === this.voiceName); if (v) return v; }
-    const prefs = [/Ryan.*Natural/i, /Thomas.*Natural/i, /Guy.*Natural/i, /Andrew.*Natural/i, /Christopher.*Natural/i, /Natural/i,
-      /Google UK English Male/i, /Daniel/i, /Google US English/i, /Microsoft (David|Mark)/i];
+    // The Oracle (2026-10-25): a mature woman's voice. Google's free UK female voice first, then other women's voices.
+    const prefs = [/Google UK English Female/i, /Libby.*Natural/i, /Sonia.*Natural/i, /Maisie.*Natural/i, /Jenny.*Natural/i,
+      /Microsoft (Hazel|Susan)/i, /Google US English/i, /Microsoft Zira/i, /Samantha/i, /Karen/i, /female/i];
     for (const p of prefs) { const v = all.find((x) => p.test(x.name)); if (v) return v; }
     return all[0] || null;
   }
@@ -277,8 +280,10 @@ export class Voice {
   /** The ElevenLabs voice id to use, or null to use the browser's voice. */
   cloudVoice() {
     if (!this.cloud || this.cloudOff || !this.audio) return null;
+    // ElevenLabs only when picked by name in Settings: the free tier runs out fast, so "Automatic"
+    // is the free browser voice (per Horace, 2026-10-25).
     if (this.voiceName.startsWith('el:')) return this.voiceName.slice(3);
-    return this.voiceName ? null : this.cloud.defaultVoice || null; // "Automatic" prefers ElevenLabs
+    return null;
   }
 
   /** Speak text. Long replies are split into sentences (Chrome cuts off long utterances). */
@@ -355,7 +360,9 @@ export class Voice {
     const u = new SpeechSynthesisUtterance(item.text);
     const v = this.pickVoice();
     if (v) { u.voice = v; u.lang = v.lang; }
-    u.rate = this.rate;
+    // Lower and a touch slower, so the free voice sounds like an older, unhurried woman (the Oracle).
+    u.rate = this.rate * this.browserRateFactor;
+    u.pitch = this.browserPitch;
     u.onend = u.onerror = () => { if (gen === this.gen) this.#itemDone(item); };
     this.#afterSettle(gen, () => speechSynthesis.speak(u));
   }

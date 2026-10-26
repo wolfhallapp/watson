@@ -18,7 +18,7 @@ if (location.hash) history.replaceState(null, '', location.pathname);
 const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, headset: true, micOn: false }, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
 if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
-if (!settings.oracleVoice) { if (settings.voice === 'nPczCjzI2devNBz1zQrb') settings.voice = ''; settings.oracleVoice = true; saveSettings(); } // the Oracle (2026-10-25): Brian -> the server's new default voice // 1.8 s cut Horace off mid-thought; move the old default up
+if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
 if (hashParams.get('listen') === '1') { settings.mode = 'handsfree'; settings.micOn = true; saveSettings(); }
 
@@ -528,8 +528,7 @@ function fillVoices() {
   const sel = $('set-voice');
   const voices = voice.voices();
   const opts = (list) => list.map((v) => `<option value="${esc(v.value)}">${esc(v.label)}</option>`).join('');
-  const brian = cloudVoices.find((v) => v.id === voice.cloud?.defaultVoice);
-  sel.innerHTML = `<option value="">Automatic${brian ? ` (ElevenLabs ${esc(brian.name.split(' - ')[0])})` : ''}</option>`
+  sel.innerHTML = `<option value="">Automatic (free browser voice, an older woman)</option>`
     + (cloudVoices.length ? `<optgroup label="ElevenLabs">${opts(cloudVoices.map((v) => ({ value: 'el:' + v.id, label: v.name })))}</optgroup>` : '')
     + (voices.length ? `<optgroup label="Browser">${opts(voices.map((v) => ({ value: v.name, label: v.name })))}</optgroup>` : '');
   sel.value = settings.voice;

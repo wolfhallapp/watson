@@ -16,6 +16,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const make = (fetchImpl, h = {}) => {
   const v = new Voice({ onState: () => {}, ...h });
   v.cloud = { defaultVoice: 'brianVoiceId123', fetch: fetchImpl };
+  v.voiceName = 'el:brianVoiceId123'; // ElevenLabs only when picked by name (2026-10-25)
   return v;
 };
 
@@ -25,9 +26,11 @@ test('key file parsing', () => {
   assert.equal(parseKeyFile('# nothing here\nOTHER=1'), '');
 });
 
-test('automatic voice uses ElevenLabs default; a browser voice turns it off', () => {
+test('automatic is the free browser voice; an ElevenLabs voice is used only when picked', () => {
   const v = make(async () => new Blob(['x']));
   assert.equal(v.cloudVoice(), 'brianVoiceId123');
+  v.voiceName = '';
+  assert.equal(v.cloudVoice(), null);
   v.voiceName = 'el:otherVoice456';
   assert.equal(v.cloudVoice(), 'otherVoice456');
   v.voiceName = 'Google UK English Male';
