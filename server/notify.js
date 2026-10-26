@@ -8,7 +8,7 @@ $t = [Security.SecurityElement]::Escape($env:WATSON_TOAST)
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
 [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null
 $x = New-Object Windows.Data.Xml.Dom.XmlDocument
-$x.LoadXml("<toast scenario='reminder'><visual><binding template='ToastGeneric'><text>Watson</text><text>$t</text></binding></visual><actions><action content='OK' arguments='ok' activationType='foreground'/></actions></toast>")
+$x.LoadXml("<toast scenario='reminder'><visual><binding template='ToastGeneric'><text>The Oracle</text><text>$t</text></binding></visual><actions><action content='OK' arguments='ok' activationType='foreground'/></actions></toast>")
 $app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe'
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app).Show([Windows.UI.Notifications.ToastNotification]::new($x))
 `;

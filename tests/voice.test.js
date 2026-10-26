@@ -10,6 +10,12 @@ test('wake word', () => {
   assert.deepEqual(extractWake('Watson'), { command: '' });
   assert.equal(extractWake("what's on the calendar today"), null);
   assert.equal(extractWake('pass the salt'), null);
+  // Her name since 2026-10-25.
+  assert.deepEqual(extractWake('Oracle what is in the pool'), { command: 'what is in the pool' });
+  assert.deepEqual(extractWake('hey oracle, set a reminder'), { command: 'set a reminder' });
+  assert.deepEqual(extractWake('The Oracle check my bonus run'), { command: 'check my bonus run' });
+  assert.deepEqual(extractWake('Oracle'), { command: '' });
+  assert.equal(extractWake('the oral exam is tomorrow'), null);
 });
 
 test('yes and no answers', () => {

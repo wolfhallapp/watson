@@ -14,9 +14,10 @@ const SR = hasWindow && (window.SpeechRecognition || window.webkitSpeechRecognit
 
 // "Watson" and the ways speech recognition tends to mishear it. ("What's on"
 // is left out on purpose: it would wake Watson in everyday conversation.)
-const WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(watson|watsons|wattson|watsen|watts\s?on|what\s?son|whatson)\b[\s,.!?:-]*/i;
+// "Oracle" (her name since 2026-10-25) and how it gets misheard; "Watson" still works too.
+const WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(oracle|oracles|orakel|orical|oricle|auricle|aurical|watson|watsons|wattson|watsen|watts\s?on|what\s?son|whatson)\b[\s,.!?:-]*/i;
 
-const STOP_SPEAKING = /^(?:(?:watson|ok|okay)[\s,]+)?(stop|stop talking|quiet|be quiet|shut up|enough|that's enough|silence|pause)\b/i;
+const STOP_SPEAKING = /^(?:(?:oracle|watson|ok|okay)[\s,]+)?(stop|stop talking|quiet|be quiet|shut up|enough|that's enough|silence|pause)\b/i;
 
 export const speechSupported = { listen: !!SR, speak: hasWindow && 'speechSynthesis' in window };
 
@@ -121,7 +122,7 @@ export class Voice {
         // The browser's speech service (Google's, in Chrome) drops a session now and then and
         // recovers on the next restart. Only say something if it keeps failing.
         this.netErrors = (this.netErrors || 0) + 1;
-        if (this.netErrors === 3) this.h.onError?.('Speech recognition can\'t reach the browser\'s speech service right now. Watson keeps retrying; check the internet if this keeps happening.');
+        if (this.netErrors === 3) this.h.onError?.('Speech recognition can\'t reach the browser\'s speech service right now. the Oracle keeps retrying; check the internet if this keeps happening.');
         this.restartDelay = Math.min(this.restartDelay * 2, 8000);
       } else if (e.error === 'audio-capture') {
         this.h.onError?.('No microphone was found.');
@@ -345,8 +346,8 @@ export class Voice {
     if ([401, 402, 503].includes(err?.status)) {
       this.cloudOff = true;
       this.h.onCloudOff?.(err.status === 402
-        ? 'The ElevenLabs voice is out of characters for this month, so Watson is using the browser voice.'
-        : 'The ElevenLabs voice isn\'t available, so Watson is using the browser voice.');
+        ? 'The ElevenLabs voice is out of characters for this month, so the Oracle is using the browser voice.'
+        : 'The ElevenLabs voice isn\'t available, so the Oracle is using the browser voice.');
     }
   }
   #speakBrowser(item, gen) {
@@ -429,7 +430,7 @@ export function toSpeakable(text) {
 
 /** Interpret a spoken answer to an approval prompt. */
 export function parseYesNo(text) {
-  const t = String(text || '').toLowerCase().replace(/^(watson|ok|okay|um|uh)[\s,]+/g, '').trim();
+  const t = String(text || '').toLowerCase().replace(/^(oracle|watson|ok|okay|um|uh)[\s,]+/g, '').trim();
   if (/^(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|approve|approved|confirm|confirmed|affirmative|please do|go for it|send it|ship it|deploy it)\b/.test(t)) {
     return { answer: true, always: /\b(always|every time|for (this|the) session|don't ask)\b/.test(t) };
   }

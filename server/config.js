@@ -58,7 +58,7 @@ export const config = {
   // (shared with the Wolf Hall sound-effects work), so it isn't copied into .env.
   tts: {
     keyFile: env('ELEVENLABS_KEY_FILE', path.join(os.homedir(), '.config', 'wolf-hall-secrets', 'elevenlabs.env')),
-    voiceId: env('WATSON_TTS_VOICE', 'nPczCjzI2devNBz1zQrb'), // Brian
+    voiceId: env('WATSON_TTS_VOICE', 'EXAVITQu4vr4xnSDxMaL'), // Sarah: mature, warm, reassuring (the Oracle, 2026-10-25; was Brian)
     model: env('WATSON_TTS_MODEL', 'eleven_flash_v2_5'), // fast, and half the characters of the full models
   },
 };

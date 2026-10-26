@@ -1,19 +1,20 @@
 :root {
-  --bg: #0d1320;
-  --bg2: #131b2c;
-  --card: #18223a;
-  --line: rgba(255, 255, 255, 0.08);
-  --text: #e8ecf4;
-  --muted: #8d98ad;
-  --gold: #d9b26a;
-  --gold-soft: rgba(217, 178, 106, 0.16);
-  --blue: #6ea8ff;
-  --green: #5fd39a;
-  --red: #ff6b6b;
-  --amber: #f3b54a;
-  --radius: 14px;
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  /* The Oracle: Matrix theme (black, phosphor green, mono type), matching the Wolf Hall app. */
+  --bg: #000000;
+  --bg2: rgba(2, 14, 6, 0.88);
+  --card: #04200d;
+  --line: rgba(0, 255, 65, 0.16);
+  --text: #c9ffd6;
+  --muted: #4f9e66;
+  --gold: #00ff41;
+  --gold-soft: rgba(0, 255, 65, 0.10);
+  --blue: #8cffaa;
+  --green: #00ff41;
+  --red: #ff4f4f;
+  --amber: #ffb020;
+  --radius: 6px;
+  --font: "Share Tech Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  --mono: "Share Tech Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
   color-scheme: dark;
 }
 
@@ -191,3 +192,47 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-
   #btn-new { padding: 6px 10px; font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+
+/* ── The Oracle: Matrix overrides ─────────────────────────────── */
+body { background: #000; text-shadow: 0 0 1px rgba(0, 255, 65, .25); }
+#rain { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .32; }
+.top, .layout, .approval-wrap, .settings, .login { position: relative; z-index: 1; }
+.approval-wrap, .login { position: fixed; }
+.top { background: rgba(0, 0, 0, .78); border-bottom-color: rgba(0, 255, 65, .25); }
+.brand span { color: var(--green); letter-spacing: 4px; text-transform: uppercase; text-shadow: 0 0 8px rgba(0, 255, 65, .7); }
+.panel, .stage, .tabs { box-shadow: 0 0 0 1px rgba(0, 255, 65, .05) inset, 0 0 24px rgba(0, 255, 65, .05); }
+button { border-radius: 4px; letter-spacing: .5px; }
+button.primary { background: var(--green); color: #00120a; box-shadow: 0 0 14px rgba(0, 255, 65, .45); }
+button.primary:hover:not(:disabled) { background: #8cffaa; }
+button.ghost { border-color: rgba(0, 255, 65, .3); color: var(--green); }
+button.ghost:hover { background: rgba(0, 255, 65, .08); }
+.tabs button.active { background: rgba(0, 255, 65, .12); color: var(--green); }
+.pill { background: rgba(0, 255, 65, .06); }
+.orb .core { background: radial-gradient(circle at 35% 30%, #0f3a1c, #021208 70%); box-shadow: 0 0 0 1px rgba(0, 255, 65, .35) inset, 0 0 18px rgba(0, 255, 65, .15); }
+.orb[data-state="listening"] .core { background: radial-gradient(circle at 35% 30%, #145a2a, #03200d 70%); }
+.orb[data-state="listening"] .r1 { border-color: rgba(0, 255, 65, .35); }
+.orb[data-state="awake"] .core, .orb[data-state="capturing"] .core { background: radial-gradient(circle at 35% 30%, #c9ffd6, #00ff41 55%, #007a20); box-shadow: 0 0 34px rgba(0, 255, 65, .8); }
+.orb[data-state="awake"] .r1, .orb[data-state="capturing"] .r1 { border-color: rgba(0, 255, 65, .7); }
+.orb[data-state="awake"] .r2, .orb[data-state="capturing"] .r2 { border-color: rgba(0, 255, 65, .4); }
+.orb[data-state="speaking"] .core { background: radial-gradient(circle at 35% 30%, #eafff0, #8cffaa 50%, #0b6b2a); box-shadow: 0 0 40px rgba(140, 255, 170, .75); }
+.orb[data-state="speaking"] .r1 { border-color: rgba(140, 255, 170, .55); }
+.state-label { color: var(--green); letter-spacing: 2px; text-transform: uppercase; font-size: 14px; }
+.caption { color: #8cffaa; }
+.msg.you { background: rgba(0, 255, 65, .07); border-color: rgba(0, 255, 65, .3); }
+.msg.watson { background: rgba(0, 40, 16, .85); border: 1px solid rgba(0, 255, 65, .12); color: #dfffe6; }
+.msg.error { color: #ff9c9c; background: rgba(255, 79, 79, .08); }
+.screen-item { background: rgba(0, 24, 10, .9); }
+.screen-item h3 { color: var(--green); text-transform: uppercase; letter-spacing: 1px; }
+.md pre, pre.block, .approval pre { background: #000; border: 1px solid rgba(0, 255, 65, .15); color: #c9ffd6; }
+.md code { background: rgba(0, 255, 65, .08); }
+.activity li { color: #9be8ad; }
+.approval { box-shadow: 0 0 50px rgba(0, 255, 65, .18); border-color: rgba(0, 255, 65, .45); }
+.approval-wrap, .settings::backdrop { background: rgba(0, 0, 0, .78); }
+.type-form input, .row select, .row input[type="number"], .login-card input { background: #000; border-color: rgba(0, 255, 65, .25); color: var(--text); }
+::selection { background: rgba(0, 255, 65, .35); color: #000; }
+@media (max-width: 860px) {
+  .brand span { letter-spacing: 2px; white-space: nowrap; font-size: 15px; }
+  .tabs button { padding: 7px 4px; font-size: 12px; }
+  #btn-new { white-space: nowrap; }
+}

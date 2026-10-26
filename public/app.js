@@ -17,7 +17,8 @@ if (location.hash) history.replaceState(null, '', location.pathname);
 
 const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, headset: true, micOn: false }, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
-if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); } // 1.8 s cut Horace off mid-thought; move the old default up
+if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
+if (!settings.oracleVoice) { if (settings.voice === 'nPczCjzI2devNBz1zQrb') settings.voice = ''; settings.oracleVoice = true; saveSettings(); } // the Oracle (2026-10-25): Brian -> the server's new default voice // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
 if (hashParams.get('listen') === '1') { settings.mode = 'handsfree'; settings.micOn = true; saveSettings(); }
 
@@ -148,7 +149,7 @@ function addScreen(item, { quiet = false } = {}) {
 function renderReminders(list) {
   const ul = $('reminders');
   ul.innerHTML = '';
-  if (!list.length) { ul.innerHTML = '<li class="empty">No reminders. Try "Watson, remind me in 20 minutes to check the oven."</li>'; return; }
+  if (!list.length) { ul.innerHTML = '<li class="empty">No reminders. Try "Oracle, remind me in 20 minutes to check the oven."</li>'; return; }
   for (const r of list.sort((a, b) => a.due.localeCompare(b.due))) {
     const li = document.createElement('li');
     const b = document.createElement('b');
@@ -168,14 +169,14 @@ document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('cli
 
 // ── Status display ──
 const LABELS = {
-  off: 'Mic is off', listening: 'Listening for "Watson"', awake: "I'm listening", capturing: 'Listening…',
+  off: 'Mic is off', listening: 'Listening for "Oracle"', awake: "I'm listening", capturing: 'Listening…',
   speaking: 'Speaking', 'ptt-idle': 'Hold to talk', thinking: 'Working on it…',
 };
 function hintFor(state) {
   if (!speechSupported.listen) return 'This browser has no speech recognition. Use Chrome or Edge on a computer, Chrome on Android, or Safari on iPhone. You can still type.';
   switch (state) {
-    case 'off': return 'Turn the mic on, then say "Watson" and your request. Or hold the orb (or Space) to talk.';
-    case 'listening': return busy ? 'Watson is working. Say "Watson, cancel" to stop it.' : 'Say "Watson, …" anytime, or hold the orb.';
+    case 'off': return 'Turn the mic on, then say "Oracle" and your request. Or hold the orb (or Space) to talk.';
+    case 'listening': return busy ? 'The Oracle is working. Say "Oracle, cancel" to stop it.' : 'Say "Oracle, …" anytime, or hold the orb.';
     case 'awake': return approvals.length ? 'Say "yes" or "no".' : 'Go ahead.';
     case 'capturing': return tapToggle ? 'Listening… tap the orb again to send.' : 'Listening… let go to send.';
     case 'speaking': return 'Press Stop or Esc to cut me off.';
@@ -296,7 +297,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify(msg)); return true; }
-  addMsg('error', 'Not connected to Watson. Is it running?');
+  addMsg('error', 'Not connected to the Oracle. Is it running?');
   return false;
 }
 function interrupt() { voice.stopSpeaking(); if (busy) send({ type: 'interrupt' }); }
@@ -351,7 +352,7 @@ function onEvent(ev) {
       $('login').hidden = true;
       $('convo').innerHTML = '';
       for (const h of ev.history || []) addMsg(h.role, h.text, h.at);
-      $('screen').innerHTML = ev.screens?.length ? '' : '<p class="empty">Diffs, code and lists Watson shows you will appear here.</p>';
+      $('screen').innerHTML = ev.screens?.length ? '' : '<p class="empty">Diffs, code and lists the Oracle shows you will appear here.</p>';
       for (const s of ev.screens || []) addScreen(s, { quiet: true });
       approvals = ev.approvals || [];
       showApproval();
@@ -368,7 +369,7 @@ function onEvent(ev) {
       addMsg('watson', ev.text);
       if (shouldSpeakFor(ev.origin)) voice.speak(ev.text);
       break;
-    case 'busy': busy = ev.busy; if (!busy) $('working-text').textContent = 'Watson is working…'; renderState(); break;
+    case 'busy': busy = ev.busy; if (!busy) $('working-text').textContent = 'The Oracle is working…'; renderState(); break;
     case 'activity':
       addActivity(ev.text, { sub: ev.sub });
       $('working-text').textContent = ev.text.length > 90 ? ev.text.slice(0, 90) + '…' : ev.text;
@@ -398,7 +399,7 @@ function onEvent(ev) {
       addMsg('system', '⏰ Reminder: ' + ev.text);
       beep(784, 150, 0.07); setTimeout(() => beep(988, 200, 0.07), 180);
       voice.speak('Reminder. ' + ev.text);
-      if ('Notification' in window && Notification.permission === 'granted') new Notification('Watson reminder', { body: ev.text, icon: 'icon.svg' });
+      if ('Notification' in window && Notification.permission === 'granted') new Notification('The Oracle: reminder', { body: ev.text, icon: 'icon.svg' });
       send({ type: 'reminders' });
       break;
     case 'reminders_changed': send({ type: 'reminders' }); break;
@@ -438,7 +439,7 @@ $('btn-mic').onclick = () => {
   renderState();
 };
 $('btn-stop').onclick = interrupt;
-$('btn-new').onclick = () => { if (confirm('Start a new conversation? Watson will forget this chat (but keep what it remembered about you).')) send({ type: 'reset' }); };
+$('btn-new').onclick = () => { if (confirm('Start a new conversation? The Oracle will forget this chat (but keep what she remembered about you).')) send({ type: 'reset' }); };
 
 // Orb: hold to talk, or tap once to start and tap again to send.
 let downAt = 0;
@@ -490,7 +491,7 @@ function setHeadsetButton(on) {
   keepAlive.play().catch(() => {}); // needs a tap or key press first; unlockAudio retries
   for (const a of actions) { try { navigator.mediaSession.setActionHandler(a, () => headsetPress(a)); } catch {} }
   try {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: 'Watson', artist: 'Press play/pause on your headset to talk' });
+    navigator.mediaSession.metadata = new MediaMetadata({ title: 'The Oracle', artist: 'Press play/pause on your headset to talk' });
     navigator.mediaSession.playbackState = 'playing';
   } catch {}
 }
@@ -555,7 +556,7 @@ $('set-follow').onchange = (e) => { settings.follow = Math.max(0, Math.min(30, N
 $('set-settle').onchange = (e) => { settings.settle = Math.max(0, Math.min(4, Number(e.target.value) || 0)); voice.settleMs = settings.settle * 1000; saveSettings(); };
 $('set-endpause').onchange = (e) => { settings.endPause = Math.max(0.5, Math.min(5, Number(e.target.value) || 3)); voice.endPauseMs = settings.endPause * 1000; saveSettings(); };
 $('set-headset').onchange = (e) => { settings.headset = e.target.checked; setHeadsetButton(settings.headset); saveSettings(); };
-$('test-voice').onclick = () => voice.speak('Good day. Watson here, ready when you are.', { wakeAfter: false });
+$('test-voice').onclick = () => voice.speak("I've been expecting you. The Oracle is here when you need her.", { wakeAfter: false });
 $('btn-pair').onclick = () => send({ type: 'pair_start' });
 $('btn-logout').onclick =() => { store.del('token'); token = ''; ws?.close(); location.reload(); };
 
