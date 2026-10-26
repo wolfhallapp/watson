@@ -444,6 +444,12 @@ export function toSpeakable(text) {
 /** Interpret a spoken answer to an approval prompt. */
 export function parseYesNo(text) {
   const t = String(text || '').toLowerCase().replace(/^(oracle|watson|architect|ok|okay|um|uh)[\s,]+/g, '').trim();
+  // Horace's code words (2026-10-26): "red pill" = do it / deploy, "free your mind" = push it, "blue pill" = no.
+  if (/^(the\s+)?red\s*pill\b|^free\s+your\s+mind\b/.test(t)) return { answer: true, always: false };
+  if (/^(the\s+)?blue\s*pill\b/.test(t)) {
+    const rest = t.replace(/^(the\s+)?blue\s*pill[\s,.!]*/, '').trim();
+    return { answer: false, rest: rest.length > 8 ? rest : '' };
+  }
   if (/^(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|approve|approved|confirm|confirmed|affirmative|please do|go for it|send it|ship it|deploy it)\b/.test(t)) {
     return { answer: true, always: /\b(always|every time|for (this|the) session|don't ask)\b/.test(t) };
   }

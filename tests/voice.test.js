@@ -50,3 +50,11 @@ test('the Architect page wakes on "Architect", not "Oracle"', () => {
     assert.deepEqual(parseYesNo('Architect, yes'), { answer: true, always: false });
   } finally { setWakeWord(ORACLE_WAKE); }
 });
+
+test('code words: red pill, free your mind, blue pill', () => {
+  assert.deepEqual(parseYesNo('red pill'), { answer: true, always: false });
+  assert.deepEqual(parseYesNo('Oracle, red pill'), { answer: true, always: false });
+  assert.deepEqual(parseYesNo('free your mind'), { answer: true, always: false });
+  assert.equal(parseYesNo('blue pill').answer, false);
+  assert.equal(parseYesNo('blue pill, deploy only the worker instead').rest, 'deploy only the worker instead');
+});
