@@ -12,6 +12,7 @@ export const ROUTINES = [
     // Wolf Hall app's Morning screen shows it even if he has to leave before sitting down at the PC.
     key: 'morningBriefing',
     hour: 6, minute: 40, untilHour: 11,
+    tuesday: { hour: 3, minute: 15 }, // Horace leaves for work at 4 AM on Tuesdays
     prompt: [
       '[Watson routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
@@ -25,10 +26,14 @@ export const ROUTINES = [
   {
     key: 'casinoOfferScan',
     hour: 7, minute: 30, untilHour: 12,
+    tuesday: { hour: 3, minute: 30 },
     prompt: [
       '[Watson routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Morning casino email check. Search Gmail for casino promotion emails from the last day',
       '(category:promotions newer_than:1d, plus anything from the senders in the Casino Sites list).',
+      'Page through ALL results (follow nextPageToken) and open every casino email: judge each by its content, never by its subject line.',
+      '(Lesson 2026-10-27: a Stake.us "your post-monthly is here!" bonus sent at 3 AM was skipped because of its subject.)',
+      'Stake.us weekly, monthly, post-monthly and reload bonus emails are free claims: always add them.',
       'Read the ones that might be free. Keep ONLY bonuses Horace can get with no purchase, no deposit and no required play:',
       'free coupons, freebies, free SC or GC claims, free spins given outright, mail-in or daily gifts, mystery boxes that are free.',
       'Leave out anything tied to buying (packages, % boosts, "first purchase", "match your purchase"), tournaments, prize drops,',
@@ -42,12 +47,13 @@ export const ROUTINES = [
 
 /** The Central day this routine should run for now, or null (not time yet, too late, or already ran). */
 export function routineDue(r, now, lastDay) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hourCycle: 'h23', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     .formatToParts(now).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]));
   const day = `${p.year}-${p.month}-${p.day}`;
   const mins = Number(p.hour) * 60 + Number(p.minute);
   if (lastDay === day) return null;
-  if (mins < r.hour * 60 + r.minute || mins >= r.untilHour * 60) return null;
+  const at = p.weekday === 'Tue' && r.tuesday ? r.tuesday : r;
+  if (mins < at.hour * 60 + at.minute || mins >= r.untilHour * 60) return null;
   return day;
 }
 
