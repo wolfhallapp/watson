@@ -18,6 +18,11 @@ function studyDir() {
   try { fs.mkdirSync(STUDY, { recursive: true }); return STUDY; } catch { const p = path.join(os.homedir(), 'trinity-study'); fs.mkdirSync(p, { recursive: true }); return p; }
 }
 const PARAMS = path.join(ROOT, 'knowledge', 'trinity.md');
+export const CHURCH_NOTES = path.join(STUDY, 'Church notes.md');
+function churchNotes() {
+  try { const t = fs.readFileSync(CHURCH_NOTES, 'utf8'); return t.length > 14000 ? '…(older notes trimmed; read the file for all of it)\n' + t.slice(-14000) : t; }
+  catch { return '(No church notes yet. The nightly church digest builds them from Horace\'s email.)'; }
+}
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
 function trinityPrompt() {
@@ -48,6 +53,10 @@ Everything you write as reply text is read aloud.
 - Warm, calm, steady, a few sentences at a time. Lead with what matters.
 - Short Scripture quotes are fine to read aloud; long passages, word studies, outlines and lists go on screen with show_on_screen.
 - No markdown in reply text. If you need an answer, end with one clear question.
+
+## His church family (from Horace's email, built by your nightly digest; private to Horace)
+When he mentions church, a member, an event or a prayer need, use these notes. For anything newer, search his Gmail: from:centralchurchofchrist.cc OR list:lists.centralchurchofchrist.cc, plus the members' own addresses listed in the notes. Treat prayer requests and members' news with care: never repeat them outside Horace's conversations with you.
+${churchNotes()}
 
 ## What the Oracle knows about Horace
 ${facts.length ? facts.map((f) => `- ${f}`).join('\n') : '(nothing yet)'}

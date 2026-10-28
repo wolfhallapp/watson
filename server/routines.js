@@ -24,8 +24,24 @@ const TZ = 'America/Chicago';
 // Morning casino email check (Wolf Hall v202): truly free bonuses -> the app's Email bonuses list.
 export const ROUTINES = [
   {
+    // Church digest (2026-10-28, per Horace): Trinity keeps notes on everything from Central Church of Christ and its members.
+    key: 'churchDigest',
+    agent: 'trinity',
+    hour: 20, minute: 30, untilHour: 23,
+    prompt: [
+      '[Trinity routine, not from Horace. Work quietly: no show_on_screen; final reply one line.]',
+      'Update the church notes file (Church notes.md in your study folder). Search Horace\'s Gmail for email from Central Church of Christ (Pflugerville):',
+      'from:centralchurchofchrist.cc OR list:lists.centralchurchofchrist.cc OR to:all@centralchurchofchrist.cc, plus the members listed in the notes.',
+      'If the file does not exist yet, look back 90 days; otherwise cover the last 3 days and skip emails already noted (keep their Gmail ids in the file).',
+      'Keep the file organized under these headings: Upcoming events (dates, times, places); Prayer requests and care (who, what, date, and update or remove old ones);',
+      'Announcements; Daily readings and sermon notes; Members (name, email, role if stated: elder, deacon, minister, teacher; family ties mentioned).',
+      'Read only, never reply or change email. Keep it factual and kind; this is private to Horace. Then reply with one line: what was added.',
+    ].join(' '),
+  },
+  {
     key: 'nightShift',
     agent: 'night',
+    fresh: true,
     hour: 1, minute: 0, untilHour: 4,
     guard: usageAllowsNightShift,
     prompt: [
@@ -102,7 +118,7 @@ export function routineDue(r, now, lastDay) {
 export function startRoutines(agents, { every = 60000 } = {}) {
   const main = agents.main || agents;
   const tick = async () => {
-    if (main.busy || agents.night?.busy) return;
+    if (main.busy || agents.night?.busy || agents.trinity?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
       const day = routineDue(r, new Date(), done[r.key]);
@@ -110,8 +126,8 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       state.set({ routinesDone: { ...done, [r.key]: day } });
       if (r.guard && !r.guard()) { console.log(`  Routine ${r.key} skipped for ${day} (usage guard)`); continue; }
       console.log(`  Routine ${r.key} for ${day}`);
-      const a = r.agent === 'night' && agents.night ? agents.night : main;
-      if (a !== main) await a.reset();
+      const a = (r.agent && agents[r.agent]) || main;
+      if (r.fresh) await a.reset(); // the Night Shift starts clean; Trinity keeps her conversation
       a.ask(r.prompt, 'routine');
       return; // one at a time; the next tick picks up any other
     }

@@ -330,7 +330,7 @@ startReminderLoop((r) => {
 
 // The Night Shift's own session (fresh each night); its activity is kept in data/night-history.jsonl.
 const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
-startRoutines({ main: agent, night: nightAgent });
+startRoutines({ main: agent, night: nightAgent, trinity });
 
 server.listen(config.port, config.host, () => {
   console.log(`\n  Watson is listening on http://localhost:${config.port}`);
