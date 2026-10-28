@@ -66,8 +66,20 @@ export const KOKORO_VOICES = [
   ['bf_emma', 'Emma (British woman)'], ['bf_isabella', 'Isabella (British woman)'], ['bf_alice', 'Alice (British woman)'], ['bf_lily', 'Lily (British woman)'],
   ['am_michael', 'Michael (American man)'], ['am_adam', 'Adam (American man)'], ['am_onyx', 'Onyx (deep American man)'], ['am_eric', 'Eric (American man)'],
   ['bm_george', 'George (deep British man)'], ['bm_fable', 'Fable (British man)'], ['bm_daniel', 'Daniel (British man)'], ['bm_lewis', 'Lewis (British man)'],
+  // Deeper, slower variants (2026-10-28, for the Oracle: an older, warm, wise woman). "~0.88" plays the voice at 88% speed,
+  // which lowers its pitch and slows it, like an older voice. Not a copy of any real person's voice.
+  ['af_sarah~0.86', 'Oracle: Sarah, older and deeper'], ['af_heart~0.86', 'Heart, older and deeper'], ['af_nicole~0.88', 'Nicole, older and deeper'],
 ].map(([id, name]) => ({ id, name }));
 const KOKORO_IDS = new Set(KOKORO_VOICES.map((v) => v.id));
+// Lower pitch and pace by rewriting the WAV header's sample rate (plays the same samples slower).
+function deepen(wav, factor) {
+  const b = Buffer.from(wav);
+  if (b.toString('ascii', 0, 4) !== 'RIFF' || !(factor > 0.5 && factor < 1)) return b;
+  const rate = b.readUInt32LE(24), blockAlign = b.readUInt16LE(32);
+  const nr = Math.round(rate * factor);
+  b.writeUInt32LE(nr, 24); b.writeUInt32LE(nr * blockAlign, 28);
+  return b;
+}
 let kokoro = null;
 let kokoroQueue = Promise.resolve();
 async function kokoroModel() {
@@ -82,11 +94,16 @@ async function kokoroModel() {
 /** { ok: true, audio: Buffer (wav), type } or { ok: false, status, error }. */
 export function synthesizeKokoro(text, voice, speed) {
   const v = KOKORO_IDS.has(voice) ? voice : 'af_heart';
+  const [base, f] = v.split('~');
+  const factor = f ? Number(f) : 1;
   const run = async () => {
     try {
       const tts = await kokoroModel();
-      const out = await tts.generate(String(text).slice(0, 1000), { voice: v, speed: Math.min(1.4, Math.max(0.6, Number(speed) || 1)) });
-      return { ok: true, audio: Buffer.from(out.toWav()), type: 'audio/wav' };
+      // Speak a little faster before deepening, so the slowed result keeps a natural pace.
+      const sp = Math.min(1.4, Math.max(0.6, (Number(speed) || 1) / Math.sqrt(factor)));
+      const out = await tts.generate(String(text).slice(0, 1000), { voice: base, speed: sp });
+      const wav = Buffer.from(out.toWav());
+      return { ok: true, audio: factor < 1 ? deepen(wav, factor) : wav, type: 'audio/wav' };
     } catch (e) { return { ok: false, status: 500, error: `Kokoro: ${e.message}` }; }
   };
   const p = kokoroQueue.then(run, run);
