@@ -10,14 +10,14 @@ const P = AGENT === 'trinity' ? {
   // Horace (10/28): the first voice sounded harsh. Prefer Edge's free natural voices (soft, warm: Ava, Emma, Jenny);
   // in Chrome fall back to the gentle UK voice, slowed down. ElevenLabs 'Grace' can be picked in Settings.
   voicePrefs: [/Ava.*Natural/i, /Emma.*Natural/i, /Jenny.*Natural/i, /Aria.*Natural/i, /Sonia.*Natural/i, /Libby.*Natural/i, /Google UK English Female/i, /Microsoft Hazel/i, /female/i],
-  pitch: 0.95, rateFactor: 0.82,
+  pitch: 0.95, rateFactor: 0.82, kokoroDefault: 'kk:af_heart',
 } : AGENT === 'architect' ? {
   name: 'The Architect', short: 'Architect', settingsKey: 'architect.settings', ws: '/ws?agent=architect', pronoun: 'he',
   automatic: 'Automatic (free browser voice, a deep man\'s voice)',
   test: 'I am the Architect. I created the Construct. Concordantly, we begin.',
   newChat: 'Start a new conversation? The Architect will forget this chat (the tree stays).',
   voicePrefs: [/Google UK English Male/i, /Ryan.*Natural/i, /Thomas.*Natural/i, /Guy.*Natural/i, /Microsoft (George|David|Mark)/i, /Daniel/i, /\bmale/i],
-  pitch: 0.7, rateFactor: 0.9,
+  pitch: 0.7, rateFactor: 0.9, kokoroDefault: 'kk:bm_george',
 } : {
   name: 'The Oracle', short: 'Oracle', settingsKey: 'settings', ws: '/ws', pronoun: 'she',
   automatic: 'Automatic (free browser voice, an older woman)',
@@ -78,6 +78,8 @@ if (location.hash) history.replaceState(null, '', location.pathname);
 const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, voice: '', rate: 1.05, follow: 7, settle: 1.5, endPause: 3, headset: true, micOn: false }, store.get(P.settingsKey, AGENT === 'architect' ? { oracleVoice: 2 } : {}));
 const saveSettings = () => store.set(P.settingsKey, settings);
 if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
+// Kokoro defaults (2026-10-28): Trinity gets the warm Heart voice, the Architect a deep British man; the Oracle keeps hers.
+if (P.kokoroDefault && settings.kokoro1 !== true) { if (!settings.voice) settings.voice = P.kokoroDefault; settings.kokoro1 = true; saveSettings(); }
 if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
 if (hashParams.get('listen') === '1') { settings.mode = 'handsfree'; settings.micOn = true; saveSettings(); }
@@ -281,14 +283,15 @@ voice.endPauseMs = settings.endPause * 1000;
 if (P.voicePrefs) { voice.voicePrefs = P.voicePrefs; voice.browserPitch = P.pitch; voice.browserRateFactor = P.rateFactor; }
 
 // ElevenLabs voices, spoken through Watson's server (which holds the API key).
-let cloudVoices = [];
+let cloudVoices = [], kokoroVoices = [];
 async function loadCloudVoices() {
   try {
     const auth = { Authorization: 'Bearer ' + token };
     const res = await fetch('tts/voices', { headers: auth, cache: 'no-store' });
     const info = res.ok ? await res.json() : { enabled: false };
-    if (!info.enabled) { voice.cloud = null; cloudVoices = []; return; }
+    if (!info.enabled) { voice.cloud = null; cloudVoices = []; kokoroVoices = []; return; }
     cloudVoices = info.voices || [];
+    kokoroVoices = info.kokoro || [];
     voice.cloud = {
       defaultVoice: info.defaultVoice,
       async fetch(text, voiceId, speed) {
@@ -658,6 +661,7 @@ function fillVoices() {
   const voices = voice.voices();
   const opts = (list) => list.map((v) => `<option value="${esc(v.value)}">${esc(v.label)}</option>`).join('');
   sel.innerHTML = `<option value="">${P.automatic}</option>`
+    + (kokoroVoices.length ? `<optgroup label="Kokoro (free, natural, runs on this PC)">${opts(kokoroVoices.map((v) => ({ value: 'kk:' + v.id, label: v.name })))}</optgroup>` : '')
     + (cloudVoices.length ? `<optgroup label="ElevenLabs">${opts(cloudVoices.map((v) => ({ value: 'el:' + v.id, label: v.name })))}</optgroup>` : '')
     + (voices.length ? `<optgroup label="Browser">${opts(voices.map((v) => ({ value: v.name, label: v.name })))}</optgroup>` : '');
   sel.value = settings.voice;

@@ -10,7 +10,7 @@ import { WatsonAgent, NIGHT } from './agent.js';
 import { answerApproval, onApprovalEvent, pendingApprovals } from './approvals.js';
 import { startReminderLoop } from './tools.js';
 import { history, reminders, state } from './store.js';
-import { listVoices, synthesize, ttsEnabled } from './tts.js';
+import { listVoices, synthesize, ttsEnabled, KOKORO_VOICES, synthesizeKokoro, warmKokoro } from './tts.js';
 import { windowsNotify } from './notify.js';
 import { startRoutines } from './routines.js';
 import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
@@ -37,9 +37,10 @@ async function handleTts(req, res, url) {
   const ip = clientIp(req);
   if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'speech request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
   if (req.method === 'GET' && url.pathname === '/tts/voices') {
-    if (!ttsEnabled()) { json(res, 200, { enabled: false, voices: [] }); return; }
-    try { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: await listVoices() }); }
-    catch (e) { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: [], error: e.message }); }
+    // Kokoro voices are always on (they run on this PC); ElevenLabs voices only with a key.
+    if (!ttsEnabled()) { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: [], kokoro: KOKORO_VOICES }); return; }
+    try { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: await listVoices(), kokoro: KOKORO_VOICES }); }
+    catch (e) { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: [], kokoro: KOKORO_VOICES, error: e.message }); }
     return;
   }
   if (req.method !== 'POST' || url.pathname !== '/tts') { json(res, 404, { error: 'not found' }); return; }
@@ -50,9 +51,10 @@ async function handleTts(req, res, url) {
   const text = String(msg.text || '').trim().slice(0, 1000);
   if (!text) { json(res, 400, { error: 'no text' }); return; }
   try {
-    const r = await synthesize(text, msg.voice, msg.speed);
+    const v = String(msg.voice || '');
+    const r = v.startsWith('kk:') ? await synthesizeKokoro(text, v.slice(3), msg.speed) : await synthesize(text, v.replace(/^el:/, ''), msg.speed);
     if (!r.ok) { console.warn('  TTS:', r.error); json(res, r.status, { error: r.error }); return; }
-    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' }).end(r.audio);
+    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': r.type || 'audio/mpeg', 'Cache-Control': 'no-store' }).end(r.audio);
   } catch (e) {
     console.warn('  TTS:', e.message);
     json(res, 502, { error: e.message });
@@ -331,6 +333,7 @@ startReminderLoop((r) => {
 // The Night Shift's own session (fresh each night); its activity is kept in data/night-history.jsonl.
 const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
 startRoutines({ main: agent, night: nightAgent, trinity });
+setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
 server.listen(config.port, config.host, () => {
   console.log(`\n  Watson is listening on http://localhost:${config.port}`);

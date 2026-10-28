@@ -293,10 +293,16 @@ export class Voice {
     if (this.voiceName.startsWith('el:')) return this.voiceName.slice(3);
     return null;
   }
+  /** The voice to ask the server for: "kk:<voice>" (Kokoro, free, local) or an ElevenLabs id. */
+  serverVoice() {
+    if (!this.cloud || !this.audio) return null;
+    if (this.voiceName.startsWith('kk:') && !this.kokoroOff) return this.voiceName;
+    return this.cloudVoice();
+  }
 
   /** Speak text. Long replies are split into sentences (Chrome cuts off long utterances). */
   speak(text, { wakeAfter = true, afterMs } = {}) {
-    if (!this.speakEnabled || (!speechSupported.speak && !this.cloudVoice())) { if (wakeAfter) this.wake(afterMs); return; }
+    if (!this.speakEnabled || (!speechSupported.speak && !this.serverVoice())) { if (wakeAfter) this.wake(afterMs); return; }
     const chunks = toSpeakable(text);
     if (!chunks.length) return;
     this.queue.push(...chunks.map((c, i) => ({ text: c, last: i === chunks.length - 1, wakeAfter, afterMs })));
@@ -314,13 +320,13 @@ export class Voice {
       this.#emitState();
     }
     const gen = this.gen;
-    const vid = this.cloudVoice();
+    const vid = this.serverVoice();
     if (!vid) { this.#speakBrowser(item, gen); return; }
     item.audio ??= this.#fetchAudio(item.text, vid);
     if (this.queue[0]) this.queue[0].audio ??= this.#fetchAudio(this.queue[0].text, vid); // fetch the next sentence while this one plays
     item.audio.then(
       (blob) => { if (gen === this.gen) this.#playBlob(blob, item, gen); },
-      (err) => { if (gen !== this.gen) return; this.#cloudFailed(err); this.#speakBrowser(item, gen); },
+      (err) => { if (gen !== this.gen) return; this.#cloudFailed(err, vid); this.#speakBrowser(item, gen); },
     );
   }
   #fetchAudio(text, vid) {
@@ -354,7 +360,9 @@ export class Voice {
     if (wait <= 0) { fn(); return; }
     setTimeout(() => { if (gen === this.gen) fn(); else cancelled?.(); }, wait);
   }
-  #cloudFailed(err) {
+  #cloudFailed(err, vid) {
+    // Kokoro failing (rare): use the browser voice for the rest of this session.
+    if (String(vid || '').startsWith('kk:')) { this.kokoroOff = true; this.h.onCloudOff?.('The Kokoro voice had a problem, so I\'m using the browser voice.'); return; }
     // Quota used up, bad key or no key: stop asking ElevenLabs for the rest of this session.
     if ([401, 402, 503].includes(err?.status)) {
       this.cloudOff = true;

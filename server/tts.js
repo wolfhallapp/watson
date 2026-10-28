@@ -56,3 +56,42 @@ export async function synthesize(text, voiceId, speed) {
   const quota = /quota|credits|limit/i.test(detail) || res.status === 402;
   return { ok: false, status: quota ? 402 : 502, error: `ElevenLabs ${res.status}${detail ? ': ' + detail : ''}` };
 }
+
+// ── Kokoro (2026-10-28): free, open-source, natural voices that run on this PC (no key, no limits) ──
+// Loaded on first use (about 15 s, model cached after the first download), then one request at a time.
+// Voice ids are sent as "kk:<voice>", e.g. kk:af_heart.
+export const KOKORO_VOICES = [
+  ['af_heart', 'Heart (warm American woman)'], ['af_bella', 'Bella (soft American woman)'], ['af_nicole', 'Nicole (gentle, hushed)'],
+  ['af_sarah', 'Sarah (mature American woman)'], ['af_nova', 'Nova (clear American woman)'], ['af_sky', 'Sky (light American woman)'],
+  ['bf_emma', 'Emma (British woman)'], ['bf_isabella', 'Isabella (British woman)'], ['bf_alice', 'Alice (British woman)'], ['bf_lily', 'Lily (British woman)'],
+  ['am_michael', 'Michael (American man)'], ['am_adam', 'Adam (American man)'], ['am_onyx', 'Onyx (deep American man)'], ['am_eric', 'Eric (American man)'],
+  ['bm_george', 'George (deep British man)'], ['bm_fable', 'Fable (British man)'], ['bm_daniel', 'Daniel (British man)'], ['bm_lewis', 'Lewis (British man)'],
+].map(([id, name]) => ({ id, name }));
+const KOKORO_IDS = new Set(KOKORO_VOICES.map((v) => v.id));
+let kokoro = null;
+let kokoroQueue = Promise.resolve();
+async function kokoroModel() {
+  if (!kokoro) {
+    kokoro = (async () => {
+      const { KokoroTTS } = await import('kokoro-js');
+      return KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', { dtype: 'q8', device: 'cpu' });
+    })().catch((e) => { kokoro = null; throw e; });
+  }
+  return kokoro;
+}
+/** { ok: true, audio: Buffer (wav), type } or { ok: false, status, error }. */
+export function synthesizeKokoro(text, voice, speed) {
+  const v = KOKORO_IDS.has(voice) ? voice : 'af_heart';
+  const run = async () => {
+    try {
+      const tts = await kokoroModel();
+      const out = await tts.generate(String(text).slice(0, 1000), { voice: v, speed: Math.min(1.4, Math.max(0.6, Number(speed) || 1)) });
+      return { ok: true, audio: Buffer.from(out.toWav()), type: 'audio/wav' };
+    } catch (e) { return { ok: false, status: 500, error: `Kokoro: ${e.message}` }; }
+  };
+  const p = kokoroQueue.then(run, run);
+  kokoroQueue = p.catch(() => {});
+  return p;
+}
+/** Warm the model up in the background so the first reply doesn't wait 15 seconds. */
+export function warmKokoro() { kokoroModel().catch((e) => console.warn('  Kokoro warm-up:', e.message)); }
