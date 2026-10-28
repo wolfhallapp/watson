@@ -68,9 +68,28 @@ export const KOKORO_VOICES = [
   ['bm_george', 'George (deep British man)'], ['bm_fable', 'Fable (British man)'], ['bm_daniel', 'Daniel (British man)'], ['bm_lewis', 'Lewis (British man)'],
   // Deeper, slower variants (2026-10-28, for the Oracle: an older, warm, wise woman). "~0.88" plays the voice at 88% speed,
   // which lowers its pitch and slows it, like an older voice. Not a copy of any real person's voice.
+  ['af_nicole~0.88~r30', 'Oracle: Nicole, older, a little gravelly'], ['af_nicole~0.88~r55', 'Oracle: Nicole, older, more gravelly'],
   ['af_sarah~0.86', 'Oracle: Sarah, older and deeper'], ['af_heart~0.86', 'Heart, older and deeper'], ['af_nicole~0.88', 'Nicole, older and deeper'],
 ].map(([id, name]) => ({ id, name }));
 const KOKORO_IDS = new Set(KOKORO_VOICES.map((v) => v.id));
+// Gravel (Horace, 10/28: "a little more gravelly"): soft saturation for grit, a fast flutter in loudness
+// for a rough, creaky edge, and a breath of noise that follows the voice. amount 0..1.
+function rasp(wav, amount) {
+  const b = Buffer.from(wav);
+  if (!(amount > 0) || b.toString('ascii', 0, 4) !== 'RIFF' || b.readUInt16LE(20) !== 3 || b.readUInt16LE(34) !== 32) return b;
+  const rate = b.readUInt32LE(24), start = 44, n = Math.floor((b.length - start) / 4);
+  const drive = 1 + 3 * amount, norm = Math.tanh(drive);
+  const depth = 0.25 * amount, breath = 0.12 * amount, w = 2 * Math.PI * 47 / rate;
+  let env = 0, seed = 12345;
+  const noise = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x3fffffff - 1; };
+  for (let i = 0; i < n; i++) {
+    const o = start + i * 4, x = b.readFloatLE(o);
+    env += (Math.abs(x) - env) * 0.01;
+    const flutter = 1 - depth * (0.5 + 0.5 * Math.sin(w * i + 0.7 * Math.sin(w * 0.13 * i)));
+    b.writeFloatLE((Math.tanh(x * drive) / norm) * flutter + noise() * env * breath, o);
+  }
+  return b;
+}
 // Kokoro comes out quiet (Nicole especially). Raise 32-bit float WAVs to a steady loudness, with a soft
 // limiter so peaks never clip (Horace, 10/28: "louder").
 function louden(wav, targetRms = 0.17) {
@@ -107,15 +126,16 @@ async function kokoroModel() {
 /** { ok: true, audio: Buffer (wav), type } or { ok: false, status, error }. */
 export function synthesizeKokoro(text, voice, speed) {
   const v = KOKORO_IDS.has(voice) ? voice : 'af_heart';
-  const [base, f] = v.split('~');
-  const factor = f ? Number(f) : 1;
+  const [base, ...mods] = v.split('~');
+  const factor = Number(mods.find((m) => /^\d/.test(m))) || 1;
+  const gravel = (Number((mods.find((m) => m.startsWith('r')) || '').slice(1)) || 0) / 100;
   const run = async () => {
     try {
       const tts = await kokoroModel();
       // Speak a little faster before deepening, so the slowed result keeps a natural pace.
       const sp = Math.min(1.4, Math.max(0.6, (Number(speed) || 1) / Math.sqrt(factor)));
       const out = await tts.generate(String(text).slice(0, 1000), { voice: base, speed: sp });
-      const wav = louden(Buffer.from(out.toWav()));
+      const wav = louden(rasp(Buffer.from(out.toWav()), gravel));
       return { ok: true, audio: factor < 1 ? deepen(wav, factor) : wav, type: 'audio/wav' };
     } catch (e) { return { ok: false, status: 500, error: `Kokoro: ${e.message}` }; }
   };
