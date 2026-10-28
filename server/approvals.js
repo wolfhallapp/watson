@@ -83,7 +83,7 @@ function classifyAll(toolName, input) {
     const writes = workerGetWrites(String(input.path || '/'));
     return writes ? { level: 'medium', reason: writes } : null;
   }
-  if (toolName.startsWith('mcp__') && !toolName.startsWith('mcp__watson__') && !toolName.startsWith('mcp__architect__')) {
+  if (toolName.startsWith('mcp__') && !toolName.startsWith('mcp__watson__') && !toolName.startsWith('mcp__architect__') && !toolName.startsWith('mcp__trinity__')) {
     const action = toolName.split('__').slice(2).join('__');
     if (MCP_HIGH.test(action)) return { level: 'high', reason: `use ${prettyTool(toolName)}, which sends or deletes something`, keep: MCP_KEEP.test(action) };
     if (MCP_WRITE.test(action)) return { level: 'medium', reason: `use ${prettyTool(toolName)}, which changes your data`, keep: MCP_KEEP.test(action) };

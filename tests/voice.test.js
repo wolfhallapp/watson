@@ -58,3 +58,12 @@ test('code words: red pill, free your mind, blue pill', () => {
   assert.equal(parseYesNo('blue pill').answer, false);
   assert.equal(parseYesNo('blue pill, deploy only the worker instead').rest, 'deploy only the worker instead');
 });
+
+test('the Trinity page wakes on "Trinity"', async () => {
+  const { TRINITY_WAKE } = await import('../public/voice.js');
+  setWakeWord(TRINITY_WAKE);
+  try {
+    assert.deepEqual(extractWake('Trinity what does Acts 2 38 mean'), { command: 'what does Acts 2 38 mean' });
+    assert.equal(extractWake('Oracle what is in the pool'), null);
+  } finally { setWakeWord(ORACLE_WAKE); }
+});

@@ -15,6 +15,7 @@ import { windowsNotify } from './notify.js';
 import { startRoutines } from './routines.js';
 import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 import { workerGet, workerPostMorning } from './knowledge.js';
+import { TRINITY } from './trinity.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -76,13 +77,14 @@ const server = http.createServer((req, res) => {
 const channels = {
   oracle: { key: 'oracle', clients: new Set(), screens: [] }, // screens: last few show_on_screen items, replayed to new screens
   architect: { key: 'architect', clients: new Set(), screens: [] },
+  trinity: { key: 'trinity', clients: new Set(), screens: [] },
 };
 function broadcastTo(ch, event) {
   if (event.type === 'screen') { ch.screens.push(event); if (ch.screens.length > 8) ch.screens.shift(); }
   const data = JSON.stringify(event);
   for (const ws of ch.clients) if (ws.readyState === ws.OPEN) ws.send(data);
 }
-const allClients = () => channels.oracle.clients.size + channels.architect.clients.size;
+const allClients = () => channels.oracle.clients.size + channels.architect.clients.size + channels.trinity.clients.size;
 const otherOf = (key) => (key === 'oracle' ? 'architect' : 'oracle');
 
 // Each agent's page also hears, in short, what the other is doing: "working" and "has a reply", so
@@ -138,10 +140,13 @@ const broadcast = agentSend('oracle');
 
 const agent = new WatsonAgent(broadcast);
 const architect = new WatsonAgent(agentSend('architect'), ARCHITECT);
+// Trinity (2026-10-28): her own page; she doesn't trade busy/reply banners with the other two.
+const trinity = new WatsonAgent((event) => broadcastTo(channels.trinity, event), TRINITY);
+channels.trinity.agent = trinity;
 channels.oracle.agent = agent;
 channels.architect.agent = architect;
 // Approvals are shared: whichever screen is open can answer them.
-onApprovalEvent((event) => { broadcastTo(channels.oracle, event); broadcastTo(channels.architect, event); });
+onApprovalEvent((event) => { broadcastTo(channels.oracle, event); broadcastTo(channels.architect, event); broadcastTo(channels.trinity, event); });
 construct.onChange((summary) => broadcastTo(channels.architect, { type: 'construct', construct: summary }));
 // What Horace may change on the tree from the Architect's screen (the Architect is told on his next turn).
 const SCREEN_ACTIONS = new Set(['update', 'step', 'note', 'payout', 'undo_payout', 'add']);
@@ -274,7 +279,7 @@ wss.on('connection', (ws, req) => {
         reminders: reminders.all().filter((r) => !r.fired),
         ...(ch.key === 'architect' ? { construct: construct.summary() } : { usage }),
         lastSay: lastSayOf(ch.key),
-        peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) },
+        ...(ch.key === 'trinity' ? {} : { peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) } }),
       }));
       return;
     }
@@ -339,6 +344,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     console.log('\n  Watson is shutting down.');
     agent.shutdown();
     architect.shutdown();
+    trinity.shutdown();
     nightAgent.shutdown();
     server.close();
     setTimeout(() => process.exit(0), 500).unref();

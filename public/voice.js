@@ -18,11 +18,13 @@ const SR = hasWindow && (window.SpeechRecognition || window.webkitSpeechRecognit
 export const ORACLE_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(oracle|oracles|orakel|orical|oricle|auricle|aurical|watson|watsons|wattson|watsen|watts\s?on|what\s?son|whatson)\b[\s,.!?:-]*/i;
 // The Architect (2026-10-25): the Construct's agent, on his own page.
 export const ARCHITECT_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(architect|architects|arkitect|archetect|archie\s?tect|r\s?kitect)\b[\s,.!?:-]*/i;
+// Trinity (2026-10-28): Horace's spiritual advisor, on her own page.
+export const TRINITY_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(trinity|trinidy|trinitee|trinite)\b[\s,.!?:-]*/i;
 let WAKE = ORACLE_WAKE;
 /** Which name wakes this page: ORACLE_WAKE (default) or ARCHITECT_WAKE. */
 export function setWakeWord(re) { WAKE = re; }
 
-const STOP_SPEAKING = /^(?:(?:oracle|watson|architect|ok|okay)[\s,]+)?(stop|stop talking|quiet|be quiet|shut up|enough|that's enough|silence|pause)\b/i;
+const STOP_SPEAKING = /^(?:(?:oracle|watson|architect|trinity|ok|okay)[\s,]+)?(stop|stop talking|quiet|be quiet|shut up|enough|that's enough|silence|pause)\b/i;
 
 export const speechSupported = { listen: !!SR, speak: hasWindow && 'speechSynthesis' in window };
 
@@ -443,7 +445,7 @@ export function toSpeakable(text) {
 
 /** Interpret a spoken answer to an approval prompt. */
 export function parseYesNo(text) {
-  const t = String(text || '').toLowerCase().replace(/^(oracle|watson|architect|ok|okay|um|uh)[\s,]+/g, '').trim();
+  const t = String(text || '').toLowerCase().replace(/^(oracle|watson|architect|trinity|ok|okay|um|uh)[\s,]+/g, '').trim();
   // Horace's code words (2026-10-26): "red pill" = do it / deploy, "free your mind" = push it, "blue pill" = no.
   if (/^(the\s+)?red\s*pill\b|^free\s+your\s+mind\b/.test(t)) return { answer: true, always: false };
   if (/^(the\s+)?blue\s*pill\b/.test(t)) {

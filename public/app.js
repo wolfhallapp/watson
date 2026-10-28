@@ -1,8 +1,15 @@
-import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE } from './voice.js';
+import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE, TRINITY_WAKE } from './voice.js';
 
 // One script for both agents' pages: the Oracle (index.html) and the Architect (architect.html, <body data-agent="architect">).
-const AGENT = document.body.dataset.agent === 'architect' ? 'architect' : 'oracle';
-const P = AGENT === 'architect' ? {
+const AGENT = ['architect', 'trinity'].includes(document.body.dataset.agent) ? document.body.dataset.agent : 'oracle';
+const P = AGENT === 'trinity' ? {
+  name: 'Trinity', short: 'Trinity', settingsKey: 'trinity.settings', ws: '/ws?agent=trinity', pronoun: 'she',
+  automatic: 'Automatic (free browser voice, a warm woman\'s voice)',
+  test: 'Grace and peace to you, Horace. I am here whenever you want to open the Word together.',
+  newChat: 'Start a new conversation? Trinity will forget this chat (your study notes stay).',
+  voicePrefs: [/Jenny.*Natural/i, /Aria.*Natural/i, /Michelle.*Natural/i, /Google US English/i, /Microsoft Zira/i, /Samantha/i, /female/i],
+  pitch: 1, rateFactor: 0.95,
+} : AGENT === 'architect' ? {
   name: 'The Architect', short: 'Architect', settingsKey: 'architect.settings', ws: '/ws?agent=architect', pronoun: 'he',
   automatic: 'Automatic (free browser voice, a deep man\'s voice)',
   test: 'I am the Architect. I created the Construct. Concordantly, we begin.',
@@ -16,6 +23,7 @@ const P = AGENT === 'architect' ? {
   newChat: 'Start a new conversation? The Oracle will forget this chat (but keep what she remembered about you).',
 };
 if (AGENT === 'architect') setWakeWord(ARCHITECT_WAKE);
+if (AGENT === 'trinity') setWakeWord(TRINITY_WAKE);
 // The other agent, so this page can say when they're working or have something for Horace.
 const PEERS = { oracle: { name: 'The Oracle', href: '/', her: 'her' }, architect: { name: 'The Architect', href: 'architect.html', her: 'him' } };
 
