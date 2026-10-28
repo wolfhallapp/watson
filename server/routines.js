@@ -31,7 +31,8 @@ export const ROUTINES = [
     prompt: [
       '[Watson routine: the Night Shift. Not from Horace; he is asleep. Work quietly: no show_on_screen, and keep your final reply to one line.]',
       `Read the task queue ${NIGHT_QUEUE}. Take the FIRST unchecked task (- [ ]). If none, write a short report saying the queue is empty and stop.`,
-      'Do ONE task only, carefully and economically (Horace watches his usage; avoid long loops and repeated reads).',
+      'Do up to TWO tasks per night (per Horace, 10/28), one at a time, carefully and economically (he watches his usage; avoid long loops and repeated reads).',
+      `Start the second task only if the first is finished and ${DATA_DIR}/state.json shows usage.five_hour.utilization below 0.5 and usage.seven_day.utilization below 0.7. Otherwise stop after one.`,
       'Code changes: never touch the main working folders. For the Wolf Hall app, run',
       '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$(date +%F) ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
       `for Watson itself use \`git -C '${ROOT}' worktree add -B oracle/night-$(date +%F) ~/night/watson main\`.`,
@@ -40,7 +41,7 @@ export const ROUTINES = [
       'If a task needs Horace (a deploy, a money decision, a fact only he knows), do the safe preparation and list exactly what he must approve.',
       `Then write the report to ${NIGHT_REPORTS}/$(date +%F).md: the task; what you did; tests and agent-smith results; the branch and commits;`,
       '"Waiting on you" (anything needing red pill or an answer); and one line of what is next. Tick the task in the queue (- [x]) with the date, or note why it is blocked.',
-      'Reply with one line: the task and its result.',
+      'Write one report covering every task you did tonight. Reply with one line: the tasks and their results.',
     ].join(' '),
   },
   {
