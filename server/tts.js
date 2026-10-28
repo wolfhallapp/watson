@@ -71,6 +71,19 @@ export const KOKORO_VOICES = [
   ['af_sarah~0.86', 'Oracle: Sarah, older and deeper'], ['af_heart~0.86', 'Heart, older and deeper'], ['af_nicole~0.88', 'Nicole, older and deeper'],
 ].map(([id, name]) => ({ id, name }));
 const KOKORO_IDS = new Set(KOKORO_VOICES.map((v) => v.id));
+// Kokoro comes out quiet (Nicole especially). Raise 32-bit float WAVs to a steady loudness, with a soft
+// limiter so peaks never clip (Horace, 10/28: "louder").
+function louden(wav, targetRms = 0.17) {
+  const b = Buffer.from(wav);
+  if (b.toString('ascii', 0, 4) !== 'RIFF' || b.readUInt16LE(20) !== 3 || b.readUInt16LE(34) !== 32) return b;
+  const start = 44, n = Math.floor((b.length - start) / 4);
+  let sum = 0; for (let i = 0; i < n; i++) { const v = b.readFloatLE(start + i * 4); sum += v * v; }
+  const rms = Math.sqrt(sum / Math.max(1, n));
+  if (!(rms > 0)) return b;
+  const gain = Math.min(5, targetRms / rms);
+  for (let i = 0; i < n; i++) { const o = start + i * 4; b.writeFloatLE(Math.tanh(b.readFloatLE(o) * gain), o); }
+  return b;
+}
 // Lower pitch and pace by rewriting the WAV header's sample rate (plays the same samples slower).
 function deepen(wav, factor) {
   const b = Buffer.from(wav);
@@ -102,7 +115,7 @@ export function synthesizeKokoro(text, voice, speed) {
       // Speak a little faster before deepening, so the slowed result keeps a natural pace.
       const sp = Math.min(1.4, Math.max(0.6, (Number(speed) || 1) / Math.sqrt(factor)));
       const out = await tts.generate(String(text).slice(0, 1000), { voice: base, speed: sp });
-      const wav = Buffer.from(out.toWav());
+      const wav = louden(Buffer.from(out.toWav()));
       return { ok: true, audio: factor < 1 ? deepen(wav, factor) : wav, type: 'audio/wav' };
     } catch (e) { return { ok: false, status: 500, error: `Kokoro: ${e.message}` }; }
   };

@@ -21,7 +21,7 @@ const P = AGENT === 'trinity' ? {
 } : {
   name: 'The Oracle', short: 'Oracle', settingsKey: 'settings', ws: '/ws', pronoun: 'she',
   automatic: 'Automatic (free browser voice, an older woman)',
-  test: "I've been expecting you. The Oracle is here when you need her.",
+  test: "I've been expecting you, Horace. Have a cookie. The Oracle is here whenever you need her.",
   newChat: 'Start a new conversation? The Oracle will forget this chat (but keep what she remembered about you).',
 };
 if (AGENT === 'architect') setWakeWord(ARCHITECT_WAKE);
@@ -79,6 +79,8 @@ const settings = Object.assign({ mode: 'handsfree', speak: true, barge: false, v
 const saveSettings = () => store.set(P.settingsKey, settings);
 if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
 // Kokoro defaults (2026-10-28): Trinity gets the warm Heart voice, the Architect a deep British man; the Oracle keeps hers.
+// Horace (10/28) picked 'Nicole, older and deeper' for the Oracle: an older, warm, wise woman.
+if (AGENT === 'oracle' && settings.oracleKk !== 1) { settings.voice = 'kk:af_nicole~0.88'; settings.oracleKk = 1; saveSettings(); }
 if (P.kokoroDefault && settings.kokoro1 !== true) { if (!settings.voice) settings.voice = P.kokoroDefault; settings.kokoro1 = true; saveSettings(); }
 if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
