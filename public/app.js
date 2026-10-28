@@ -7,8 +7,10 @@ const P = AGENT === 'trinity' ? {
   automatic: 'Automatic (free browser voice, a warm woman\'s voice)',
   test: 'Grace and peace to you, Horace. I am here whenever you want to open the Word together.',
   newChat: 'Start a new conversation? Trinity will forget this chat (your study notes stay).',
-  voicePrefs: [/Jenny.*Natural/i, /Aria.*Natural/i, /Michelle.*Natural/i, /Google US English/i, /Microsoft Zira/i, /Samantha/i, /female/i],
-  pitch: 1, rateFactor: 0.95,
+  // Horace (10/28): the first voice sounded harsh. Prefer Edge's free natural voices (soft, warm: Ava, Emma, Jenny);
+  // in Chrome fall back to the gentle UK voice, slowed down. ElevenLabs 'Grace' can be picked in Settings.
+  voicePrefs: [/Ava.*Natural/i, /Emma.*Natural/i, /Jenny.*Natural/i, /Aria.*Natural/i, /Sonia.*Natural/i, /Libby.*Natural/i, /Google UK English Female/i, /Microsoft Hazel/i, /female/i],
+  pitch: 0.95, rateFactor: 0.82,
 } : AGENT === 'architect' ? {
   name: 'The Architect', short: 'Architect', settingsKey: 'architect.settings', ws: '/ws?agent=architect', pronoun: 'he',
   automatic: 'Automatic (free browser voice, a deep man\'s voice)',
