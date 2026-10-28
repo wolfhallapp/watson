@@ -80,7 +80,7 @@ const saveSettings = () => store.set(P.settingsKey, settings);
 if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
 // Kokoro defaults (2026-10-28): Trinity gets the warm Heart voice, the Architect a deep British man; the Oracle keeps hers.
 // Horace (10/28) picked 'Nicole, older and deeper' for the Oracle: an older, warm, wise woman.
-if (AGENT === 'oracle' && settings.oracleKk !== 2) { settings.voice = 'kk:af_nicole~0.88~r30'; settings.oracleKk = 2; saveSettings(); } // 10/28: then 'a little more gravelly'
+if (AGENT === 'oracle' && settings.oracleKk !== 3) { settings.voice = 'kk:af_sarah~0.86'; settings.oracleKk = 3; saveSettings(); } // 10/28 final: Sarah, older and deeper (Nicole was too sultry) // 10/28: then 'a little more gravelly'
 if (P.kokoroDefault && settings.kokoro1 !== true) { if (!settings.voice) settings.voice = P.kokoroDefault; settings.kokoro1 = true; saveSettings(); }
 if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens Watson with #listen=1: always listening for "Watson".
