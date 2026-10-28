@@ -5,7 +5,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ROOT, config } from './config.js';
 import { classify, describe, prettyTool, requestApproval, denyAllPending, trustAllows } from './approvals.js';
 import { createWatsonTools, formatLocal, userTimeZone } from './tools.js';
-import { history, memory, state } from './store.js';
+import { history, makeHistory, memory, state } from './store.js';
 import { changesSince, knowledgeForPrompt, knowledgeSignature, memoriesForPrompt, projectSnapshot } from './knowledge.js';
 
 /** Async queue that feeds user messages into the SDK's streaming input. */
@@ -80,6 +80,12 @@ Horace collects free daily casino bonuses with the Bonus Run on the Wolf Hall Ga
 ## The Architect
 A second agent, the Architect, runs on his own page (architect.html, linked at the top of yours) with his own conversation. He is the brain of the Construct, Horace's tree of small legit ways to earn from home. Send Construct work to him ("that's the Architect's department; tap Architect at the top"). You both keep working when Horace is on the other page; each page shows a banner and chimes when the other has an answer or a question, so Horace knows to switch.
 
+## The Night Shift (2026-10-28)
+At 1 AM a separate session works one task from ${ROOT}/data/night-queue.md on a night branch (git worktree under ~/night). It tests the work, commits locally and writes ${ROOT}/data/night-reports/<date>.md. It never deploys, pushes or changes live data; those wait for Horace.
+- "Put X on the night shift" means: append "- [ ] X" to the queue, written clearly enough to do alone.
+- "What did you do last night?" or "show me last night's work" means: read the newest report, say it in two or three sentences, and put the report and the branch diff (git -C <worktree> diff main...HEAD --stat, plus the key parts) on screen.
+- "Red pill" on night work means merge that branch into main and then follow the normal deploy rules (diff, pre-flight, deploy, smoke test). Push only on "free your mind".
+
 ## Horace's code words (2026-10-26)
 When you have asked "shall I go ahead?" (or an approval is waiting), these are his answer:
 - "Red pill" = yes, do it. For a deploy it's his OK to deploy.
@@ -143,6 +149,26 @@ export const ORACLE = {
   knowledgeNotes: true,
 };
 
+/** Why a tool call isn't allowed while nobody is watching (routines), or null when it's fine. */
+export function unattendedBlock(toolName, input = {}) {
+  if (toolName === 'Bash') {
+    const c = String(input.command || '');
+    if (/\bwrangler\s+(deploy|publish|secret|delete|rollback|kv|d1|r2)\b/.test(c)) return 'Cloudflare deploys and secrets';
+    if (/\bnetlify\s+(deploy|api|sites)/.test(c)) return 'Netlify deploys';
+    if (/\bgit\b[^|;&]*\s(push|reset\s+--hard|clean|branch\s+-D|checkout\s+main|merge|rebase)\b/.test(c)) return 'pushing or rewriting git branches';
+    if (/\bcurl\b[^|;]*(-X\s*(POST|PATCH|PUT|DELETE)|--data|-d\s)/i.test(c)) return 'write requests to live services';
+    if (/\brm\s+-[a-z]*r/i.test(c)) return 'deleting folders';
+  }
+  if (/^mcp__claude_ai_Notion__notion-(create|update|move|delete|duplicate|restore)/.test(toolName)) return 'changing Notion';
+  if (/^mcp__claude_ai_(Gmail|Google_Calendar|Google_Drive)__/.test(toolName) && !/(search|list|get|read|download)/.test(toolName)) return 'changing email, calendar or Drive';
+  if (toolName === 'mcp__watson__morning' && input.action !== 'briefing' && input.action !== 'view') return 'changing the Morning Log';
+  if (toolName === 'mcp__watson__casino' && input.action !== 'add_offers') return 'changing the Bonus Run';
+  return null;
+}
+
+// The Night Shift (2026-10-28): the Oracle's rules and tools in a separate session that starts fresh each night.
+export const NIGHT = { ...ORACLE, key: 'night', label: 'The Night Shift', sessionKey: 'nightSessionId', history: makeHistory('night-history.jsonl'), knowledgeNotes: false };
+
 export class WatsonAgent {
   /** @param {(event: object) => void} send broadcast to this agent's screens */
   constructor(send, persona = ORACLE) {
@@ -171,6 +197,12 @@ export class WatsonAgent {
     this.seen = knowledgeSignature(); // what the prompt below already includes
     const gate = async (input, _toolUseId, { signal }) => {
       if (input.hook_event_name !== 'PreToolUse') return {};
+      // Unattended runs (routines like the Night Shift) never deploy, push or write to live data,
+      // whatever trust mode allows: Horace isn't there to say yes (2026-10-28).
+      if (this.origin === 'routine') {
+        const why = unattendedBlock(input.tool_name, input.tool_input);
+        if (why) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: `Not allowed in an unattended routine: ${why}. Queue it for Horace's red pill in the shift report instead.` } };
+      }
       const risk = classify(input.tool_name, input.tool_input);
       if (!risk) return {};
       const d = await requestApproval({ toolName: input.tool_name, input: input.tool_input, ...risk, signal, who: this.p.label });

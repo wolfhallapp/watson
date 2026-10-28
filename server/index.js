@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { DATA_DIR, ROOT, config } from './config.js';
-import { WatsonAgent } from './agent.js';
+import { WatsonAgent, NIGHT } from './agent.js';
 import { answerApproval, onApprovalEvent, pendingApprovals } from './approvals.js';
 import { startReminderLoop } from './tools.js';
 import { history, reminders, state } from './store.js';
@@ -323,7 +323,9 @@ startReminderLoop((r) => {
   return true;
 });
 
-startRoutines(agent);
+// The Night Shift's own session (fresh each night); its activity is kept in data/night-history.jsonl.
+const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
+startRoutines({ main: agent, night: nightAgent });
 
 server.listen(config.port, config.host, () => {
   console.log(`\n  Watson is listening on http://localhost:${config.port}`);
@@ -337,6 +339,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     console.log('\n  Watson is shutting down.');
     agent.shutdown();
     architect.shutdown();
+    nightAgent.shutdown();
     server.close();
     setTimeout(() => process.exit(0), 500).unref();
   });
