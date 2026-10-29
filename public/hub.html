@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Construct Hub</title>
+<link rel="icon" href="morpheus.svg" type="image/svg+xml">
+<script src="rain.js" defer></script>
+<link rel="stylesheet" href="hub.css">
+</head>
+<body>
+<canvas id="rain" aria-hidden="true"></canvas>
+<div class="ticker" aria-label="Ticker"><div class="run" id="ticker">Loading the Construct…</div></div>
+<div class="wrap">
+  <div class="top"><h1>CONSTRUCT HUB</h1><div><a href="/">Oracle</a><a href="morpheus.html">Morpheus</a></div></div>
+  <div class="grid">
+    <div>
+      <div class="core" id="core">
+        <div class="scene" id="scene">
+          <div class="ring r4"></div><div class="ring r1" id="r1"></div><div class="ring r2"></div><div class="ring r3"></div><div class="ring tilt"></div>
+        </div>
+        <div class="badge"><div class="rank" id="rank">—</div><div class="xp" id="xp">0</div><div class="sub" id="nextr"></div><div class="bar"><i id="bar"></i></div></div>
+      </div>
+      <div class="stats"><div class="stat"><b id="streak">0</b><span>STREAK</span></div><div class="stat"><b id="left">—</b><span>QUESTS LEFT</span></div><div class="stat"><b id="today">0</b><span>TODAY XP</span></div><div class="stat"><b id="best">0</b><span>BEST</span></div></div>
+    </div>
+    <div class="panel chat">
+      <h2><span>OPERATOR LOG</span><span id="clock"></span></h2>
+      <div class="msgs" id="msgs"><div class="m sys">Tell me what you did, Operator. "Showered and brushed." "Moved 5." "Dodged buying a pack." "Missed the night check." Tap the mic to talk.</div></div>
+      <form class="in" id="form" autocomplete="off"><button type="button" class="mic" id="mic" title="Talk">🎙</button><input id="text" placeholder="Log it…" aria-label="Log it"><button>Send</button></form>
+    </div>
+  </div>
+  <div class="panel mt"><h2><span>TODAY'S QUESTS · tap to log</span><span id="date"></span></h2><div class="quests" id="quests"></div></div>
+  <div class="grid mt">
+    <div class="panel"><h2><span>ACHIEVEMENTS</span></h2><div class="ach" id="ach"></div></div>
+    <div class="panel"><h2><span>RANKS</span></h2><div class="ranks" id="ranks"></div><p class="note">XP never goes down. A miss is data, not a loss. Every reward is earned and known in advance — no luck involved.</p></div>
+  </div>
+</div>
+<div class="login" id="login" hidden><form id="lf"><b class="lt">Jack in</b><p class="lp">Paste your access token (the <code>WATSON_TOKEN</code> in the Oracle's <code>.env</code>), or open the Oracle on this device once and come back.</p><input id="tok" type="password" placeholder="Access token"><button class="mic wide">Connect</button></form></div>
+<script type="module" src="hub-app.js"></script>
+</body>
+</html>

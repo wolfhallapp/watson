@@ -17,6 +17,7 @@ import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
 import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
+import { hubState, logMessage, tickerExtras } from './hub.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -62,8 +63,31 @@ async function handleTts(req, res, url) {
   }
 }
 
+// The Construct Hub (2026-10-29): GET /hub/state, GET /hub/ticker, POST /hub/log { text }. Same token as speech.
+async function handleHub(req, res, url) {
+  const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const ip = clientIp(req);
+  if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'hub request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
+  if (req.method === 'GET' && url.pathname === '/hub/state') { json(res, 200, hubState()); return; }
+  if (req.method === 'GET' && url.pathname === '/hub/ticker') {
+    const s = hubState(); const extra = await tickerExtras();
+    const r = reminders.all().filter((x) => !x.fired).sort((a, b) => String(a.due).localeCompare(String(b.due)))[0];
+    json(res, 200, { ...extra, reminder: r ? { text: r.text, due: r.due } : null, line: s.line }); return;
+  }
+  if (req.method === 'POST' && url.pathname === '/hub/log') {
+    let body = '';
+    for await (const chunk of req) { body += chunk; if (body.length > 4000) { json(res, 413, { error: 'too long' }); return; } }
+    let msg; try { msg = JSON.parse(body); } catch { json(res, 400, { error: 'bad json' }); return; }
+    const text = String(msg.text || '').trim().slice(0, 1000);
+    if (!text) { json(res, 400, { error: 'no text' }); return; }
+    json(res, 200, logMessage(text, { quest: typeof msg.quest === 'string' ? msg.quest.slice(0, 20) : null })); return;
+  }
+  json(res, 404, { error: 'not found' });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname.startsWith('/hub/')) { handleHub(req, res, url).catch((e) => json(res, 500, { error: e.message })); return; }
   if (url.pathname === '/tts' || url.pathname.startsWith('/tts/')) { handleTts(req, res, url).catch(() => res.destroy()); return; }
   let rel = decodeURIComponent(url.pathname);
   if (rel === '/') rel = '/index.html';
