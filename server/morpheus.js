@@ -9,7 +9,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { ROOT } from './config.js';
-import { makeHistory, memory } from './store.js';
+import { makeHistory, memory, reminders } from './store.js';
 import { formatLocal, userTimeZone } from './tools.js';
 import { searchSessions } from './knowledge.js';
 
@@ -17,6 +17,7 @@ export const PRIVATE = process.env.MORPHEUS_DIR || path.join(os.homedir(), '.ora
 export const MDIR = path.join(PRIVATE, 'morpheus');
 export const JOURNAL = path.join(MDIR, 'journal.md');
 export const INSIGHTS = path.join(MDIR, 'insights.md');
+export const SCHEDULE = path.join(MDIR, 'schedule.md');
 const TEXTS = path.join(PRIVATE, 'texts.jsonl');
 const PARAMS = path.join(ROOT, 'knowledge', 'morpheus.md');
 const TZ = 'America/Chicago';
@@ -119,6 +120,14 @@ ${params}
 - **Keep the insights page.** When you learn something lasting about him (a value, a wound, a pattern, a goal, what helps him, what to avoid), update it with update_insights. Keep it short (under about 60 lines), kind and true. The Oracle reads this page to know him, so write it for her too: no secrets of other people, nothing graphic, nothing he asked you to keep between the two of you.
 - Put longer reflections, patterns or summaries on screen with show_on_screen.
 
+## Day planner (2026-10-29, per Horace)
+Horace asked you to help him build a day planner. His schedule is below and in my_schedule (which also lists his upcoming reminders). Read his Google Calendar (read only) for anything new.
+- Build plans that fit his real life: Tuesdays he leaves at 4 AM, he's short on sleep, church on Wednesday and Thursday nights, festival weekends, the kids, paydays.
+- Protect what matters to him: sleep, faith, his daughters, and a no-reply window so he isn't always on. Plan 2 or 3 real priorities a day, not 20.
+- Put each plan on screen as a simple time-blocked list, and journal the plan in a line or two.
+- When he tells you a time or a rule ("church is at 10", "I have the girls every other weekend"), record it with update_schedule. Never guess a time; ask.
+- To put things on his calendar or set reminders, tell him to ask the Oracle, who can do it with his yes.
+
 ## Care and limits
 - You are not a licensed therapist, and you never diagnose. If he's in crisis, thinks about harming himself or someone else, or is unsafe, stop the journaling: urge him, warmly and plainly, to call or text 988 (Suicide & Crisis Lifeline) or 911 now, and to reach someone he trusts. Suggest a licensed counselor for anything that needs real treatment; you can help him find one.
 - His faith matters to him (Churches of Christ; Trinity is his spiritual advisor). Respect it; point him to Trinity for Scripture questions.
@@ -129,6 +138,9 @@ ${params}
 Everything you write as reply text is read aloud in a deep, calm voice.
 - Few words, well chosen. One to four sentences, then a question or a silence he can step into.
 - No markdown in reply text. Lists, quotes from his texts and long reflections go on screen.
+
+## His schedule
+${read(SCHEDULE, '(No schedule yet. Ask him about his week and record it with update_schedule.)').slice(0, 7000)}
 
 ## What you know about him (your insights page)
 ${insights}
@@ -158,6 +170,15 @@ function createMorpheusTools(send, currentSessionId) {
       tool('update_insights', "Replace the insights page (what you know about Horace that lasts). The Oracle reads it. Markdown, under about 60 lines. Send the whole page.",
         { content: z.string().min(20).max(12000) },
         async ({ content }) => { ensureDir(); fs.writeFileSync(INSIGHTS, content.trim() + '\n', { mode: 0o600 }); return text('Insights page updated.'); }),
+      tool('my_schedule', "Horace's schedule (work, sleep, church, family, money dates, routines) plus his upcoming reminders. Use it when planning his day or week.",
+        {},
+        async () => {
+          const r = reminders.all().filter((x) => !x.fired).map((x) => `- ${formatLocal(new Date(x.due))}: ${x.text || x.message || ''}`).join('\n');
+          return text(read(SCHEDULE, '(No schedule file yet.)') + '\n\n## Upcoming reminders\n' + (r || '(none)'));
+        }),
+      tool('update_schedule', "Replace Horace's schedule page with an updated version (send the whole page, markdown). Use it when he tells you a time, a rule or a change. Never guess a time.",
+        { content: z.string().min(50).max(20000) },
+        async ({ content }) => { ensureDir(); fs.writeFileSync(SCHEDULE, content.trim() + '\n', { mode: 0o600 }); return text('Schedule updated.'); }),
       tool('search_texts', "Search Horace's text messages (2018 on). Filter by words, person (name or number, partial is fine), date range (YYYY-MM-DD), and mine=true for only what he sent. Returns the newest matches.",
         { query: z.string().optional(), person: z.string().optional(), from: z.string().optional(), to: z.string().optional(), mine: z.boolean().optional(), limit: z.number().int().min(1).max(200).optional() },
         async (a) => {

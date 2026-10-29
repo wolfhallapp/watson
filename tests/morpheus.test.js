@@ -60,3 +60,9 @@ test('calls: parsed from the newest calls-*.xml', () => {
   assert.deepEqual([c[0].who, c[0].kind, c[0].secs], ['Mama', 'outgoing', 125]);
   assert.deepEqual([c[1].who, c[1].kind], ['+18005550000', 'rejected']);
 });
+
+test('the schedule page shows up in his prompt once written', () => {
+  fs.writeFileSync(M.SCHEDULE, '# Schedule\n- Tuesdays: leaves at 4:00 AM, home about 6 PM.\n');
+  assert.match(M.MORPHEUS.prompt(), /Tuesdays: leaves at 4:00 AM/);
+  assert.match(M.MORPHEUS.prompt(), /Day planner/);
+});
