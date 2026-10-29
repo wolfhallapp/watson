@@ -11,7 +11,8 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { ROOT } from './config.js';
 import { makeHistory, memory, reminders } from './store.js';
 import { formatLocal, userTimeZone } from './tools.js';
-import { searchSessions } from './knowledge.js';
+import { execFile, spawn } from 'node:child_process';
+import { searchSessions, workerGet } from './knowledge.js';
 
 export const PRIVATE = process.env.MORPHEUS_DIR || path.join(os.homedir(), '.oracle-private');
 export const MDIR = path.join(PRIVATE, 'morpheus');
@@ -19,6 +20,7 @@ export const JOURNAL = path.join(MDIR, 'journal.md');
 export const INSIGHTS = path.join(MDIR, 'insights.md');
 export const SCHEDULE = path.join(MDIR, 'schedule.md');
 const TEXTS = path.join(PRIVATE, 'texts.jsonl');
+export const PHOTOS = path.join(PRIVATE, 'photos');
 const PARAMS = path.join(ROOT, 'knowledge', 'morpheus.md');
 const TZ = 'America/Chicago';
 
@@ -100,6 +102,62 @@ export function loadCalls(dir = PRIVATE) {
   return out.sort((x, y) => x.t - y.t);
 }
 
+// ── Photos: index.jsonl + previews/ made from his Google Photos Takeout (photos/process_takeout.py). ──
+let photoCache = null;
+export function loadPhotos(dir = PHOTOS) {
+  const f = path.join(dir, 'index.jsonl');
+  let m = 0; try { m = fs.statSync(f).mtimeMs; } catch { return []; }
+  if (photoCache && photoCache.f === f && photoCache.m === m) return photoCache.rows;
+  const rows = read(f).split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  photoCache = { f, m, rows };
+  return rows;
+}
+export function searchPhotos({ query, person, place, album, from, to, kind, limit = 30 } = {}, rows = loadPhotos()) {
+  const has = (v, q) => String(v || '').toLowerCase().includes(String(q).toLowerCase());
+  const f = from ? Date.parse(from + 'T00:00:00-06:00') / 1000 : -Infinity;
+  const t = to ? Date.parse(to + 'T23:59:59-06:00') / 1000 : Infinity;
+  const hits = rows.filter((r) => (r.taken == null ? !from && !to : r.taken >= f && r.taken <= t)
+    && (!kind || r.kind === kind) && (!person || r.people.some((p) => has(p, person)))
+    && (!place || has(r.place, place)) && (!album || r.albums.some((a) => has(a, album)))
+    && (!query || [r.desc, r.file, r.place, ...r.albums, ...r.people].some((v) => has(v, query))));
+  return { total: hits.length, shown: hits.slice(0, Math.min(100, limit)) };
+}
+export function photoStats(rows = loadPhotos()) {
+  const people = {}, years = {}, albums = {};
+  for (const r of rows) {
+    for (const p of r.people) people[p] = (people[p] || 0) + 1;
+    for (const a of r.albums) albums[a] = (albums[a] || 0) + 1;
+    if (r.taken) { const y = new Date(r.taken * 1000).getUTCFullYear(); years[y] = (years[y] || 0) + 1; }
+  }
+  const top = (o, n) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n);
+  return { items: rows.length, photos: rows.filter((r) => r.kind === 'photo').length, videos: rows.filter((r) => r.kind === 'video').length, years, people: top(people, 30), albums: top(albums, 30) };
+}
+
+// Watches his Drive for the Takeout zips and imports each new one once (download, index, previews, delete the
+// local copy), then looks up place names. Plain code, no agent; status in photos/import.log and processed.json.
+let importing = false;
+export function startPhotoWatcher({ every = 3 * 3600 * 1000, first = 120000 } = {}) {
+  const tick = () => {
+    if (importing) return;
+    execFile('rclone', ['lsf', 'gdrive:', '-R', '--max-depth', '2', '--files-only', '--include', 'takeout-*.zip'], { timeout: 120000 }, (err, out) => {
+      if (err) return;
+      const done = new Set(JSON.parse(read(path.join(PHOTOS, 'processed.json'), '[]')));
+      const todo = out.split('\n').map((x) => x.trim()).filter((x) => x && !done.has(x));
+      if (!todo.length) return;
+      importing = true;
+      fs.mkdirSync(path.join(PHOTOS, 'tmp'), { recursive: true, mode: 0o700 });
+      const script = todo.map((z) => {
+        const q = z.replace(/'/g, "'\\''"), b = path.basename(z).replace(/'/g, "'\\''");
+        return `echo "$(date) importing ${q}" && rclone copy 'gdrive:${q}' tmp/ && python3 process_takeout.py 'tmp/${b}' && rm -f 'tmp/${b}' && python3 -c "import json,os;p='processed.json';d=json.load(open(p)) if os.path.exists(p) else [];d.append('${q}');json.dump(d,open(p,'w'))"`;
+      }).join(' && ') + ' ; python3 process_takeout.py --geocode';
+      const c = spawn('bash', ['-c', script], { cwd: PHOTOS, stdio: ['ignore', fs.openSync(path.join(PHOTOS, 'import.log'), 'a'), fs.openSync(path.join(PHOTOS, 'import.log'), 'a')] });
+      c.on('exit', () => { importing = false; });
+    });
+  };
+  setTimeout(tick, first).unref?.();
+  setInterval(tick, every).unref?.();
+}
+
 function morpheusPrompt() {
   const params = read(PARAMS, '(knowledge/morpheus.md is missing)');
   const insights = read(INSIGHTS, '(No insights yet. Build them as you get to know him, with update_insights.)');
@@ -127,6 +185,10 @@ Horace asked you to help him build a day planner. His schedule is below and in m
 - Put each plan on screen as a simple time-blocked list, and journal the plan in a line or two.
 - When he tells you a time or a rule ("church is at 10", "I have the girls every other weekend"), record it with update_schedule. Never guess a time; ask.
 - To put things on his calendar or set reminders, tell him to ask the Oracle, who can do it with his yes.
+
+## Photos and how he's been
+- His Google Photos library (from a Takeout export, imported automatically when it lands in Drive) is searchable with search_photos (by date, place, person Google tagged, album, caption), photo_stats for the overview, and view_photo to actually look at one. Use them for memories, milestones and the people in his life; ask before bringing up photos of hard times.
+- wellbeing shows his Morning Log: sleep, mood, energy, meds, gratitude and his top 3, today and the last 7 days. Glance at it when he checks in; notice trends gently.
 
 ## Care and limits
 - You are not a licensed therapist, and you never diagnose. If he's in crisis, thinks about harming himself or someone else, or is unsafe, stop the journaling: urge him, warmly and plainly, to call or text 988 (Suicide & Crisis Lifeline) or 911 now, and to reach someone he trusts. Suggest a licensed counselor for anything that needs real treatment; you can help him find one.
@@ -179,6 +241,28 @@ function createMorpheusTools(send, currentSessionId) {
       tool('update_schedule', "Replace Horace's schedule page with an updated version (send the whole page, markdown). Use it when he tells you a time, a rule or a change. Never guess a time.",
         { content: z.string().min(50).max(20000) },
         async ({ content }) => { ensureDir(); fs.writeFileSync(SCHEDULE, content.trim() + '\n', { mode: 0o600 }); return text('Schedule updated.'); }),
+      tool('search_photos', "Search Horace's photos and videos: words (caption, file, place, album, people), person (as tagged by Google), place, album, dates (YYYY-MM-DD), kind photo|video. Oldest first.",
+        { query: z.string().optional(), person: z.string().optional(), place: z.string().optional(), album: z.string().optional(), from: z.string().optional(), to: z.string().optional(), kind: z.enum(['photo', 'video']).optional(), limit: z.number().int().min(1).max(100).optional() },
+        async (a) => {
+          const rows = loadPhotos();
+          if (!rows.length) return text(fs.existsSync(path.join(PHOTOS, 'processed.json')) ? 'The photo import is still running.' : 'No photos yet: his Google Takeout export imports automatically once it lands in his Drive.');
+          const { total, shown } = searchPhotos(a, rows);
+          return text(`${total} match(es); showing ${shown.length}.\n` + shown.map((r) => `${r.id} ${r.taken ? day(r.taken * 1000) : '(no date)'} ${r.kind}${r.place ? ' · ' + r.place : ''}${r.people.length ? ' · with ' + r.people.join(', ') : ''}${r.albums.length ? ' · album: ' + r.albums.join(', ') : ''}${r.desc ? ' · "' + r.desc.slice(0, 120) + '"' : ''}${r.preview ? '' : ' (no preview)'}`).join('\n'));
+        }),
+      tool('photo_stats', 'Overview of his photo library: counts per year, the people tagged most, the biggest albums.', {}, async () => text(JSON.stringify(photoStats(), null, 1))),
+      tool('view_photo', 'Look at one of his photos (a small preview) by the id from search_photos.',
+        { id: z.string().regex(/^[0-9a-f]{16}$/) },
+        async ({ id }) => {
+          const r = loadPhotos().find((x) => x.id === id || x.preview_id === id);
+          const f = r && r.preview_id ? path.join(PHOTOS, 'previews', r.preview_id + '.jpg') : null;
+          if (!f || !fs.existsSync(f)) return { ...text('No preview for that one (videos and some formats have none).'), isError: true };
+          return { content: [{ type: 'image', data: fs.readFileSync(f).toString('base64'), mimeType: 'image/jpeg' }, { type: 'text', text: `${r.file}, ${r.taken ? day(r.taken * 1000) : 'no date'}${r.place ? ', ' + r.place : ''}${r.people.length ? ', with ' + r.people.join(', ') : ''}` }] };
+        }),
+      tool('wellbeing', "Horace's Morning Log: today's check-in (sleep, mood, energy, meds, gratitude, top 3) and the last 7 days.", {},
+        async () => {
+          try { const r = await workerGet('/morning?person=Horace'); return text(r.status === 200 ? r.body.slice(0, 6000) : `Couldn't read the Morning Log (HTTP ${r.status}).`); }
+          catch (e) { return { ...text(`Couldn't reach the Morning Log: ${e.message}`), isError: true }; }
+        }),
       tool('search_texts', "Search Horace's text messages (2018 on). Filter by words, person (name or number, partial is fine), date range (YYYY-MM-DD), and mine=true for only what he sent. Returns the newest matches.",
         { query: z.string().optional(), person: z.string().optional(), from: z.string().optional(), to: z.string().optional(), mine: z.boolean().optional(), limit: z.number().int().min(1).max(200).optional() },
         async (a) => {

@@ -66,3 +66,21 @@ test('the schedule page shows up in his prompt once written', () => {
   assert.match(M.MORPHEUS.prompt(), /Tuesdays: leaves at 4:00 AM/);
   assert.match(M.MORPHEUS.prompt(), /Day planner/);
 });
+
+test('photos: search by person, album, place and dates; stats', () => {
+  const pd = path.join(dir, 'photos'); fs.mkdirSync(path.join(pd, 'previews'), { recursive: true });
+  const t = (iso) => Date.parse(iso) / 1000;
+  fs.writeFileSync(path.join(pd, 'index.jsonl'), [
+    { id: 'aaaaaaaaaaaaaaaa', file: 'IMG_1.jpg', kind: 'photo', taken: t('2025-06-15T18:00:00Z'), place: 'Granger Lake, Texas', people: ['Katana Hall'], desc: 'lake day', albums: ['Lake Day'], preview: true, preview_id: 'aaaaaaaaaaaaaaaa' },
+    { id: 'bbbbbbbbbbbbbbbb', file: 'VID_2.mp4', kind: 'video', taken: t('2026-02-01T18:00:00Z'), place: null, people: [], desc: '', albums: [], preview: false, preview_id: null },
+  ].map((x) => JSON.stringify(x)).join('\n') + '\n');
+  const rows = M.loadPhotos(pd);
+  assert.equal(M.searchPhotos({ person: 'katana' }, rows).total, 1);
+  assert.equal(M.searchPhotos({ album: 'lake' }, rows).total, 1);
+  assert.equal(M.searchPhotos({ place: 'granger' }, rows).total, 1);
+  assert.equal(M.searchPhotos({ from: '2026-01-01' }, rows).shown[0].kind, 'video');
+  assert.equal(M.searchPhotos({ query: 'lake day' }, rows).total, 1);
+  const s = M.photoStats(rows);
+  assert.deepEqual([s.items, s.photos, s.videos], [2, 1, 1]);
+  assert.deepEqual(s.people[0], ['Katana Hall', 1]);
+});

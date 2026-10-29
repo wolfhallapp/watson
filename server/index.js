@@ -16,7 +16,7 @@ import { startRoutines } from './routines.js';
 import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
-import { MORPHEUS } from './morpheus.js';
+import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -338,6 +338,7 @@ startReminderLoop((r) => {
 // The Night Shift's own session (fresh each night); its activity is kept in data/night-history.jsonl.
 const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
 startRoutines({ main: agent, night: nightAgent, trinity, morpheus });
+startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
 server.listen(config.port, config.host, () => {
