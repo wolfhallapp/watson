@@ -67,3 +67,13 @@ test('the Trinity page wakes on "Trinity"', async () => {
     assert.equal(extractWake('Oracle what is in the pool'), null);
   } finally { setWakeWord(ORACLE_WAKE); }
 });
+
+test('the Morpheus page wakes on "Morpheus" (and common mishearings)', async () => {
+  const { MORPHEUS_WAKE } = await import('../public/voice.js');
+  setWakeWord(MORPHEUS_WAKE);
+  try {
+    assert.deepEqual(extractWake('Morpheus I had a rough day'), { command: 'I had a rough day' });
+    assert.deepEqual(extractWake('hey morphius can we talk'), { command: 'can we talk' });
+    assert.equal(extractWake('Trinity what does Acts 2 38 mean'), null);
+  } finally { setWakeWord(ORACLE_WAKE); }
+});

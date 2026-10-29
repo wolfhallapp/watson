@@ -16,6 +16,7 @@ import { startRoutines } from './routines.js';
 import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
+import { MORPHEUS } from './morpheus.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -80,13 +81,14 @@ const channels = {
   oracle: { key: 'oracle', clients: new Set(), screens: [] }, // screens: last few show_on_screen items, replayed to new screens
   architect: { key: 'architect', clients: new Set(), screens: [] },
   trinity: { key: 'trinity', clients: new Set(), screens: [] },
+  morpheus: { key: 'morpheus', clients: new Set(), screens: [] },
 };
 function broadcastTo(ch, event) {
   if (event.type === 'screen') { ch.screens.push(event); if (ch.screens.length > 8) ch.screens.shift(); }
   const data = JSON.stringify(event);
   for (const ws of ch.clients) if (ws.readyState === ws.OPEN) ws.send(data);
 }
-const allClients = () => channels.oracle.clients.size + channels.architect.clients.size + channels.trinity.clients.size;
+const allClients = () => Object.values(channels).reduce((n, ch) => n + ch.clients.size, 0);
 const otherOf = (key) => (key === 'oracle' ? 'architect' : 'oracle');
 
 // Each agent's page also hears, in short, what the other is doing: "working" and "has a reply", so
@@ -145,10 +147,13 @@ const architect = new WatsonAgent(agentSend('architect'), ARCHITECT);
 // Trinity (2026-10-28): her own page; she doesn't trade busy/reply banners with the other two.
 const trinity = new WatsonAgent((event) => broadcastTo(channels.trinity, event), TRINITY);
 channels.trinity.agent = trinity;
+// Morpheus (2026-10-29): Horace's guru and journal; his own page, no peer banners.
+const morpheus = new WatsonAgent((event) => broadcastTo(channels.morpheus, event), MORPHEUS);
+channels.morpheus.agent = morpheus;
 channels.oracle.agent = agent;
 channels.architect.agent = architect;
 // Approvals are shared: whichever screen is open can answer them.
-onApprovalEvent((event) => { broadcastTo(channels.oracle, event); broadcastTo(channels.architect, event); broadcastTo(channels.trinity, event); });
+onApprovalEvent((event) => { for (const ch of Object.values(channels)) broadcastTo(ch, event); });
 construct.onChange((summary) => broadcastTo(channels.architect, { type: 'construct', construct: summary }));
 // What Horace may change on the tree from the Architect's screen (the Architect is told on his next turn).
 const SCREEN_ACTIONS = new Set(['update', 'step', 'note', 'payout', 'undo_payout', 'add']);
@@ -281,7 +286,7 @@ wss.on('connection', (ws, req) => {
         reminders: reminders.all().filter((r) => !r.fired),
         ...(ch.key === 'architect' ? { construct: construct.summary() } : { usage }),
         lastSay: lastSayOf(ch.key),
-        ...(ch.key === 'trinity' ? {} : { peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) } }),
+        ...(ch.key === 'trinity' || ch.key === 'morpheus' ? {} : { peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) } }),
       }));
       return;
     }
@@ -332,7 +337,7 @@ startReminderLoop((r) => {
 
 // The Night Shift's own session (fresh each night); its activity is kept in data/night-history.jsonl.
 const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
-startRoutines({ main: agent, night: nightAgent, trinity });
+startRoutines({ main: agent, night: nightAgent, trinity, morpheus });
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
 server.listen(config.port, config.host, () => {
@@ -348,6 +353,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     agent.shutdown();
     architect.shutdown();
     trinity.shutdown();
+    morpheus.shutdown();
     nightAgent.shutdown();
     server.close();
     setTimeout(() => process.exit(0), 500).unref();

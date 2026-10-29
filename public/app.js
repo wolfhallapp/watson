@@ -1,8 +1,15 @@
-import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE, TRINITY_WAKE } from './voice.js';
+import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE, TRINITY_WAKE, MORPHEUS_WAKE } from './voice.js';
 
 // One script for both agents' pages: the Oracle (index.html) and the Architect (architect.html, <body data-agent="architect">).
-const AGENT = ['architect', 'trinity'].includes(document.body.dataset.agent) ? document.body.dataset.agent : 'oracle';
-const P = AGENT === 'trinity' ? {
+const AGENT = ['architect', 'trinity', 'morpheus'].includes(document.body.dataset.agent) ? document.body.dataset.agent : 'oracle';
+const P = AGENT === 'morpheus' ? {
+  name: 'Morpheus', short: 'Morpheus', settingsKey: 'morpheus.settings', ws: '/ws?agent=morpheus', pronoun: 'he',
+  automatic: 'Automatic (free browser voice, a deep, calm man\'s voice)',
+  test: 'I can only show you the door, Horace. You are the one who has to walk through it. Talk to me.',
+  newChat: 'Start a new conversation? Morpheus will forget this chat (the journal stays).',
+  voicePrefs: [/Guy.*Natural/i, /Davis.*Natural/i, /Christopher.*Natural/i, /Microsoft (David|Mark)/i, /Google US English/i, /\bmale/i],
+  pitch: 0.7, rateFactor: 0.85, kokoroDefault: 'kk:am_onyx~0.9',
+} : AGENT === 'trinity' ? {
   name: 'Trinity', short: 'Trinity', settingsKey: 'trinity.settings', ws: '/ws?agent=trinity', pronoun: 'she',
   automatic: 'Automatic (free browser voice, a warm woman\'s voice)',
   test: 'Grace and peace to you, Horace. I am here whenever you want to open the Word together.',
@@ -26,6 +33,7 @@ const P = AGENT === 'trinity' ? {
 };
 if (AGENT === 'architect') setWakeWord(ARCHITECT_WAKE);
 if (AGENT === 'trinity') setWakeWord(TRINITY_WAKE);
+if (AGENT === 'morpheus') setWakeWord(MORPHEUS_WAKE);
 // The other agent, so this page can say when they're working or have something for Horace.
 const PEERS = { oracle: { name: 'The Oracle', href: '/', her: 'her' }, architect: { name: 'The Architect', href: 'architect.html', her: 'him' } };
 

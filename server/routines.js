@@ -119,7 +119,7 @@ export function routineDue(r, now, lastDay) {
 export function startRoutines(agents, { every = 60000 } = {}) {
   const main = agents.main || agents;
   const tick = async () => {
-    if (main.busy || agents.night?.busy || agents.trinity?.busy) return;
+    if (main.busy || agents.night?.busy || agents.trinity?.busy || agents.morpheus?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
       const day = routineDue(r, new Date(), done[r.key]);

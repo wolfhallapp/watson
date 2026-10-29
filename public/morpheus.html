@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Morpheus</title>
+  <link rel="manifest" href="morpheus.webmanifest">
+  <link rel="icon" href="morpheus.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="morpheus.svg">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+  <script src="rain.js" defer></script>
+</head>
+<body data-agent="morpheus" class="morpheus">
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <header class="top">
+    <div class="brand">
+      <img src="morpheus.svg" alt="" width="28" height="28">
+      <span>Morpheus</span>
+    </div>
+    <div class="top-actions">
+      <a class="navlink" href="/" title="Go to the Oracle">Oracle</a>
+      <a class="navlink" href="architect.html" title="Go to the Architect">Architect</a>
+      <a class="navlink" href="trinity.html" title="Go to Morpheus">Morpheus</a>
+      <span id="conn" class="pill pill-off">Connecting…</span>
+      <button id="btn-new" class="ghost" title="Start a new conversation">New chat</button>
+      <button id="btn-settings" class="ghost icon" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="left">
+      <div class="stage">
+        <button id="orb" class="orb" data-state="off" aria-label="Microphone. Hold to talk, or tap to start and stop.">
+          <span class="ring r1"></span><span class="ring r2"></span><span class="core"></span>
+        </button>
+        <div id="state-label" class="state-label">Mic is off</div>
+        <div id="caption" class="caption" aria-live="polite"></div>
+        <div class="controls">
+          <button id="btn-mic" class="primary">Turn mic on</button>
+          <button id="btn-stop" class="danger" disabled>Stop</button>
+        </div>
+        <p id="hint" class="hint"></p>
+        <form id="type-form" class="type-form" autocomplete="off">
+          <input id="type-input" type="text" placeholder="Or type to Morpheus…" aria-label="Message Morpheus">
+          <button type="submit" class="ghost">Send</button>
+        </form>
+      </div>
+
+      <nav class="tabs mobile-tabs" role="tablist">
+        <button data-tab="convo" class="active" role="tab">Talk</button>
+        <button data-tab="screen" role="tab">Screen <b id="screen-dot" class="dot" hidden></b></button>
+        <button data-tab="activity" role="tab">Activity</button>
+      </nav>
+
+      <div id="tab-convo" class="panel convo tab-panel active">
+        <ol id="convo" class="convo-list"></ol>
+        <div id="working" class="working" hidden><span class="spinner"></span><span id="working-text">Morpheus is working…</span></div>
+      </div>
+    </section>
+
+    <section class="right">
+      <nav class="tabs desktop-tabs" role="tablist">
+        <button data-tab="screen" class="active" role="tab">Reflections</button>
+        <button data-tab="activity" role="tab">Activity</button>
+      </nav>
+      <div id="tab-screen" class="panel tab-panel active">
+        <div id="screen" class="screen"><p class="empty">Reflections, patterns and your own words Morpheus shows you will appear here.</p></div>
+      </div>
+      <div id="tab-activity" class="panel tab-panel">
+        <ol id="activity" class="activity"><li class="empty">What Morpheus is looking at shows up here.</li></ol>
+      </div>
+    </section>
+  </main>
+
+  <div id="approval" class="approval-wrap" hidden>
+    <div class="approval" role="alertdialog" aria-labelledby="approval-title">
+      <div class="approval-kicker" id="approval-level">Needs your OK</div>
+      <h2 id="approval-title"></h2>
+      <pre id="approval-detail"></pre>
+      <p class="approval-say">Say <b>"yes"</b> or <b>"no"</b>, or tap.</p>
+      <div class="approval-buttons">
+        <button id="ap-no" class="danger">No</button>
+        <button id="ap-always" class="ghost" hidden>Yes, for this session</button>
+        <button id="ap-yes" class="primary">Yes</button>
+      </div>
+      <div id="approval-more" class="approval-more"></div>
+    </div>
+  </div>
+
+  <dialog id="settings" class="settings">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <label class="row"><span>Listening</span>
+        <select id="set-mode">
+          <option value="handsfree">Hands-free: say "Morpheus…"</option>
+          <option value="ptt">Push-to-talk only</option>
+        </select>
+      </label>
+      <label class="row"><span>Speak replies</span><input id="set-speak" type="checkbox"></label>
+      <label class="row"><span>Interrupt Morpheus by saying "stop" (use headphones)</span><input id="set-barge" type="checkbox"></label>
+      <label class="row"><span>Voice</span><select id="set-voice"></select></label>
+      <label class="row"><span>Speed <output id="rate-out"></output></span><input id="set-rate" type="range" min="0.7" max="1.6" step="0.05"></label>
+      <label class="row"><span>Reply window after Morpheus speaks (seconds)</span><input id="set-follow" type="number" min="0" max="30" step="1"></label>
+      <label class="row"><span>Headset play/pause button starts and sends talking</span><input id="set-headset" type="checkbox"></label>
+      <label class="row"><span>Silence that ends what you're saying (seconds)</span><input id="set-endpause" type="number" min="0.5" max="5" step="0.25"></label>
+      <label class="row"><span>Pause before Morpheus speaks, so Bluetooth headphones can leave call mode (seconds)</span><input id="set-settle" type="number" min="0" max="4" step="0.25"></label>
+      <button id="test-voice" type="button" class="ghost">Test voice</button>
+      <div class="pair">
+        <button id="btn-pair" type="button" class="ghost">Pair a phone</button>
+        <div id="pair-out" class="pair-out" hidden>
+          <div id="pair-code" class="pair-code"></div>
+          <div id="pair-url" class="pair-url"></div>
+          <p id="pair-note" class="small"></p>
+        </div>
+      </div>
+      <p class="small">Keys: hold <kbd>Space</kbd> to talk · <kbd>Esc</kbd> stops Morpheus.</p>
+      <p class="small" id="status-line"></p>
+      <div class="dialog-buttons">
+        <button id="btn-logout" type="button" class="ghost">Forget access token on this device</button>
+        <button value="close" class="primary">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="login" class="login" hidden>
+    <form id="login-form" class="login-card">
+      <img src="morpheus.svg" alt="" width="56" height="56">
+      <h1>Morpheus</h1>
+      <p>Enter the 6-digit code from <b>Settings → Pair a phone</b> on your PC, or your access token (the <code>WATSON_TOKEN</code> line in the Oracle's <code>.env</code> file; Morpheus shares it).</p>
+      <input id="login-token" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Code or access token" required>
+      <button class="primary" type="submit">Connect</button>
+      <p id="login-error" class="error"></p>
+    </form>
+  </div>
+</body>
+</html>

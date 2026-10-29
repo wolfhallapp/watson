@@ -69,7 +69,7 @@ export const KOKORO_VOICES = [
   // Deeper, slower variants (2026-10-28, for the Oracle: an older, warm, wise woman). "~0.88" plays the voice at 88% speed,
   // which lowers its pitch and slows it, like an older voice. Not a copy of any real person's voice.
   ['af_nicole~0.88~r30', 'Oracle: Nicole, older, a little gravelly'], ['af_nicole~0.88~r55', 'Oracle: Nicole, older, more gravelly'],
-  ['af_sarah~0.86', 'Oracle: Sarah, older and deeper'], ['af_heart~0.86', 'Heart, older and deeper'], ['af_nicole~0.88', 'Nicole, older and deeper'],
+  ['af_sarah~0.86', 'Oracle: Sarah, older and deeper'], ['am_onyx~0.9', 'Morpheus: Onyx, deep and slow'], ['af_heart~0.86', 'Heart, older and deeper'], ['af_nicole~0.88', 'Nicole, older and deeper'],
 ].map(([id, name]) => ({ id, name }));
 const KOKORO_IDS = new Set(KOKORO_VOICES.map((v) => v.id));
 // Gravel (Horace, 10/28: "a little more gravelly"): soft saturation for grit, a fast flutter in loudness

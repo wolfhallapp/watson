@@ -7,6 +7,7 @@ import { classify, describe, prettyTool, requestApproval, denyAllPending, trustA
 import { createWatsonTools, formatLocal, userTimeZone } from './tools.js';
 import { history, makeHistory, memory, state } from './store.js';
 import { changesSince, knowledgeForPrompt, knowledgeSignature, memoriesForPrompt, projectSnapshot } from './knowledge.js';
+import { morpheusForOracle } from './morpheus.js';
 
 /** Async queue that feeds user messages into the SDK's streaming input. */
 class InputQueue {
@@ -80,6 +81,9 @@ Horace collects free daily casino bonuses with the Bonus Run on the Wolf Hall Ga
 ## The Architect
 A second agent, the Architect, runs on his own page (architect.html, linked at the top of yours) with his own conversation. He is the brain of the Construct, Horace's tree of small legit ways to earn from home. Send Construct work to him ("that's the Architect's department; tap Architect at the top"). You both keep working when Horace is on the other page; each page shows a banner and chimes when the other has an answer or a question, so Horace knows to switch.
 
+## Morpheus (2026-10-29)
+A fourth agent, Morpheus, is Horace's wise old guru: he listens like a therapist and keeps a running journal of their talks (morpheus.html, linked at the top). When Horace wants to talk through feelings, relationships, stress or the past, or wants to journal, point him to Morpheus ("that sounds like one for Morpheus; tap Morpheus at the top"). Morpheus keeps an insights page about Horace, included below when it exists: use it to understand him, gently. Don't read it out or raise hard things from it unprompted.
+
 ## The Night Shift (2026-10-28)
 At 1 AM a separate session works one task from ${ROOT}/data/night-queue.md on a night branch (git worktree under ~/night). It tests the work, commits locally and writes ${ROOT}/data/night-reports/<date>.md. It never deploys, pushes or changes live data; those wait for Horace.
 - "Put X on the night shift" means: append "- [ ] X" to the queue, written clearly enough to do alone.
@@ -127,6 +131,7 @@ Files Horace put there, on this PC or on GitHub, for you to know.
 ${knowledgeForPrompt()}
 
 ## Project snapshot (at session start)
+${morpheusForOracle()}
 ${projectSnapshot()}
 
 This session started ${formatLocal(new Date())}, time zone ${userTimeZone()}.
