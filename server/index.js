@@ -17,7 +17,7 @@ import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
 import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
-import { hubState, logMessage, tickerExtras } from './hub.js';
+import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -68,7 +68,7 @@ async function handleHub(req, res, url) {
   const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   const ip = clientIp(req);
   if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'hub request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
-  if (req.method === 'GET' && url.pathname === '/hub/state') { json(res, 200, hubState()); return; }
+  if (req.method === 'GET' && url.pathname === '/hub/state') { json(res, 200, hubState({ funMoneyOver: funMoneyOver() })); return; }
   if (req.method === 'GET' && url.pathname === '/hub/ticker') {
     const s = hubState(); const extra = await tickerExtras();
     const r = reminders.all().filter((x) => !x.fired).sort((a, b) => String(a.due).localeCompare(String(b.due)))[0];
@@ -80,7 +80,7 @@ async function handleHub(req, res, url) {
     let msg; try { msg = JSON.parse(body); } catch { json(res, 400, { error: 'bad json' }); return; }
     const text = String(msg.text || '').trim().slice(0, 1000);
     if (!text) { json(res, 400, { error: 'no text' }); return; }
-    json(res, 200, logMessage(text, { quest: typeof msg.quest === 'string' ? msg.quest.slice(0, 20) : null })); return;
+    json(res, 200, logMessage(text, { quest: typeof msg.quest === 'string' ? msg.quest.slice(0, 20) : null, funMoneyOver: funMoneyOver() })); return;
   }
   json(res, 404, { error: 'not found' });
 }
