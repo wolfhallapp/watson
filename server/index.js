@@ -9,7 +9,7 @@ import { DATA_DIR, ROOT, config } from './config.js';
 import { WatsonAgent, NIGHT } from './agent.js';
 import { answerApproval, onApprovalEvent, pendingApprovals } from './approvals.js';
 import { startReminderLoop } from './tools.js';
-import { history, reminders, state } from './store.js';
+import { history, reminders, state, screens, SCREEN_LIMIT } from './store.js';
 import { listVoices, synthesize, ttsEnabled, KOKORO_VOICES, synthesizeKokoro, warmKokoro } from './tts.js';
 import { windowsNotify } from './notify.js';
 import { startRoutines } from './routines.js';
@@ -102,13 +102,17 @@ const server = http.createServer((req, res) => {
 
 // ── Clients: one channel per agent (the Oracle at /ws, the Architect at /ws?agent=architect) ──
 const channels = {
-  oracle: { key: 'oracle', clients: new Set(), screens: [] }, // screens: last few show_on_screen items, replayed to new screens
-  architect: { key: 'architect', clients: new Set(), screens: [] },
+  oracle: { key: 'oracle', clients: new Set(), screens: screens.load('oracle') }, // screens: last few show_on_screen items, replayed to new screens (saved in data/screens.json)
+  architect: { key: 'architect', clients: new Set(), screens: screens.load('architect') },
   trinity: { key: 'trinity', clients: new Set(), screens: [] },
   morpheus: { key: 'morpheus', clients: new Set(), screens: [] },
 };
 function broadcastTo(ch, event) {
-  if (event.type === 'screen') { ch.screens.push(event); if (ch.screens.length > 8) ch.screens.shift(); }
+  if (event.type === 'screen') {
+    ch.screens.push(event);
+    if (ch.screens.length > SCREEN_LIMIT) ch.screens.shift();
+    screens.save(ch.key, ch.screens);
+  }
   const data = JSON.stringify(event);
   for (const ws of ch.clients) if (ws.readyState === ws.OPEN) ws.send(data);
 }
