@@ -135,10 +135,29 @@ export function photoStats(rows = loadPhotos()) {
 
 // Watches his Drive for the Takeout zips and imports each new one once (download, index, previews, delete the
 // local copy), then looks up place names. Plain code, no agent; status in photos/import.log and processed.json.
-let importing = false;
-export function startPhotoWatcher({ every = 3 * 3600 * 1000, first = 120000 } = {}) {
+// Overnight only (per Horace 2026-10-30: the 4 GB downloads were choking his Starlink by day). An import
+// starts only between 11 PM and 6 AM Central; one still running at 6 AM is paused (SIGSTOP, progress kept)
+// and resumed at 11 PM.
+const PHOTO_NIGHT = { start: 23, end: 6 };
+export function isPhotoNight(d = new Date()) {
+  const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' }).format(d));
+  return h >= PHOTO_NIGHT.start || h < PHOTO_NIGHT.end;
+}
+const photoLog = (msg) => { try { fs.appendFileSync(path.join(PHOTOS, 'import.log'), `${new Date().toString()} ${msg}\n`); } catch {} };
+let importing = false, job = null, paused = false;
+export function startPhotoWatcher({ every = 30 * 60 * 1000, first = 120000, guardEvery = 5 * 60 * 1000 } = {}) {
+  // An import left over from before a restart can't be paused or watched; stop it so tonight's starts clean.
+  execFile('pkill', ['-KILL', '-f', 'rclone copy gdrive:Takeout'], () => {});
+  const guard = () => {
+    if (!job) return;
+    const night = isPhotoNight();
+    try {
+      if (!night && !paused) { process.kill(-job.pid, 'SIGSTOP'); paused = true; photoLog('paused for the day (resumes at 11 PM)'); }
+      else if (night && paused) { process.kill(-job.pid, 'SIGCONT'); paused = false; photoLog('resumed for the night'); }
+    } catch {}
+  };
   const tick = () => {
-    if (importing) return;
+    if (importing || !isPhotoNight()) return;
     execFile('rclone', ['lsf', 'gdrive:', '-R', '--max-depth', '2', '--files-only', '--include', 'takeout-*.zip'], { timeout: 120000 }, (err, out) => {
       if (err) return;
       const done = new Set(JSON.parse(read(path.join(PHOTOS, 'processed.json'), '[]')));
@@ -150,12 +169,15 @@ export function startPhotoWatcher({ every = 3 * 3600 * 1000, first = 120000 } = 
         const q = z.replace(/'/g, "'\\''"), b = path.basename(z).replace(/'/g, "'\\''");
         return `echo "$(date) importing ${q}" && rclone copy 'gdrive:${q}' tmp/ && python3 process_takeout.py 'tmp/${b}' && rm -f 'tmp/${b}' && python3 -c "import json,os;p='processed.json';d=json.load(open(p)) if os.path.exists(p) else [];d.append('${q}');json.dump(d,open(p,'w'))"`;
       }).join(' && ') + ' ; python3 process_takeout.py --geocode';
-      const c = spawn('bash', ['-c', script], { cwd: PHOTOS, stdio: ['ignore', fs.openSync(path.join(PHOTOS, 'import.log'), 'a'), fs.openSync(path.join(PHOTOS, 'import.log'), 'a')] });
-      c.on('exit', () => { importing = false; });
+      // Its own process group, so the guard can pause and resume rclone and the rest of the chain together.
+      const c = spawn('bash', ['-c', script], { cwd: PHOTOS, detached: true, stdio: ['ignore', fs.openSync(path.join(PHOTOS, 'import.log'), 'a'), fs.openSync(path.join(PHOTOS, 'import.log'), 'a')] });
+      job = c; paused = false;
+      c.on('exit', () => { importing = false; job = null; paused = false; });
     });
   };
   setTimeout(tick, first).unref?.();
   setInterval(tick, every).unref?.();
+  setInterval(guard, guardEvery).unref?.();
 }
 
 function morpheusPrompt() {

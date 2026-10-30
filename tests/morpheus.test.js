@@ -84,3 +84,15 @@ test('photos: search by person, album, place and dates; stats', () => {
   assert.deepEqual([s.items, s.photos, s.videos], [2, 1, 1]);
   assert.deepEqual(s.people[0], ['Katana Hall', 1]);
 });
+
+test('photo import runs overnight only (11 PM to 6 AM Central)', () => {
+  const at = (iso) => M.isPhotoNight(new Date(iso));
+  assert.equal(at('2026-10-30T22:59:00-05:00'), false); // 10:59 PM CDT
+  assert.equal(at('2026-10-30T23:00:00-05:00'), true);
+  assert.equal(at('2026-10-31T00:30:00-05:00'), true);  // midnight hour
+  assert.equal(at('2026-10-31T05:59:00-05:00'), true);
+  assert.equal(at('2026-10-31T06:00:00-05:00'), false);
+  assert.equal(at('2026-10-30T13:00:00-05:00'), false);
+  assert.equal(at('2026-12-01T23:30:00-06:00'), true);  // CST
+  assert.equal(at('2026-12-02T06:10:00-06:00'), false);
+});
