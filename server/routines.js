@@ -14,8 +14,8 @@ export const NIGHT_REPORTS = path.join(DATA_DIR, 'night-reports');
 // Skip a night when the weekly Claude allowance is mostly used, so Horace keeps enough for his own day.
 export function usageAllowsNightShift(usage = state.get().usage || {}) {
   const w = usage.seven_day, f = usage.five_hour;
-  if (w && typeof w.utilization === 'number' && w.utilization >= 0.7) return false;
-  if (f && typeof f.utilization === 'number' && f.utilization >= 0.5 && f.resetsAt && (f.resetsAt > 1e12 ? f.resetsAt : f.resetsAt * 1000) > Date.now()) return false;
+  if (w && typeof w.utilization === 'number' && w.utilization >= 0.8) return false;
+  if (f && typeof f.utilization === 'number' && f.utilization >= 0.95 && f.resetsAt && (f.resetsAt > 1e12 ? f.resetsAt : f.resetsAt * 1000) > Date.now()) return false;
   return true;
 }
 
@@ -39,25 +39,26 @@ export const ROUTINES = [
     ].join(' '),
   },
   {
+    // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
+    // 6:30 AM, whenever the usage meter allows, so the 5-hour window is spent overnight and fresh by morning.
     key: 'nightShift',
     agent: 'night',
     fresh: true,
-    hour: 1, minute: 0, untilHour: 4,
-    guard: usageAllowsNightShift,
+    repeat: true,
+    hour: 21, minute: 15, untilHour: 6, untilMinute: 30,
+    guard: () => usageAllowsNightShift() && /^- \[ \]/m.test(readQueue()),
     prompt: [
       '[Watson routine: the Night Shift. Not from Horace; he is asleep. Work quietly: no show_on_screen, and keep your final reply to one line.]',
-      `Read the task queue ${NIGHT_QUEUE}. Take the FIRST unchecked task (- [ ]). If none, write a short report saying the queue is empty and stop.`,
-      'Do up to TWO tasks per night (per Horace, 10/28), one at a time, carefully and economically (he watches his usage; avoid long loops and repeated reads).',
-      `Start the second task only if the first is finished and ${DATA_DIR}/state.json shows usage.five_hour.utilization below 0.5 and usage.seven_day.utilization below 0.7. Otherwise stop after one.`,
+      `Read the task queue ${NIGHT_QUEUE}. Take the FIRST unchecked task (- [ ]) and do exactly that ONE task, carefully and economically. You will be started again for the next one.`,
+      'NIGHT=$(date -d "+7 hours" +%F) is the date of the morning Horace wakes up; use it for the branch and the report.',
       'Code changes: never touch the main working folders. For the Wolf Hall app, run',
-      '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$(date +%F) ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
-      `for Watson itself use \`git -C '${ROOT}' worktree add -B oracle/night-$(date +%F) ~/night/watson main\`.`,
+      '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
+      `for Watson itself use \`git -C '${ROOT}' worktree add -B oracle/night-$NIGHT ~/night/watson main\` (reuse it if it exists).`,
       'Follow the repo rules: syntax checks, the tests in tests/, a new test for what you changed, and the agent-smith subagent for Wolf Hall changes. Commit on the night branch with a clear message.',
       'Live checks are read-only GETs only, and never GET /forecast or the current week of /week-budget. Never deploy, push, change Notion or money data, send anything or delete anything. Those are blocked anyway.',
       'If a task needs Horace (a deploy, a money decision, a fact only he knows), do the safe preparation and list exactly what he must approve.',
-      `Then write the report to ${NIGHT_REPORTS}/$(date +%F).md: the task; what you did; tests and agent-smith results; the branch and commits;`,
-      '"Waiting on you" (anything needing red pill or an answer); and one line of what is next. Tick the task in the queue (- [x]) with the date, or note why it is blocked.',
-      'Write one report covering every task you did tonight. Reply with one line: the tasks and their results.',
+      `Then APPEND a section to the report ${NIGHT_REPORTS}/$NIGHT.md (create it with a title if missing): the task; what you did; tests and agent-smith results; the branch and commits;`,
+      '"Waiting on you" (anything needing red pill or an answer). Tick the task in the queue (- [x]) with the date, or mark it "- [~] blocked: <why>" so it is not picked again. Reply with one line: the task and its result.',
     ].join(' '),
   },
   {
@@ -100,12 +101,21 @@ export const ROUTINES = [
   },
 ];
 
+function readQueue() { try { return fs.readFileSync(NIGHT_QUEUE, 'utf8'); } catch { return ''; } }
+
 /** The Central day this routine should run for now, or null (not time yet, too late, or already ran). */
 export function routineDue(r, now, lastDay) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hourCycle: 'h23', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     .formatToParts(now).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]));
   const day = `${p.year}-${p.month}-${p.day}`;
   const mins = Number(p.hour) * 60 + Number(p.minute);
+  if (r.repeat) {
+    // Overnight window that wraps past midnight; may run many times, at least 3 minutes apart.
+    const start = r.hour * 60 + r.minute, end = r.untilHour * 60 + (r.untilMinute || 0);
+    const inWin = start > end ? (mins >= start || mins < end) : (mins >= start && mins < end);
+    if (!inWin || (lastDay && now - Date.parse(lastDay) < 3 * 60000)) return null;
+    return now.toISOString();
+  }
   if (lastDay === day) return null;
   const at = p.weekday === 'Tue' && r.tuesday ? r.tuesday : r;
   if (mins < at.hour * 60 + at.minute || mins >= r.untilHour * 60) return null;
@@ -124,6 +134,7 @@ export function startRoutines(agents, { every = 60000 } = {}) {
     for (const r of ROUTINES) {
       const day = routineDue(r, new Date(), done[r.key]);
       if (!day) continue;
+      if (r.repeat && r.guard && !r.guard()) continue; // overnight: just wait for the meter or new tasks
       state.set({ routinesDone: { ...done, [r.key]: day } });
       if (r.guard && !r.guard()) { console.log(`  Routine ${r.key} skipped for ${day} (usage guard)`); continue; }
       console.log(`  Routine ${r.key} for ${day}`);

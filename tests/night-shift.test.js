@@ -18,15 +18,22 @@ test('unattended runs cannot deploy, push or write live', () => {
   assert.equal(unattendedBlock('mcp__watson__casino', { action: 'add_offers' }), null);
 });
 
-test('the night shift skips when the weekly allowance is mostly used', () => {
+test('the night shift waits when the weekly allowance is mostly used or the 5-hour meter is full', () => {
   assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.4 } }), true);
-  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.75 } }), false);
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.85 } }), false);
+  const soon = Date.now() + 3600000;
+  assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: soon } }), false);
+  assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: Date.now() - 1000 } }), true); // refilled
   assert.equal(usageAllowsNightShift({}), true);
 });
 
-test('the night shift runs 1-4 AM Central in its own session', () => {
+test('the night shift repeats all night (9:15 PM to 6:30 AM Central), at least 3 minutes apart', () => {
   const r = ROUTINES.find((x) => x.key === 'nightShift');
   assert.equal(r.agent, 'night');
-  assert.equal(routineDue(r, new Date('2026-10-29T06:30:00Z'), null), '2026-10-29'); // 1:30 AM CDT
-  assert.equal(routineDue(r, new Date('2026-10-29T10:30:00Z'), null), null); // 5:30 AM
+  assert.ok(routineDue(r, new Date('2026-10-30T02:20:00Z'), null)); // 9:20 PM CDT
+  assert.ok(routineDue(r, new Date('2026-10-30T06:30:00Z'), null)); // 1:30 AM
+  assert.equal(routineDue(r, new Date('2026-10-30T11:40:00Z'), null), null); // 6:40 AM: done for the night
+  assert.equal(routineDue(r, new Date('2026-10-29T20:00:00Z'), null), null); // 3 PM
+  assert.equal(routineDue(r, new Date('2026-10-30T06:31:00Z'), '2026-10-30T06:30:00.000Z'), null); // too soon
+  assert.ok(routineDue(r, new Date('2026-10-30T06:34:00Z'), '2026-10-30T06:30:00.000Z'));
 });
