@@ -6,6 +6,7 @@ import path from 'node:path';
 import { state } from './store.js';
 import { DATA_DIR, ROOT } from './config.js';
 import { prepareWeeklyLedger, LEDGER_DIR } from './ledger.js';
+import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -63,6 +64,14 @@ export const ROUTINES = [
     ].join(' '),
   },
   {
+    // The Sunday week in review (night shift 2026-10-30): Saturday 11 PM, when /morning's 7 days are exactly
+    // Sunday to Saturday. Code only (`run`, no agent or prompt), so it doesn't wait for the Night Shift.
+    key: 'weeklyTrends',
+    weekday: 'Sat',
+    hour: 23, minute: 0, untilHour: 24,
+    run: () => prepareWeeklyTrends(),
+  },
+  {
     // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
     // 6:30 AM, whenever the usage meter allows, so the 5-hour window is spent overnight and fresh by morning.
     key: 'nightShift',
@@ -98,6 +107,7 @@ export const ROUTINES = [
       'the casino Bonus Run, the Architect\'s moves for today, upcoming reminders and the weather for Thrall, TX (one line).',
       'If Trinity\'s church digest ran last night (Documents/Trinity study/Church notes.md changed since yesterday), add a line starting "⛪ Church:" with the next event and anything new; if it did not run, say so in that line.',
       `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,
+      `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
       'Start each line with a small emoji label, for example "📅 Calendar:". Put the most important line first.',
@@ -155,9 +165,20 @@ export function routineDue(r, now, lastDay) {
 export function startRoutines(agents, { every = 60000 } = {}) {
   const main = agents.main || agents;
   const tick = async () => {
+    // Code-only routines (`run`) never speak or use an agent, so they run even while an agent is busy.
+    for (const r of ROUTINES) {
+      if (!r.run) continue;
+      const done = state.get().routinesDone || {};
+      const day = routineDue(r, new Date(), done[r.key]);
+      if (!day) continue;
+      state.set({ routinesDone: { ...done, [r.key]: day } });
+      console.log(`  Routine ${r.key} for ${day}`);
+      try { await r.run(); } catch (e) { console.log(`  Routine ${r.key} failed: ${e.message}`); }
+    }
     if (main.busy || agents.night?.busy || agents.trinity?.busy || agents.morpheus?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
+      if (r.run) continue;
       const day = routineDue(r, new Date(), done[r.key]);
       if (!day) continue;
       if (r.repeat && r.guard && !r.guard()) continue; // overnight: just wait for the meter or new tasks
