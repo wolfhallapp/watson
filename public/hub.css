@@ -58,3 +58,4 @@ form.in button,.mic{background:#03200c;border:1px solid var(--g);color:var(--g);
 .flash{animation:flash .9s}@keyframes flash{0%{filter:brightness(2.2) hue-rotate(20deg)}100%{filter:none}}
 @media (prefers-reduced-motion:reduce){.ring,.ticker .run{animation:none!important}}
 .ring.tilt{inset:40px}.mt{margin-top:14px}.note{font-size:11px;color:var(--mut);margin:8px 0 0}.lt{color:var(--g)}.lp{font-size:12px;color:var(--mut)}.wide{width:100%}
+.login[hidden],[hidden]{display:none!important}
