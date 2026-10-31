@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { state } from './store.js';
 import { DATA_DIR, ROOT } from './config.js';
+import { prepareWeeklyLedger, LEDGER_DIR } from './ledger.js';
+import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -39,6 +41,37 @@ export const ROUTINES = [
       'Announcements; Daily readings and sermon notes; Members (name, email, role if stated: elder, deacon, minister, teacher; family ties mentioned).',
       'Read only, never reply or change email. Keep it factual and kind; this is private to Horace. Then reply with one line: what was added.',
     ].join(' '),
+  },
+  {
+    // The Ledger of the week (night shift 2026-10-30): early Friday, once the Fri-Thu budget week has ended.
+    // Listed before the Night Shift so it goes first; prepare() reads the numbers (offset -1 and the 4 weeks
+    // before, never the current week) and saves them, then the prompt adds one checked suggestion.
+    key: 'weeklyLedger',
+    agent: 'night',
+    fresh: true,
+    weekday: 'Fri',
+    hour: 0, minute: 20, untilHour: 6,
+    prepare: () => prepareWeeklyLedger(),
+    prompt: ({ facts, file, today }) => [
+      '[Oracle routine: the Ledger of the week. Not from Horace; he is asleep. Work quietly: no show_on_screen; final reply one line.]',
+      'Last week\'s budget numbers, already worked out from GET /week-budget?offset=-1 and the 4 weeks before it:',
+      '\n' + facts + '\n',
+      'Write one specific, realistic suggestion for the coming week. Before it, check the real numbers (your check-costs-first rule):',
+      'his receipts (wolf_hall /week-budget with a NEGATIVE offset only), the weekly targets above, and a quick web search for any price you name.',
+      'Never guess a price or amount; if you can\'t check one, leave it out. Never suggest buying in bulk or a subscription without the real cost and how it fits the target.',
+      'Encourage, never nag (no lectures about smoking or weight). Never call /forecast or /week-budget with offset 0 (they write to Notion). Change nothing.',
+      `Save ${file}. Its FIRST line is the briefing line: "📊 Ledger:" then the total vs target, the biggest overspend, eating out vs the trend and the suggestion, in one plain sentence or two, real numbers only.`,
+      'After a blank line, add the full report as short markdown: spent vs target, top 5 merchants, eating-out trend, the suggestion and where its prices came from.',
+      `Then reply with one line: the Ledger for ${today} is saved.`,
+    ].join(' '),
+  },
+  {
+    // The Sunday week in review (night shift 2026-10-30): Saturday 11 PM, when /morning's 7 days are exactly
+    // Sunday to Saturday. Code only (`run`, no agent or prompt), so it doesn't wait for the Night Shift.
+    key: 'weeklyTrends',
+    weekday: 'Sat',
+    hour: 23, minute: 0, untilHour: 24,
+    run: () => prepareWeeklyTrends(),
   },
   {
     // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
@@ -82,6 +115,8 @@ export const ROUTINES = [
       'calendar for today and tomorrow, important unread email from the last day, bills due in the next 7 days, the Pool,',
       'the casino Bonus Run, the Architect\'s moves for today, upcoming reminders and the weather for Thrall, TX (one line).',
       'If Trinity\'s church digest ran last night (Documents/Trinity study/Church notes.md changed since yesterday), add a line starting "⛪ Church:" with the next event and anything new; if it did not run, say so in that line.',
+      `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,
+      `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
       `If ${CASINO_DEALS} lists deals, add a line starting "🏷️ Casino deals:" with how many and the one ending soonest, as plain fact with no nudge to buy.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
@@ -147,6 +182,7 @@ export function routineDue(r, now, lastDay) {
     return null;
   }
   if (lastDay === day) return null;
+  if (r.weekday && p.weekday !== r.weekday) return null;
   const at = p.weekday === 'Tue' && r.tuesday ? r.tuesday : r;
   if (mins < at.hour * 60 + at.minute || mins >= r.untilHour * 60) return null;
   return day;
@@ -159,18 +195,34 @@ export function routineDue(r, now, lastDay) {
 export function startRoutines(agents, { every = 60000 } = {}) {
   const main = agents.main || agents;
   const tick = async () => {
+    // Code-only routines (`run`) never speak or use an agent, so they run even while an agent is busy.
+    for (const r of ROUTINES) {
+      if (!r.run) continue;
+      const done = state.get().routinesDone || {};
+      const day = routineDue(r, new Date(), done[r.key]);
+      if (!day) continue;
+      state.set({ routinesDone: { ...done, [r.key]: day } });
+      console.log(`  Routine ${r.key} for ${day}`);
+      try { await r.run(); } catch (e) { console.log(`  Routine ${r.key} failed: ${e.message}`); }
+    }
     if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
+      if (r.run) continue;
       const day = routineDue(r, new Date(), done[r.key]);
       if (!day) continue;
       if (r.repeat && r.guard && !r.guard()) continue; // overnight: just wait for the meter or new tasks
       state.set({ routinesDone: { ...done, [r.key]: day } });
       if (r.guard && !r.guard()) { console.log(`  Routine ${r.key} skipped for ${day} (usage guard)`); continue; }
       console.log(`  Routine ${r.key} for ${day}`);
+      let prompt = r.prompt;
+      if (r.prepare) {
+        // Gathers facts in code first (the Ledger). A failure is logged and saved for the briefing; no retry today.
+        try { prompt = r.prompt(await r.prepare()); } catch (e) { console.log(`  Routine ${r.key} could not prepare: ${e.message}`); return; }
+      }
       const a = (r.agent && agents[r.agent]) || main;
       if (r.fresh) await a.reset(); // the Night Shift starts clean; Trinity keeps her conversation
-      a.ask(r.prompt, 'routine');
+      a.ask(prompt, 'routine');
       return; // one at a time; the next tick picks up any other
     }
   };

@@ -18,6 +18,11 @@ function render(s) {
   $('streak').textContent = s.streak; $('left').textContent = s.left; $('today').textContent = s.todayXp; $('best').textContent = s.best;
   $('date').textContent = new Date(s.date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' });
   $('quests').innerHTML = s.quests.map((q) => `<div class="q ${q.status}${q.dejaVu ? ' deja' : ''}" data-q="${esc(q.id)}" role="button" tabindex="0">${esc(q.label)}<small>${esc(fmt(q.at))}${q.status === 'missed' ? ' · data, not a loss' : ''}</small></div>`).join('');
+  $('bosses').innerHTML = (s.bosses || []).map((b) => `<div class="boss ${b.state}"><div class="bh"><b>${esc(b.name)}</b><span>${b.state === 'won' ? 'BEATEN' : `${b.done}/${b.target}`} · +${b.reward} XP</span></div>`
+    + `<div class="bar wide"><i style="width:${b.target ? Math.round(b.done / b.target * 100) : 0}%"></i></div>`
+    + `<div class="pips">${b.days.map((d) => `<i class="${d.status}" title="${esc(d.date)}">${esc(d.dow[0])}</i>`).join('')}</div>`
+    + `<small>${esc(b.how)}</small><small class="bn">${esc(b.note)}</small></div>`).join('')
+    + (s.hard ? '<p class="note">Neo difficulty: a perfect day now needs one extra move.</p>' : '');
   $('ach').innerHTML = s.achievements.map((a) => `<span class="a ${a.at ? 'got' : ''}" title="${esc(a.how)}">${esc(a.name)}</span>`).join('');
   $('ranks').innerHTML = s.ranks.map((r) => `<span class="${s.xp >= r[1] ? 'on' : ''}">${esc(r[0])} ${r[1].toLocaleString()}${s.unlocks[r[0]] ? ' (' + esc(s.unlocks[r[0]]) + ')' : ''}</span>`).join(' · ');
   ticker();
@@ -27,7 +32,7 @@ function ticker() {
   if (!S) return;
   const got = S.achievements.filter((a) => a.at === S.date).map((a) => '🏆 ' + a.name);
   const items = [`<b>${esc(S.rank.toUpperCase())}</b> ${S.xp.toLocaleString()} XP`, `STREAK ${S.streak}`, S.nextQuest ? `NEXT ${esc(fmt(S.nextQuest.at))} ${esc(S.nextQuest.label)}` : 'ALL QUESTS CLEARED',
-    `${S.left} QUESTS LEFT TODAY`, ...got.map(esc), T.budget != null ? `BUDGET LEFT THIS WEEK $${Number(T.budget).toFixed(2)}` : '', T.weather ? `THRALL ${esc(T.weather)}` : '',
+    `${S.left} QUESTS LEFT TODAY`, ...got.map(esc), ...(S.bosses || []).map((b) => b.state === 'won' ? `⚔ ${esc(b.name.toUpperCase())} BEATEN` : b.state === 'fighting' ? `⚔ ${esc(b.name.toUpperCase())} ${b.done}/${b.target}` : ''), T.budget != null ? `BUDGET LEFT THIS WEEK $${Number(T.budget).toFixed(2)}` : '', T.weather ? `THRALL ${esc(T.weather)}` : '',
     T.reminder ? `REMINDER ${esc(new Date(T.reminder.due).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }))} ${esc(T.reminder.text.slice(0, 60))}` : '', `MORPHEUS: "${esc(S.line)}"`].filter(Boolean);
   $('ticker').innerHTML = items.join('<i>◆</i>');
 }

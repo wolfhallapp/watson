@@ -69,3 +69,33 @@ export const reminders = {
   add(r) { const list = this.all(); list.push(r); this.save(list); return r; },
   remove(id) { const list = this.all(); const kept = list.filter((r) => r.id !== id); this.save(kept); return list.length !== kept.length; },
 };
+
+// ── Screens: the last few show_on_screen items per agent, kept in data/screens.json so a
+// restart doesn't blank the Screen tab. Only the Oracle and the Architect are saved; Trinity's
+// and Morpheus's screens stay in memory (Morpheus's private material lives in ~/.oracle-private).
+export const SCREEN_LIMIT = 8;
+export const SAVED_SCREENS = ['oracle', 'architect'];
+export function makeScreenStore(filePath = file('screens.json'), keys = SAVED_SCREENS) {
+  const read = () => {
+    try { const v = JSON.parse(fs.readFileSync(filePath, 'utf8')); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }
+  };
+  return {
+    load(key) {
+      if (!keys.includes(key)) return [];
+      const list = read()[key];
+      return Array.isArray(list) ? list.filter((s) => s && s.type === 'screen').slice(-SCREEN_LIMIT) : [];
+    },
+    save(key, list) {
+      if (!keys.includes(key)) return false;
+      try {
+        const all = read();
+        all[key] = list.slice(-SCREEN_LIMIT);
+        const tmp = filePath + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(all, null, 2));
+        fs.renameSync(tmp, filePath);
+        return true;
+      } catch (err) { console.warn(`  Couldn't save screens: ${err.message}`); return false; }
+    },
+  };
+}
+export const screens = makeScreenStore();

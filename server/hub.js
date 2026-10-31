@@ -15,7 +15,7 @@ export const RANKS = [
   ['Bluepill', 0], ['Awakened', 250], ['Redpill', 750], ['Crew', 1500], ['Operator', 3000], ['Captain', 5000], ['Neo', 8000], ['The One', 12000],
 ];
 export const UNLOCKS = { Crew: 'the food construct', Operator: 'clothes and laundry', Captain: 'the cleaning rotation' };
-export const XP = { done: 20, partly: 10, missed: 0, perfect: 60, nightCheck: 10, neverMissTwice: 10, dejaVu: 10, dodge: 20 };
+export const XP = { done: 20, partly: 10, missed: 0, perfect: 60, nightCheck: 10, neverMissTwice: 10, dejaVu: 10, dodge: 20, boss: 150 };
 export const ACHIEVEMENTS = {
   wake: ['Wake up, Neo', 'Logged your first quest.'],
   rabbit: ['Follow the white rabbit', 'Finished every morning quest in one day.'],
@@ -24,7 +24,17 @@ export const ACHIEVEMENTS = {
   free: ['Free your mind', 'Three perfect days in a row.'],
   twice: ['Never miss twice', 'Picked a quest right back up the day after missing it.'],
   kungfu: ['I know kung fu', 'Seven perfect days in a row.'],
+  boss: ['The Keymaker', 'Beat your first weekly boss fight.'],
 };
+// Weekly boss fights (phase 3, 2026-10-30). Weeks run Monday to Sunday. Each pays a fixed, known +150 XP once per week.
+export const BOSSES = [
+  { id: 'smith', name: 'Agent Smith week', how: 'No impulse buy all week: log something every day with no impulse buy, and keep Fun Money inside its budget.' },
+  { id: 'sentinels', name: 'Sentinel swarm', how: 'Every Move quest done on every workday this week.' },
+  { id: 'merovingian', name: 'The Merovingian', how: 'Lights out on time every night this week (logged within 30 minutes of the time).' },
+];
+// Difficulty scales with rank: from Neo on, a perfect day needs one extra move.
+export const HARD_FROM = 'Neo';
+const LIGHTS_GRACE = 30;
 const LINES = ['Never miss twice.', 'There is a difference between knowing the path and walking the path.', 'Free your mind.',
   'I can only show you the door. You are the one who has to walk through it.', 'A miss is data, not a loss.', 'Welcome to the real world.'];
 
@@ -39,7 +49,18 @@ const dowOf = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', 
 const hm = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 
 // ── The daily quests, from his planner (dayplanner.md v3) ──
-export function questsFor(iso) {
+export function questsFor(iso, rank = 'Bluepill') {
+  const list = baseQuests(iso);
+  if (rankIdx(rank) < rankIdx(HARD_FROM)) return list;
+  const d = dowOf(iso);
+  const extra = d === 'Tue' ? { id: 'move1', label: 'Move 5 (Neo)', at: '19:00', group: 'evening' }
+    : d === 'Sat' || d === 'Sun' ? { id: 'move3', label: 'Move 10 (Neo)', at: '17:00', group: 'day' }
+      : { id: 'move5', label: 'Extra Move 5 + water (Neo)', at: '16:00', group: 'day' };
+  return [...list, extra].sort((a, b) => hm(a.at) - hm(b.at)); // stable, so equal times keep their order
+}
+const rankIdx = (name) => Math.max(0, RANKS.findIndex((r) => r[0] === name));
+export const rankOf = (xp) => RANKS.reduce((i, r) => (xp >= r[1] ? r[0] : i), RANKS[0][0]);
+function baseQuests(iso) {
   const d = dowOf(iso);
   const q = (id, label, at, group = 'day') => ({ id, label, at, group });
   if (d === 'Sat' || d === 'Sun') {
@@ -69,6 +90,7 @@ export function saveLog(log, file = LOG) { fs.mkdirSync(path.dirname(file), { re
 const NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, ten: 10, fifteen: 15, twenty: 20 };
 const PATTERNS = [
   ['dodge', /\b(dodg\w*|resist\w*|didn'?t buy|did not buy|skipped buying|passed on (buying|a pack))\b/],
+  ['impulse', /\b(impulse ?(buy|buys|bought|purchase\w*)|bought (a|another|some) (pack|game|game pack|card pack|spin)\w*|caved|splurged)\b/],
   ['nightcheck', /\bnight ?check\b/],
   ['clockout', /\b(clock(ed)? ?out|off work|done (with|for) (work|the day)|logged off|signed off)\b/],
   ['winddown', /\bwind(ing|ed)? ?down\b/],
@@ -95,6 +117,7 @@ export function parse(text, now = new Date()) {
     for (const [kind, re] of PATTERNS) {
       if (!re.test(c)) continue;
       if (kind === 'dodge') { out.push({ kind, status: 'done' }); break; }
+      if (kind === 'impulse') { out.push(neg.test(c) ? { kind: 'dodge', status: 'done' } : { kind, status: 'missed' }); break; } // "no impulse buys" is a dodge
       if (kind === 'lunch' && (mins >= 16 * 60 + 30) && !/\blunch\b/.test(c)) { out.push({ kind: 'dinner', status: neg.test(c) ? 'missed' : 'done', note: c.trim() }); break; }
       const prev = out[out.length - 1];
       if (['lunch', 'dinner'].includes(kind) && prev && prev.kind === kind) { prev.note += ' and ' + c.trim(); break; } // "eggs and bacon" is one meal
@@ -115,7 +138,7 @@ function slotFor(kind, quests, doneIds, mins) {
     const pick = mins < 14 * 60 ? ['shower1', 'shower2'] : ['shower2', 'shower1'];
     return pick.find((id) => ids.includes(id) && !doneIds.has(id)) || pick.find((id) => ids.includes(id));
   }
-  if (kind === 'move') return ['move1', 'move2', 'move3', 'move4'].find((id) => ids.includes(id) && !doneIds.has(id));
+  if (kind === 'move') return ['move1', 'move2', 'move3', 'move4', 'move5'].find((id) => ids.includes(id) && !doneIds.has(id));
   return ids.includes(kind) ? kind : null;
 }
 
@@ -123,13 +146,16 @@ function slotFor(kind, quests, doneIds, mins) {
 export function score(log, today = local().date) {
   const byDay = {};
   for (const e of log.entries) (byDay[e.date] = byDay[e.date] || []).push(e);
-  const days = Object.keys(byDay).sort();
-  let xp = 0, streak = 0, best = 0; const perfect = new Set(); const dayXp = {};
+  const bossXp = {};
+  for (const won of Object.values(log.bosses || {})) bossXp[won] = (bossXp[won] || 0) + XP.boss; // a won boss is kept forever
+  const days = [...new Set([...Object.keys(byDay), ...Object.keys(bossXp)])].sort();
+  let xp = 0, streak = 0, best = 0; const perfect = new Set(); const dayXp = {}; const dayRank = {};
   const doneOn = (iso) => new Set((byDay[iso] || []).filter((e) => e.status === 'done').map((e) => e.habit));
   for (let iso = days[0]; iso && iso <= today; iso = addDays(iso, 1)) {
     const ents = byDay[iso] || [];
-    let x = ents.reduce((s, e) => s + (e.xp || 0), 0);
-    const quests = questsFor(iso).map((q) => q.id);
+    let x = ents.reduce((s, e) => s + (e.xp || 0), 0) + (bossXp[iso] || 0);
+    dayRank[iso] = rankOf(xp); // the day's quests follow the rank held when the day began
+    const quests = questsFor(iso, dayRank[iso]).map((q) => q.id);
     const done = doneOn(iso);
     if (quests.every((id) => done.has(id))) {
       perfect.add(iso); streak += 1; best = Math.max(best, streak);
@@ -137,20 +163,65 @@ export function score(log, today = local().date) {
     } else if (iso < today) streak = 0;
     dayXp[iso] = x; xp += x;
   }
-  const rankIdx = RANKS.reduce((i, r, k) => (xp >= r[1] ? k : i), 0);
-  const next = RANKS[rankIdx + 1];
-  return { xp, rank: RANKS[rankIdx][0], next: next ? { name: next[0], at: next[1], need: next[1] - xp } : null, streak, best, perfect: [...perfect], dayXp };
+  const ri = RANKS.reduce((i, r, k) => (xp >= r[1] ? k : i), 0);
+  const next = RANKS[ri + 1];
+  return { xp, rank: RANKS[ri][0], next: next ? { name: next[0], at: next[1], need: next[1] - xp } : null, streak, best, perfect: [...perfect], dayXp, dayRank,
+    todayRank: dayRank[today] || rankOf(xp) };
 }
 
 // "Déjà vu": a quest missed two days running comes back as a glitch quest worth a bonus today. Never a penalty.
-export function dejaVu(log, today) {
+export function dejaVu(log, today, rank = 'Bluepill') {
   const y1 = addDays(today, -1), y2 = addDays(today, -2);
   const did = (iso) => new Set(log.entries.filter((e) => e.date === iso && e.status === 'done').map((e) => e.habit));
   const loggedAny = (iso) => log.entries.some((e) => e.date === iso);
   if (!loggedAny(y1) && !loggedAny(y2)) return [];
   const d1 = did(y1), d2 = did(y2);
-  const q1 = new Set(questsFor(y1).map((q) => q.id)), q2 = new Set(questsFor(y2).map((q) => q.id));
-  return questsFor(today).map((q) => q.id).filter((id) => q1.has(id) && q2.has(id) && !d1.has(id) && !d2.has(id));
+  const q1 = new Set(questsFor(y1, rank).map((q) => q.id)), q2 = new Set(questsFor(y2, rank).map((q) => q.id));
+  return questsFor(today, rank).map((q) => q.id).filter((id) => q1.has(id) && q2.has(id) && !d1.has(id) && !d2.has(id));
+}
+
+// ── Weekly boss fights: progress from the log, Monday to Sunday. Fixed rules, nothing random. ──
+export const weekStart = (iso) => addDays(iso, -((new Date(iso + 'T12:00:00Z').getUTCDay() + 6) % 7));
+export function bosses(log, today, { s = score(log, today), funMoneyOver = null } = {}) {
+  const ws = weekStart(today);
+  const week = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+  const ents = (iso) => log.entries.filter((e) => e.date === iso);
+  const rankFor = (iso) => s.dayRank[iso] || s.todayRank;
+  const day = {
+    // A clean day: he logged something and no impulse buy. A quiet day with no log can't be counted.
+    // 'ok', 'miss' (settled), or 'pending' (could still happen today; a past pending day counts as a miss).
+    smith: (iso) => (ents(iso).some((e) => e.habit === 'impulse') ? 'miss' : ents(iso).length ? 'ok' : 'pending'),
+    sentinels: (iso) => {
+      const moves = questsFor(iso, rankFor(iso)).filter((q) => q.id.startsWith('move')).map((q) => q.id);
+      if (!moves.includes('move4')) return 'off'; // not a workday with four moves (Tuesday, weekends)
+      const done = new Set(ents(iso).filter((e) => e.status === 'done').map((e) => e.habit));
+      return moves.every((id) => done.has(id)) ? 'ok' : 'pending';
+    },
+    merovingian: (iso) => {
+      const at = questsFor(iso, rankFor(iso)).find((q) => q.id === 'lights')?.at;
+      const lights = ents(iso).filter((e) => e.habit === 'lights' && e.status === 'done');
+      if (at && lights.some((e) => e.time && hm(e.time) <= hm(at) + LIGHTS_GRACE)) return 'ok';
+      return lights.length ? 'miss' : 'pending';
+    },
+  };
+  return BOSSES.map((b) => {
+    const days = week.map((iso) => {
+      if (iso > today) return { date: iso, dow: dowOf(iso), status: day[b.id](iso) === 'off' ? 'off' : 'open' };
+      const st = day[b.id](iso);
+      return { date: iso, dow: dowOf(iso), status: st === 'pending' ? (iso === today ? 'open' : 'miss') : st };
+    });
+    const live = days.filter((d) => d.status !== 'off');
+    const done = live.filter((d) => d.status === 'ok').length;
+    const won = (log.bosses || {})[`${ws}:${b.id}`] || null;
+    const blocked = b.id === 'smith' && funMoneyOver === true;
+    const cleared = done === live.length && !blocked;
+    const state = won ? 'won' : live.some((d) => d.status === 'miss') ? 'slipped' : 'fighting';
+    const note = won ? `Beaten ${won}. +${XP.boss} XP is yours to keep.`
+      : state === 'slipped' ? 'This one slipped past this week. That is data. A new fight starts Monday.'
+        : blocked ? 'Fun Money is over budget this week; bring it back inside to land the last blow.'
+          : `${live.length - done} to go.${b.id === 'smith' && funMoneyOver == null ? ' (Fun Money not checked yet.)' : ''}`;
+    return { ...b, week: ws, reward: XP.boss, done, target: live.length, days, won, state, cleared: !won && cleared, note };
+  });
 }
 
 function unlock(log, key, at, got) {
@@ -159,21 +230,25 @@ function unlock(log, key, at, got) {
 }
 
 // Apply a chat message: returns { reply, added, achievements, state }.
-export function logMessage(text, { now = new Date(), file = LOG, quest = null } = {}) {
+export function logMessage(text, { now = new Date(), file = LOG, quest = null, funMoneyOver = null } = {}) {
   const log = loadLog(file);
   const { date, mins, time } = local(now);
   const before = score(log, date);
-  const quests = questsFor(date);
+  const quests = questsFor(date, before.todayRank);
   const items = quest ? (quests.some((q) => q.id === quest) ? [{ kind: quest, status: 'done', direct: true }] : []) : parse(text, now);
   const doneIds = new Set(log.entries.filter((e) => e.date === date && e.status === 'done').map((e) => e.habit));
-  const glitches = new Set(dejaVu(log, date));
+  const glitches = new Set(dejaVu(log, date, before.todayRank));
   const yDone = new Set(log.entries.filter((e) => e.date === addDays(date, -1) && e.status === 'done').map((e) => e.habit));
-  const yQuests = new Set(questsFor(addDays(date, -1)).map((q) => q.id));
+  const yQuests = new Set(questsFor(addDays(date, -1), before.dayRank[addDays(date, -1)] || before.todayRank).map((q) => q.id));
   const added = []; const got = []; const notes = [];
   for (const it of items) {
     if (it.kind === 'dodge') {
       const e = { date, time, habit: 'dodge', status: 'done', xp: XP.dodge, note: 'Dodged an impulse buy', text };
       log.entries.push(e); added.push(e); unlock(log, 'dodge', date, got); continue;
+    }
+    if (it.kind === 'impulse') {
+      const e = { date, time, habit: 'impulse', status: 'missed', xp: 0, note: 'Impulse buy noted', text };
+      log.entries.push(e); added.push(e); continue;
     }
     for (let n = 0; n < (it.count || 1); n++) {
       const id = it.direct ? it.kind : slotFor(it.kind, quests, doneIds, mins);
@@ -194,13 +269,18 @@ export function logMessage(text, { now = new Date(), file = LOG, quest = null } 
   if (added.length) unlock(log, 'wake', date, got);
   const morning = quests.filter((q) => q.group === 'morning').map((q) => q.id);
   if (morning.length && morning.every((id) => doneIds.has(id))) unlock(log, 'rabbit', date, got);
+  const beaten = [];
+  if (added.length) {
+    log.bosses = log.bosses || {};
+    for (const b of bosses(log, date, { funMoneyOver })) if (b.cleared) { log.bosses[`${b.week}:${b.id}`] = date; beaten.push(b.name); unlock(log, 'boss', date, got); }
+  }
   const after = score(log, date);
   if (after.perfect.includes(date)) unlock(log, 'spoon', date, got);
   if (after.streak >= 3) unlock(log, 'free', date, got);
   if (after.streak >= 7) unlock(log, 'kungfu', date, got);
   saveLog(log, file);
   const gained = after.xp - before.xp;
-  const label = (e) => e.habit === 'dodge' ? 'Dodged it' : e.habit === 'food' ? `Food logged (${e.note})` : `${(quests.find((q) => q.id === e.habit) || { label: e.habit }).label}: ${e.status}`;
+  const label = (e) => e.habit === 'dodge' ? 'Dodged it' : e.habit === 'impulse' ? 'Impulse buy noted' : e.habit === 'food' ? `Food logged (${e.note})` : `${(quests.find((q) => q.id === e.habit) || { label: e.habit }).label}: ${e.status}`;
   let reply;
   if (!added.length) reply = notes[0] || "I didn't catch a quest in that, Operator. Try \"showered\", \"moved 5\", \"brushed\", \"night check\", or tap a quest.";
   else {
@@ -209,24 +289,26 @@ export function logMessage(text, { now = new Date(), file = LOG, quest = null } 
     else reply += ' ' + ['The rain thickens, Operator.', 'The code bends to you.', 'You are beginning to believe.', 'Another wall of the Construct lit.'][after.xp % 4];
     if (after.rank !== before.rank) reply += ` Rank up: ${after.rank}.${UNLOCKS[after.rank] ? ` Unlocked: ${UNLOCKS[after.rank]}.` : ''}`;
     if (after.perfect.includes(date) && !before.perfect.includes(date)) reply += ` Perfect day! Streak ${after.streak}.`;
+    if (beaten.length) reply += ` Boss down: ${beaten.join(', ')}. +${XP.boss} XP each.`;
     if (got.length) reply += ` Achievement: ${got.join(', ')}.`;
   }
-  return { reply, added, achievements: got, state: hubState({ now, file, log }) };
+  return { reply, added, achievements: got, bosses: beaten, state: hubState({ now, file, log, funMoneyOver }) };
 }
 
-export function hubState({ now = new Date(), file = LOG, log = loadLog(file) } = {}) {
+export function hubState({ now = new Date(), file = LOG, log = loadLog(file), funMoneyOver = null } = {}) {
   const { date, mins } = local(now);
   const s = score(log, date);
   const done = new Map();
   for (const e of log.entries.filter((x) => x.date === date)) if (e.status === 'done' || !done.has(e.habit)) done.set(e.habit, e.status);
-  const glitch = new Set(dejaVu(log, date));
-  const quests = questsFor(date).map((q) => ({ ...q, status: done.get(q.id) || (hm(q.at) + 60 < mins ? 'open-late' : 'open'), dejaVu: glitch.has(q.id) }));
+  const glitch = new Set(dejaVu(log, date, s.todayRank));
+  const quests = questsFor(date, s.todayRank).map((q) => ({ ...q, status: done.get(q.id) || (hm(q.at) + 60 < mins ? 'open-late' : 'open'), dejaVu: glitch.has(q.id) }));
   const nextQ = quests.find((q) => !['done'].includes(q.status) && hm(q.at) >= mins - 15) || null;
   return {
     date, rank: s.rank, xp: s.xp, next: s.next, streak: s.streak, best: s.best, todayXp: s.dayXp[date] || 0,
     quests, left: quests.filter((q) => q.status !== 'done').length, nextQuest: nextQ && { label: nextQ.label, at: nextQ.at },
     achievements: Object.entries(ACHIEVEMENTS).map(([k, [name, how]]) => ({ name, how, at: log.achievements[k] || null })),
     recent: log.entries.slice(-12).reverse(), line: LINES[Number(date.slice(-2)) % LINES.length], ranks: RANKS, unlocks: UNLOCKS,
+    bosses: bosses(log, date, { s, funMoneyOver }).map(({ cleared, ...b }) => b), hard: rankIdx(s.todayRank) >= rankIdx(HARD_FROM),
   };
 }
 
@@ -241,7 +323,8 @@ export async function tickerExtras() {
     const r = await workerGet('/week-budget?offset=0'); const d = JSON.parse(r.body);
     if (!d.ok) return null;
     const avail = typeof d.totalAvailable === 'number' ? d.totalAvailable : d.totalCap;
-    return Math.round((avail - d.totalSpent) * 100) / 100;
+    const fun = (d.categories || []).find((c) => c.key === 'FunMoney');
+    return { left: Math.round((avail - d.totalSpent) * 100) / 100, funOver: fun ? fun.overUnder > 0 : null };
   });
   const weather = await cached('weather', 60 * 60000, async () => {
     const h = { 'User-Agent': 'watson-hub (personal)' };
@@ -250,5 +333,7 @@ export async function tickerExtras() {
     const p = fc.properties.periods[0];
     return `${p.name}: ${p.temperature}°, ${p.shortForecast}${p.probabilityOfPrecipitation?.value ? `, ${p.probabilityOfPrecipitation.value}% rain` : ''}`;
   });
-  return { budget, weather };
+  return { budget: budget ? budget.left : null, weather };
 }
+// Fun Money for the Agent Smith boss, from the ticker's cached budget read (no extra worker call). null = not known.
+export const funMoneyOver = () => cache.budget?.v?.funOver ?? null;

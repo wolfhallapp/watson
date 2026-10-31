@@ -366,7 +366,7 @@ export class WatsonAgent {
   #rollover() {
     const size = Math.round(this.contextTokens / 1000);
     const recent = this.history.recent(40)
-      .filter((h) => (h.role === 'you' || h.role === 'watson') && !/^\[(Watson|Oracle|Trinity) routine/.test(h.text))
+      .filter((h) => (h.role === 'you' || h.role === 'watson') && !/^\[(The Oracle|Oracle|Trinity) routine/.test(h.text))
       .slice(-8)
       .map((h) => `${h.role === 'you' ? 'Horace' : 'You'}: ${String(h.text).replace(/\s+/g, ' ').slice(0, 300)}`);
     this.input?.close();
