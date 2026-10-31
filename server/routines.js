@@ -11,6 +11,8 @@ import { DATA_DIR, ROOT } from './config.js';
 // Nothing is deployed, pushed or changed live; agent.js blocks that for routines.
 export const NIGHT_QUEUE = path.join(DATA_DIR, 'night-queue.md');
 export const NIGHT_REPORTS = path.join(DATA_DIR, 'night-reports');
+// Casino purchase deals and discounts, for Horace's information (10/31). Never part of the free Bonus Run.
+export const CASINO_DEALS = path.join(DATA_DIR, 'casino-deals.md');
 // Skip a night when the weekly Claude allowance is mostly used, so Horace keeps enough for his own day.
 export function usageAllowsNightShift(usage = state.get().usage || {}) {
   const w = usage.seven_day, f = usage.five_hour;
@@ -46,10 +48,15 @@ export const ROUTINES = [
     fresh: true,
     repeat: true,
     hour: 21, minute: 15, untilHour: 6, untilMinute: 30,
-    guard: () => usageAllowsNightShift() && /^- \[ \]/m.test(readQueue()),
+    // 10/31 per Horace: always have a task running overnight. With an empty queue it picks its own improvement.
+    guard: () => usageAllowsNightShift(),
     prompt: [
       '[Watson routine: the Night Shift. Not from Horace; he is asleep. Work quietly: no show_on_screen, and keep your final reply to one line.]',
       `Read the task queue ${NIGHT_QUEUE}. Take the FIRST unchecked task (- [ ]) and do exactly that ONE task, carefully and economically. You will be started again for the next one.`,
+      'IF THE QUEUE HAS NO UNCHECKED TASK, choose one yourself (Horace wants the Night Shift always working, 10/31): one improvement or innovation small enough to finish and test tonight.',
+      `Look for ideas in the newest reports in ${NIGHT_REPORTS} (open audit findings, "worth a look" notes, failing date-dependent tests), the top of ~/projects/wolf-hall-app/PROGRESS.md (open items), the Wolf Hall CLAUDE.md known issues, and what would make Horace's day easier (his morning routine, budget, Taylor's console, the Construct, the Oracle's own screens).`,
+      'Prefer fixing a known problem over something new. Skip anything already built on an unmerged night branch or already in a report, anything that needs an answer only Horace has, and anything that touches money data.',
+      'Before starting, append it to the queue as "- [ ] (self-chosen) <what and why>" so the next run does not pick the same thing, then do it exactly like a queued task and mark it self-chosen in the report.',
       'NIGHT=$(date -d "+7 hours" +%F) is the date of the morning Horace wakes up; use it for the branch and the report.',
       'Code changes: never touch the main working folders. For the Wolf Hall app, run',
       '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
@@ -76,31 +83,37 @@ export const ROUTINES = [
       'the casino Bonus Run, the Architect\'s moves for today, upcoming reminders and the weather for Thrall, TX (one line).',
       'If Trinity\'s church digest ran last night (Documents/Trinity study/Church notes.md changed since yesterday), add a line starting "⛪ Church:" with the next event and anything new; if it did not run, say so in that line.',
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
+      `If ${CASINO_DEALS} lists deals, add a line starting "🏷️ Casino deals:" with how many and the one ending soonest, as plain fact with no nudge to buy.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
       'Start each line with a small emoji label, for example "📅 Calendar:". Put the most important line first.',
       'Save it with the morning tool, action briefing. Then reply with one line saying it is saved.',
     ].join(' '),
   },
   {
+    // Casino email check. 10/31 per Horace: three times a day, and also list purchase deals and discounts
+    // (for his information only; they never go on the free Bonus Run list).
     key: 'casinoOfferScan',
     agent: 'routine', // its own throwaway conversation: opening every casino email is what overfilled the Oracle's (2026-10-30)
     fresh: true,
-    hour: 7, minute: 30, untilHour: 12,
-    tuesday: { hour: 3, minute: 30 },
+    times: [{ hour: 7, minute: 30 }, { hour: 13, minute: 0 }, { hour: 19, minute: 0 }],
+    untilHour: 23,
+    tuesday: { hour: 3, minute: 30 }, // the first check moves earlier on Tuesdays
     prompt: [
-      '[Watson routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
-      'Morning casino email check. Search Gmail for casino promotion emails from the last day',
+      '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
+      'Casino email check (it runs at 7:30 AM, 1 PM and 7 PM). Search Gmail for casino promotion emails from the last day',
       '(category:promotions newer_than:1d, plus anything from the senders in the Casino Sites list).',
       'Page through ALL results (follow nextPageToken) and open every casino email: judge each by its content, never by its subject line.',
       '(Lesson 2026-10-27: a Stake.us "your post-monthly is here!" bonus sent at 3 AM was skipped because of its subject.)',
       'Stake.us weekly, monthly, post-monthly and reload bonus emails are free claims: always add them.',
-      'Read the ones that might be free. Keep ONLY bonuses Horace can get with no purchase, no deposit and no required play:',
+      'FREE BONUSES: keep only what Horace can get with no purchase, no deposit and no required play:',
       'free coupons, freebies, free SC or GC claims, free spins given outright, mail-in or daily gifts, mystery boxes that are free.',
-      'Leave out anything tied to buying (packages, % boosts, "first purchase", "match your purchase"), tournaments, prize drops,',
-      'leaderboards, referrals and giveaways that need social media.',
-      'Add each keeper with the casino tool, action add_offers: site, what (short, e.g. "2.2 SC + 2222 GC"),',
-      'expires (ISO 8601 with offset, only if the email says when it ends), link (the email\'s Gmail viewUrl), emailId (Gmail message id).',
-      'Then reply with one line: how many you added, or that there were none.',
+      'Add each with the casino tool, action add_offers: site, what (short, e.g. "2.2 SC + 2222 GC"),',
+      'expires (ISO 8601 with offset, only if the email says when it ends), link (the email\'s Gmail viewUrl), emailId (Gmail message id). Repeats are skipped, so re-adding is harmless.',
+      'Never add anything tied to buying, tournaments, prize drops, leaderboards, referrals or social-media giveaways with add_offers.',
+      `DEALS (Horace wants to know them, 10/31): rewrite ${CASINO_DEALS} as the current list of purchase deals and discounts from the emails`,
+      '(e.g. "Chumba: 50% off first package, $9.99 for 30 SC, ends Sun 11:59 PM"). One line each: site, the deal with its real price and what you get, and when it ends.',
+      'Keep deals from the existing file that have not expired and drop expired ones. Put a "Updated <date time>" line at the top. Plain facts only: no recommendation to buy, no hype.',
+      'Then reply with one line: free bonuses added, and how many deals are on the list.',
     ].join(' '),
   },
 ];
@@ -119,6 +132,19 @@ export function routineDue(r, now, lastDay) {
     const inWin = start > end ? (mins >= start || mins < end) : (mins >= start && mins < end);
     if (!inWin || (lastDay && now - Date.parse(lastDay) < 3 * 60000)) return null;
     return now.toISOString();
+  }
+  if (r.times) {
+    // Several runs a day: the latest slot that has started, until the next one (or untilHour) begins.
+    const slots = r.times.map((t, i) => (i === 0 && p.weekday === 'Tue' && r.tuesday ? r.tuesday : t));
+    for (let i = slots.length - 1; i >= 0; i--) {
+      const start = slots[i].hour * 60 + slots[i].minute;
+      const end = i + 1 < slots.length ? slots[i + 1].hour * 60 + slots[i + 1].minute : r.untilHour * 60;
+      if (mins < start) continue;
+      if (mins >= end) return null;
+      const key = `${day}@${String(slots[i].hour).padStart(2, '0')}:${String(slots[i].minute).padStart(2, '0')}`;
+      return lastDay === key ? null : key;
+    }
+    return null;
   }
   if (lastDay === day) return null;
   const at = p.weekday === 'Tue' && r.tuesday ? r.tuesday : r;
