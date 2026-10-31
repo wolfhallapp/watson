@@ -35,7 +35,7 @@ function say(text, me) { const d = document.createElement('div'); d.className = 
 async function send(text, quest) {
   say(text, true);
   try { const r = await api('/hub/log', { text, quest }); say(r.reply); render(r.state); if (r.added?.length) { $('core').classList.remove('flash'); void $('core').offsetWidth; $('core').classList.add('flash'); } }
-  catch (e) { if (e.message !== 'auth') say("Couldn't reach the Construct. Is Watson running?"); }
+  catch (e) { if (e.message !== 'auth') say("Couldn't reach the Construct. Is the Oracle running?"); }
 }
 $('form').onsubmit = (e) => { e.preventDefault(); const t = $('text').value.trim(); if (t) { $('text').value = ''; send(t); } };
 $('quests').onclick = (e) => { const q = e.target.closest('[data-q]'); if (!q || !S) return; const it = S.quests.find((x) => x.id === q.dataset.q); if (it.status === 'done') return; send(`${it.label} — done`, it.id); };

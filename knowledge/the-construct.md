@@ -6,7 +6,7 @@ day up. The trunk is small earners; each branch is a family of strategies; each 
 ## Who runs it: the Architect
 - On 2026-10-25 Horace asked for the Construct to have its own Oracle-style screen, **not** in the
   Wolf Hall app yet, and for a second agent named **the Architect** to be its brain.
-- The Architect lives in Watson's server, beside the Oracle:
+- The Architect lives in the Oracle's server, beside the Oracle:
   - Page: http://localhost:8787/architect.html (or double-click `Architect.cmd`). There's a link
     between the Oracle's page and his.
   - Wake word: "Architect". Voice: a deep male browser voice.

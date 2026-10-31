@@ -1,4 +1,4 @@
-// What Watson knows beyond its own notes: the Claude Code memory folders, a
+// What the Oracle knows beyond its own notes: the Claude Code memory folders, a
 // snapshot of the project repo, past Claude Code conversations (searchable),
 // and read-only access to the live Wolf Hall worker.
 import fs from 'node:fs';
@@ -186,7 +186,7 @@ export async function workerPostGambling(p, body) {
   if (!/^\/gambling\/(claim|site|play-run|offers|offer)$/.test(p)) throw new Error('Only the /gambling/ write routes are allowed');
   const r = await fetch(WORKER_URL + p, {
     method: 'POST', headers: { 'X-Worker-Key': workerKey(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, source: 'Watson' }), signal: AbortSignal.timeout(60000),
+    body: JSON.stringify({ ...body, source: 'The Oracle' }), signal: AbortSignal.timeout(60000),
   });
   const text = await r.text();
   let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
@@ -211,7 +211,7 @@ export async function workerGet(p) {
   return { status: r.status, body };
 }
 
-// ── The knowledge folder: files Horace adds (here or on GitHub) that Watson should know ──
+// ── The knowledge folder: files Horace adds (here or on GitHub) that the Oracle should know ──
 
 export const KNOWLEDGE_DIR = path.join(ROOT, 'knowledge');
 const TEXT_EXT = new Set(['.md', '.txt', '.json', '.csv', '.yaml', '.yml']);

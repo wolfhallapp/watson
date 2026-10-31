@@ -91,7 +91,7 @@ if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
 if (AGENT === 'oracle' && settings.oracleKk !== 3) { settings.voice = 'kk:af_sarah~0.86'; settings.oracleKk = 3; saveSettings(); } // 10/28 final: Sarah, older and deeper (Nicole was too sultry) // 10/28: then 'a little more gravelly'
 if (P.kokoroDefault && settings.kokoro1 !== true) { if (!settings.voice) settings.voice = P.kokoroDefault; settings.kokoro1 = true; saveSettings(); }
 if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
-// The PC launcher opens Watson with #listen=1: always listening for "Watson".
+// The PC launcher opens the Oracle with #listen=1: always listening for "Oracle".
 if (hashParams.get('listen') === '1') { settings.mode = 'handsfree'; settings.micOn = true; saveSettings(); }
 
 // ── State ──
@@ -292,7 +292,7 @@ voice.settleMs = settings.settle * 1000;
 voice.endPauseMs = settings.endPause * 1000;
 if (P.voicePrefs) { voice.voicePrefs = P.voicePrefs; voice.browserPitch = P.pitch; voice.browserRateFactor = P.rateFactor; }
 
-// ElevenLabs voices, spoken through Watson's server (which holds the API key).
+// ElevenLabs voices, spoken through the Oracle's server (which holds the API key).
 let cloudVoices = [], kokoroVoices = [];
 async function loadCloudVoices() {
   try {
@@ -604,7 +604,7 @@ orb.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Headset button: play/pause on Bluetooth headphones works like tapping the orb (press to
 // start talking, press again to send). Browsers only pass media keys to a page that is
-// playing audio, so a silent loop keeps Watson's media session alive. If another app (say,
+// playing audio, so a silent loop keeps the Oracle's media session alive. If another app (say,
 // music) played something more recently, that app gets the button instead.
 let keepAlive = null;
 function silentWavUrl(seconds = 2, rate = 8000) {

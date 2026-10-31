@@ -8,7 +8,7 @@ const env = fs.readFileSync(new URL('../.env', import.meta.url), 'utf8');
 const token = env.match(/^WATSON_TOKEN=(.+)$/m)[1].trim();
 const port = (env.match(/^WATSON_PORT=(\d+)$/m) || [, '8787'])[1];
 const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { Origin: `http://127.0.0.1:${port}` } });
-const timer = setTimeout(() => { console.log('No answer from Watson within 10 seconds.'); process.exit(1); }, 10000);
+const timer = setTimeout(() => { console.log('No answer from the Oracle within 10 seconds.'); process.exit(1); }, 10000);
 ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', token, clientId: 'status-check' })));
 ws.on('message', (d) => {
   const m = JSON.parse(d.toString());

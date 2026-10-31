@@ -6,7 +6,7 @@ param([switch]$Remove)
 $startup = [Environment]::GetFolderPath('Startup')
 $link = Join-Path $startup 'Watson.lnk'
 if ($Remove) {
-  if (Test-Path $link) { Remove-Item $link; Write-Host 'Watson will no longer start at login.' } else { Write-Host 'Watson was not set to start at login.' }
+  if (Test-Path $link) { Remove-Item $link; Write-Host 'The Oracle will no longer start at login.' } else { Write-Host 'The Oracle was not set to start at login.' }
   exit 0
 }
 $root = Split-Path -Parent $PSScriptRoot
@@ -18,4 +18,4 @@ $s.WorkingDirectory = $root
 $s.WindowStyle = 7  # minimized
 $s.Description = 'Start Watson and listen for its name'
 $s.Save()
-Write-Host "Watson will start at login ($link)."
+Write-Host "The Oracle will start at login ($link)."

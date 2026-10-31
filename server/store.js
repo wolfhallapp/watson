@@ -1,5 +1,5 @@
 // Small JSON/text persistence under data/: conversation history, session id,
-// Watson's long-term memory notes and reminders.
+// The Oracle's long-term memory notes and reminders.
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './config.js';
@@ -15,7 +15,7 @@ function writeJson(name, value) {
   fs.renameSync(tmp, file(name));
 }
 
-// ── Session state (lets Watson resume the same conversation after a restart) ──
+// ── Session state (lets the Oracle resume the same conversation after a restart) ──
 export const state = {
   get() { return readJson('state.json', {}); },
   set(patch) { writeJson('state.json', { ...this.get(), ...patch }); },
@@ -58,7 +58,7 @@ export const memory = {
     return facts.length - kept.length;
   },
   save(facts) {
-    fs.writeFileSync(file(MEMORY), '# Things Watson remembers\n\n' + facts.map((f) => `- ${f}`).join('\n') + '\n');
+    fs.writeFileSync(file(MEMORY), '# Things the Oracle remembers\n\n' + facts.map((f) => `- ${f}`).join('\n') + '\n');
   },
 };
 

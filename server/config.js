@@ -1,4 +1,4 @@
-// Watson configuration. Values come from .env in the project root (created on
+// The Oracle configuration. Values come from .env in the project root (created on
 // first run) and can be overridden by real environment variables.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,16 +12,16 @@ const ENV_FILE = path.join(ROOT, '.env');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// First run: create .env with a random access token so Watson is never
+// First run: create .env with a random access token so the Oracle is never
 // reachable without one (it can run commands on this machine).
 if (!fs.existsSync(ENV_FILE)) {
   const token = crypto.randomBytes(24).toString('base64url');
   fs.writeFileSync(ENV_FILE, [
-    '# Watson settings. Restart Watson after changing these.',
-    '# Anyone with this token can control Watson. Keep it private.',
+    '# the Oracle settings. Restart the Oracle after changing these.',
+    '# Anyone with this token can control the Oracle. Keep it private.',
     `WATSON_TOKEN=${token}`,
     'WATSON_PORT=8787',
-    '# The project Watson codes in by default (a WSL path).',
+    '# The project the Oracle codes in by default (a WSL path).',
     `WATSON_PROJECT_DIR=${path.join(os.homedir(), 'projects', 'wolf-hall-app')}`,
     'WATSON_MODEL=claude-opus-5-5',
     '# low | medium | high | xhigh | max',
@@ -49,7 +49,7 @@ export const config = {
   effort: env('WATSON_EFFORT', 'high'),
   permissionMode: env('WATSON_PERMISSION_MODE', 'acceptEdits'),
   maxBudgetUsd: env('WATSON_MAX_BUDGET_USD') ? Number(env('WATSON_MAX_BUDGET_USD')) : undefined,
-  // How long Watson waits for a yes/no before treating it as "no".
+  // How long the Oracle waits for a yes/no before treating it as "no".
   approvalTimeoutMs: 10 * 60 * 1000,
   // Past this many tokens of conversation, the next message starts a fresh one (2026-10-30: the
   // Oracle's conversation reached 658K tokens, so every reply was slow, costly, and timed out).

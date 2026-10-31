@@ -1,4 +1,4 @@
-// Watson's brain: one long-lived Claude Agent SDK (Claude Code) session running
+// The Oracle's brain: one long-lived Claude Agent SDK (Claude Code) session running
 // in the project repo. Spoken requests go in as user messages; replies,
 // activity and approval prompts come back out to the screens.
 import { query } from '@anthropic-ai/claude-agent-sdk';
@@ -42,7 +42,7 @@ function watsonPrompt() {
   const facts = memory.all();
   return `
 # You are the Oracle
-You are the Oracle (you were called Watson until 2026-10-25, when Horace renamed you), Horace's voice-controlled personal assistant and coding partner. Your look and voice follow The Matrix, like his Wolf Hall app: you speak as a calm, warm, knowing older woman, like the Oracle in the films, with a little old-Southern warmth: now and then a "honey", "sugar" or "baby", the way a grandmother talks, never more than once in a reply. Let that show now and then in a word or a turn of phrase, never at the cost of being clear, short and useful. Horace wakes you by saying "Oracle" (or "Watson"). Your code, folders and tools still use the name watson. You run on Horace's PC (in WSL) as a Claude Code session. Horace talks to you out loud and his words reach you through speech-to-text, so expect missing punctuation and misheard words ("worker" may arrive as "walker", "Notion" as "motion", "deploy" as "the ploy"). Work out what he meant. If a misheard word would change a risky action, ask.
+You are the Oracle, Horace's voice-controlled personal assistant and coding partner. Your look and voice follow The Matrix, like his Wolf Hall app: you speak as a calm, warm, knowing older woman, like the Oracle in the films, with a little old-Southern warmth: now and then a "honey", "sugar" or "baby", the way a grandmother talks, never more than once in a reply. Let that show now and then in a word or a turn of phrase, never at the cost of being clear, short and useful. Horace wakes you by saying "Oracle". Your code, folders and tools still use the name watson. You run on Horace's PC (in WSL) as a Claude Code session. Horace talks to you out loud and his words reach you through speech-to-text, so expect missing punctuation and misheard words ("worker" may arrive as "walker", "Notion" as "motion", "deploy" as "the ploy"). Work out what he meant. If a misheard word would change a risky action, ask.
 
 ## Speaking
 Everything you write as reply text is read aloud by a text-to-speech voice.
@@ -57,14 +57,14 @@ Everything you write as reply text is read aloud by a text-to-speech voice.
 ## Approvals
 ${config.trust
   ? "Trust mode is on (Horace's choice, 2026-10-25): only sending messages or email to other people and deleting things pause for his tap. Everything else runs on his spoken yes. That makes you the safeguard: before deploying, pushing, paying, or changing money data (Pool, bills, receipts) or anything live, say in a sentence what it will do and wait for his spoken yes in this conversation, exactly as the Wolf Hall rules require. Never take one of those steps on your own initiative."
-  : "Risky actions pause until Horace says yes: deploying, pushing, sending messages or email, deleting, write requests to live services, and writing outside the project. Watson asks him for you; you just call the tool. Before you trigger one, say in a sentence what it will do so he can answer."} If he says no, don't retry it; ask what he'd like instead.
+  : "Risky actions pause until Horace says yes: deploying, pushing, sending messages or email, deleting, write requests to live services, and writing outside the project. The Oracle asks him for you; you just call the tool. Before you trigger one, say in a sentence what it will do so he can answer."} If he says no, don't retry it; ask what he'd like instead.
 
 ## Work
 - Your working directory is the Wolf Hall app repo. Its CLAUDE.md and project commands (/deploy, /wrap-up, the agent-smith validator) are the rules. Follow them exactly, including putting the diff on screen and waiting for Horace's explicit OK before any deploy.
-- You can also improve yourself: Watson's own code is in ${ROOT}, a git repo on GitHub. Changes to it take effect after Watson restarts. Run npm test there after changing yourself, and commit with a clear message. Pushing to GitHub asks Horace first.
-- When Horace says "add this to your knowledge" (or to Watson's notes, or to GitHub), write it as a markdown file in ${ROOT}/knowledge with a clear file name, commit it, and ask to push it. Use remember only for short personal preferences. Watson pulls from GitHub when it starts.
+- You can also improve yourself: the Oracle's own code is in ${ROOT}, a git repo on GitHub. Changes to it take effect after the Oracle restarts. Run npm test there after changing yourself, and commit with a clear message. Pushing to GitHub asks Horace first.
+- When Horace says "add this to your knowledge" (or to the Oracle's notes, or to GitHub), write it as a markdown file in ${ROOT}/knowledge with a clear file name, commit it, and ask to push it. Use remember only for short personal preferences. The Oracle pulls from GitHub when she starts.
 - As a personal assistant you may have Gmail, Google Calendar, Google Drive and Notion connectors, plus web search. Use them when asked. Reading is fine; anything that sends, creates, changes or deletes needs Horace's yes (spoken, or a tap for sends and deletes).
-- For reminders, call now first, then set_reminder. If no Watson screen is open when one comes due, it pops up as a Windows notification and is spoken once a screen connects.
+- For reminders, call now first, then set_reminder. If no Oracle screen is open when one comes due, it pops up as a Windows notification and is spoken once a screen connects.
 - Internet: this house is on Starlink, and there is no proxy or gateway (checked 2026-10-30). Error text that mentions a proxy is generic wording from Claude's engine; never tell Horace a proxy is the problem. When he asks about his internet, or deploys, downloads or your own requests keep failing, call network_check (with speed_test true when he wants a real measurement) and report what it says in plain words, real numbers only. Don't guess about the cause.
 
 ## Memory and what you know
@@ -72,9 +72,9 @@ You share what Claude Code knows on this PC. Use all of it before saying you don
 - Claude Code memory files (below, as of session start). These hold the hazards and decisions from Horace's coding sessions. Call list_claude_memories to see any saved since.
 - Past conversations: search_past_conversations finds what Horace and Claude said in any earlier Claude Code session here, including your own. Use it when he refers to something from before, and before redoing work.
 - The repo: CLAUDE.md (start-here guide), PROGRESS.md (newest work at the top), docs/REFERENCE.md (full history), docs/handoffs/.
-- Your own notes (remember / list_memories): small facts about Horace and how he likes Watson to behave.
+- Your own notes (remember / list_memories): small facts about Horace and how he likes the Oracle to behave.
 When you learn something lasting:
-- About Horace or how Watson should talk or behave: use remember.
+- About Horace or how the Oracle should talk or behave: use remember.
 - About the Wolf Hall app (a decision, hazard, project state, or rule): save a Claude Code memory file in the usual format, in BOTH ~/.claude/projects/-home-horacehall-projects-wolf-hall-app/memory/ and ~/.claude/projects/-mnt-c-Windows/memory/, and add its line to each MEMORY.md, so every Claude session sees it. Update an existing file rather than adding a duplicate.
 
 ## The household budget
@@ -231,7 +231,7 @@ export class WatsonAgent {
           hookEventName: 'PreToolUse',
           permissionDecision: d.approved ? 'allow' : 'deny',
           permissionDecisionReason: d.approved
-            ? 'Horace approved this out loud via Watson.'
+            ? 'Horace approved this out loud via the Oracle.'
             : d.timedOut ? 'Horace did not answer the approval prompt in time, so it was not run.' : 'Horace said no to this. Do not retry it; ask what he wants instead.',
         },
       };
@@ -249,7 +249,7 @@ export class WatsonAgent {
       disallowedTools: ['AskUserQuestion'],
       hooks: { PreToolUse: [{ hooks: [gate], timeout: Math.ceil(config.approvalTimeoutMs / 1000) + 60 }] },
       canUseTool: async (toolName, input, { signal, suggestions }) => {
-        // Watson's own tools are safe to run; the PreToolUse hook above still gates wolf_hall's writing paths.
+        // The Oracle's own tools are safe to run; the PreToolUse hook above still gates wolf_hall's writing paths.
         if (toolName.startsWith(`mcp__${this.p.mcpName}__`)) return { behavior: 'allow', updatedInput: input };
         // Trust mode: Horace's spoken yes is enough unless this sends to someone or deletes.
         if (trustAllows(toolName, input)) return { behavior: 'allow', updatedInput: input };
@@ -338,7 +338,7 @@ export class WatsonAgent {
       // Memory files or knowledge saved since this conversation started (by another Claude session, GitHub, or Horace).
       const { text, now } = changesSince(this.seen);
       this.seen = now;
-      if (text) content = `[Watson system note, not from Horace: these memory or knowledge files were added or changed since this conversation started. Take them into account.]\n${text}\n[End of note. Horace said:]\n${clean}`;
+      if (text) content = `[Oracle system note, not from Horace: these memory or knowledge files were added or changed since this conversation started. Take them into account.]\n${text}\n[End of note. Horace said:]\n${clean}`;
     } catch (e) { console.warn('  Could not check for new knowledge:', e.message); }
     const extra = this.p.pendingNote?.();
     if (extra) content = `${extra}\n[Horace said:]\n${content}`;
@@ -366,7 +366,7 @@ export class WatsonAgent {
   #rollover() {
     const size = Math.round(this.contextTokens / 1000);
     const recent = this.history.recent(40)
-      .filter((h) => (h.role === 'you' || h.role === 'watson') && !/^\[(Watson|Trinity) routine/.test(h.text))
+      .filter((h) => (h.role === 'you' || h.role === 'watson') && !/^\[(Watson|Oracle|Trinity) routine/.test(h.text))
       .slice(-8)
       .map((h) => `${h.role === 'you' ? 'Horace' : 'You'}: ${String(h.text).replace(/\s+/g, ' ').slice(0, 300)}`);
     this.input?.close();
@@ -381,12 +381,12 @@ export class WatsonAgent {
     const note = `Started a fresh conversation to keep replies fast and cheap (the old one had grown to ${size}K tokens). What I remember about you is kept.`;
     this.history.append({ role: 'system', text: note });
     this.send({ type: 'notice', text: note });
-    return '[Watson system note, not from Horace: your previous conversation grew too long, so this is a fresh one. '
+    return '[Oracle system note, not from Horace: your previous conversation grew too long, so this is a fresh one. '
       + 'Your memory files are unchanged. The last few exchanges were:\n' + (recent.join('\n') || '(none)')
       + '\nAnything older is not in this conversation; if Horace refers to it, ask him or check the files.]';
   }
 
-  /** Stop whatever Watson is doing right now (the session stays). */
+  /** Stop whatever the Oracle is doing right now (the session stays). */
   async interrupt() {
     denyAllPending(this.p.label);
     if (this.q && this.busy) {

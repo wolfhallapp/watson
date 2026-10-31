@@ -25,11 +25,11 @@ EOF
 fi
 
 if ! curl -fs "http://127.0.0.1:$PORT/" >/dev/null; then
-  echo "Watson isn't running on port $PORT. Start it first (double-click Watson.cmd)."
+  echo "The Oracle isn't running on port $PORT. Start it first (double-click Watson.cmd)."
   exit 1
 fi
 
-echo "Opening a tunnel to Watson. On your PC, open Watson's Settings > Pair a phone to get"
+echo "Opening a tunnel to the Oracle. On your PC, open the Oracle's Settings > Pair a phone to get"
 echo "the phone address and a 6-digit code. Close this window (or Ctrl+C) to stop the tunnel."
 echo
 # Watson reads the address from data/tunnel.log to show it on the pairing screen.

@@ -1,4 +1,4 @@
-// The approval gate. Every tool call Watson makes is checked here; anything that
+// The approval gate. Every tool call the Oracle makes is checked here; anything that
 // deploys, pushes, sends, deletes or writes outside the project needs a spoken
 // (or tapped) yes first, even if Claude Code's own settings would allow it.
 import path from 'node:path';
@@ -128,7 +128,7 @@ export function onApprovalEvent(fn) { broadcast = fn; }
  * Ask the person. Resolves { approved, always } once someone answers from any
  * connected device, or { approved: false } after the timeout / abort.
  */
-export function requestApproval({ toolName, input, level, reason, canAlways = false, signal, who = 'Watson' }) {
+export function requestApproval({ toolName, input, level, reason, canAlways = false, signal, who = 'The Oracle' }) {
   const id = crypto.randomUUID();
   const info = {
     id, toolName, level, reason, canAlways, who,

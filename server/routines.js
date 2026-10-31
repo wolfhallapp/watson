@@ -1,6 +1,6 @@
-// Watson's own daily routines: prompts Watson gives itself at a set time, quietly (origin
+// The Oracle's own daily routines: prompts the Oracle gives itself at a set time, quietly (origin
 // 'routine', so no screen speaks the reply). Runs once per day per routine, and only when
-// Watson isn't busy with something Horace asked, so it never talks over him.
+// The Oracle isn't busy with something Horace asked, so it never talks over him.
 import fs from 'node:fs';
 import path from 'node:path';
 import { state } from './store.js';
@@ -51,7 +51,7 @@ export const ROUTINES = [
     // 10/31 per Horace: always have a task running overnight. With an empty queue it picks its own improvement.
     guard: () => usageAllowsNightShift(),
     prompt: [
-      '[Watson routine: the Night Shift. Not from Horace; he is asleep. Work quietly: no show_on_screen, and keep your final reply to one line.]',
+      '[Oracle routine: the Night Shift. Not from Horace; he is asleep. Work quietly: no show_on_screen, and keep your final reply to one line.]',
       `Read the task queue ${NIGHT_QUEUE}. Take the FIRST unchecked task (- [ ]) and do exactly that ONE task, carefully and economically. You will be started again for the next one.`,
       'IF THE QUEUE HAS NO UNCHECKED TASK, choose one yourself (Horace wants the Night Shift always working, 10/31): one improvement or innovation small enough to finish and test tonight.',
       `Look for ideas in the newest reports in ${NIGHT_REPORTS} (open audit findings, "worth a look" notes, failing date-dependent tests), the top of ~/projects/wolf-hall-app/PROGRESS.md (open items), the Wolf Hall CLAUDE.md known issues, and what would make Horace's day easier (his morning routine, budget, Taylor's console, the Construct, the Oracle's own screens).`,
@@ -60,7 +60,7 @@ export const ROUTINES = [
       'NIGHT=$(date -d "+7 hours" +%F) is the date of the morning Horace wakes up; use it for the branch and the report.',
       'Code changes: never touch the main working folders. For the Wolf Hall app, run',
       '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
-      `for Watson itself use \`git -C '${ROOT}' worktree add -B oracle/night-$NIGHT ~/night/watson main\` (reuse it if it exists).`,
+      `for the Oracle itself use \`git -C '${ROOT}' worktree add -B oracle/night-$NIGHT ~/night/watson main\` (reuse it if it exists).`,
       'Follow the repo rules: syntax checks, the tests in tests/, a new test for what you changed, and the agent-smith subagent for Wolf Hall changes. Commit on the night branch with a clear message.',
       'Live checks are read-only GETs only, and never GET /forecast or the current week of /week-budget. Never deploy, push, change Notion or money data, send anything or delete anything. Those are blocked anyway.',
       'If a task needs Horace (a deploy, a money decision, a fact only he knows), do the safe preparation and list exactly what he must approve.',
@@ -77,7 +77,7 @@ export const ROUTINES = [
     hour: 6, minute: 40, untilHour: 11,
     tuesday: { hour: 3, minute: 15 }, // Horace leaves for work at 4 AM on Tuesdays
     prompt: [
-      '[Watson routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
+      '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
       'calendar for today and tomorrow, important unread email from the last day, bills due in the next 7 days, the Pool,',
       'the casino Bonus Run, the Architect\'s moves for today, upcoming reminders and the weather for Thrall, TX (one line).',

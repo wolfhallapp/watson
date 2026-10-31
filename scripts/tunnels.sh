@@ -12,4 +12,4 @@ for pid in $(pgrep -x cloudflared); do
   done
   echo "pid $pid  started $started  https://${host:-<unknown>}"
 done
-echo "Address Watson shows for pairing: $(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' data/tunnel.log 2>/dev/null | tail -1)"
+echo "Address the Oracle shows for pairing: $(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' data/tunnel.log 2>/dev/null | tail -1)"

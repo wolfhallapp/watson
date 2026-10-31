@@ -16,7 +16,7 @@ while true; do
   node server/index.js 2>&1 | tee -a data/server.log
   code=${PIPESTATUS[0]}
   [ "$stopping" = 1 ] || [ "$code" = 0 ] || [ "$code" = 130 ] && break
-  echo "  Watson stopped unexpectedly (exit $code). Restarting in 5 seconds..." | tee -a data/server.log
+  echo "  The Oracle stopped unexpectedly (exit $code). Restarting in 5 seconds..." | tee -a data/server.log
   sleep 5
 done
 echo

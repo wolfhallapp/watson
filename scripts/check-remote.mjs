@@ -31,7 +31,7 @@ function hello(siteBase, fields, then) {
 }
 
 const page = await fetch(base);
-console.log('Page:', page.status, (await page.text()).includes('<title>Watson</title>') ? '(Watson)' : '(unexpected content)');
+console.log('Page:', page.status, (await page.text()).includes('<title>The Oracle</title>') ? '(the Oracle)' : '(unexpected content)');
 console.log('Wrong token:', await hello(base, { token: 'x'.repeat(token.length) }));
 console.log('Wrong capitalization:', await hello(base, { token: token.toUpperCase() === token ? token.toLowerCase() : token.toUpperCase() }));
 console.log('Real token:', await hello(base, { token }));

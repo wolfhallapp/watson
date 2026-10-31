@@ -9,7 +9,7 @@ for _ in $(seq 120); do
 done
 if ! node scripts/status.mjs 2>/dev/null | grep -q '"busy":false'; then echo "Still busy after 30 minutes; not restarting."; exit 1; fi
 pid=$(pgrep -f '^node server/index.js')
-echo "$(date '+%H:%M:%S') idle; restarting Watson (pid $pid)"
+echo "$(date '+%H:%M:%S') idle; restarting the Oracle (pid $pid)"
 [ -n "$pid" ] && kill "$pid"
 for _ in $(seq 20); do pgrep -f '^node server/index.js' >/dev/null || break; sleep 1; done
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w scripts/start-watson.ps1)" -NoBrowser

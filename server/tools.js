@@ -1,4 +1,4 @@
-// Watson's own tools, served in-process to the agent as the "watson" MCP server.
+// The Oracle's own tools, served in-process to the agent as the "watson" MCP server.
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
@@ -19,16 +19,16 @@ export function formatLocal(date, tz = userTimeZone()) {
   }).format(date);
 }
 
-/** `send(event)` broadcasts an event to every connected Watson screen. */
+/** `send(event)` broadcasts an event to every connected the Oracle screen. */
 export function createWatsonTools(send, currentSessionId = () => null) {
   return createSdkMcpServer({
     name: 'watson',
     version: '0.1.0',
-    instructions: 'Watson\'s own tools: put things on the screen, remember facts about the user, set spoken reminders, search past Claude Code conversations, and read the live Wolf Hall budget.',
+    instructions: 'The Oracle\'s own tools: put things on the screen, remember facts about the user, set spoken reminders, search past Claude Code conversations, and read the live Wolf Hall budget.',
     tools: [
       tool(
         'show_on_screen',
-        'Show something on the Watson screen instead of reading it aloud: diffs, code, lists, tables, long explanations, links. Use this whenever the content is longer than a sentence or two or is hard to listen to. The screen keeps the latest few items.',
+        'Show something on the Oracle screen instead of reading it aloud: diffs, code, lists, tables, long explanations, links. Use this whenever the content is longer than a sentence or two or is hard to listen to. The screen keeps the latest few items.',
         {
           title: z.string().describe('Short heading, e.g. "Diff for the forecast fix"'),
           content: z.string().describe('The content. Markdown is supported.'),
@@ -50,7 +50,7 @@ export function createWatsonTools(send, currentSessionId = () => null) {
       ),
       tool(
         'remember',
-        'Save a lasting fact or preference about the user so Watson knows it in future conversations (e.g. "Horace prefers short answers"). One fact per call.',
+        'Save a lasting fact or preference about the user so the Oracle knows it in future conversations (e.g. "Horace prefers short answers"). One fact per call.',
         { fact: z.string().min(3) },
         async ({ fact }) => { memory.add(fact); return text(`Remembered: ${fact}`); },
       ),
@@ -62,13 +62,13 @@ export function createWatsonTools(send, currentSessionId = () => null) {
       ),
       tool(
         'list_memories',
-        'List everything Watson has remembered about the user.',
+        'List everything the Oracle has remembered about the user.',
         {},
         async () => { const all = memory.all(); return text(all.length ? all.map((f) => `- ${f}`).join('\n') : 'Nothing remembered yet.'); },
       ),
       tool(
         'search_past_conversations',
-        'Search every past Claude Code conversation on this PC (sessions run in the repo, in Windows folders, in the desktop app, and Watson\'s own earlier sessions) for what Horace and Claude said. Use it when Horace refers to something discussed before ("what did we decide about...", "the thing you fixed yesterday"), or before redoing work that may already have been done. Every word must appear; use 1 to 3 distinctive words. Newest first.',
+        'Search every past Claude Code conversation on this PC (sessions run in the repo, in Windows folders, in the desktop app, and the Oracle\'s own earlier sessions) for what Horace and Claude said. Use it when Horace refers to something discussed before ("what did we decide about...", "the thing you fixed yesterday"), or before redoing work that may already have been done. Every word must appear; use 1 to 3 distinctive words. Newest first.',
         {
           query: z.string().min(2).describe('Distinctive words, e.g. "rollover phantom" or "CLAUDE_KEY"'),
           limit: z.number().int().min(1).max(30).optional(),
@@ -210,7 +210,7 @@ export function createWatsonTools(send, currentSessionId = () => null) {
       ),
       tool(
         'set_reminder',
-        'Set a reminder that Watson will say out loud (and show as a notification) at a time. Give either in_minutes or at. Watson must be running at that time; if no screen is open it will speak it when one connects.',
+        'Set a reminder that the Oracle will say out loud (and show as a notification) at a time. Give either in_minutes or at. The Oracle must be running at that time; if no screen is open it will speak it when one connects.',
         {
           text: z.string().describe('What to remind about, phrased to be spoken, e.g. "Time to pay the Verizon bill"'),
           in_minutes: z.number().positive().optional(),

@@ -22,10 +22,10 @@ function Test-Watson {
 
 if (-not (Test-Watson)) {
   Start-Process wsl.exe -ArgumentList "--cd `"$root`" -e bash ./scripts/run.sh" -WindowStyle Minimized
-  Write-Host 'Starting Watson...'
+  Write-Host 'Starting the Oracle...'
   $deadline = (Get-Date).AddSeconds($(if ($AtLogin) { 180 } else { 40 }))
   while (-not (Test-Watson)) {
-    if ((Get-Date) -gt $deadline) { Write-Host 'Watson did not start. Open the minimized "wsl" window to see why.'; exit 1 }
+    if ((Get-Date) -gt $deadline) { Write-Host 'The Oracle did not start. Open the minimized "wsl" window to see why.'; exit 1 }
     Start-Sleep -Milliseconds 500
   }
 }

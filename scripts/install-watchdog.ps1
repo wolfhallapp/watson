@@ -9,8 +9,8 @@ $name = 'Watson watchdog'
 if ($Remove) {
   if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
     Unregister-ScheduledTask -TaskName $name -Confirm:$false
-    Write-Host 'The Watson watchdog is removed.'
-  } else { Write-Host 'The Watson watchdog was not installed.' }
+    Write-Host 'The Oracle watchdog is removed.'
+  } else { Write-Host 'The Oracle watchdog was not installed.' }
   exit 0
 }
 $vbs = Join-Path $PSScriptRoot 'watchdog.vbs'
@@ -24,4 +24,4 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $name -Action $action -Trigger @($every, $logon) -Settings $settings -Principal $principal `
   -Description 'Checks every 3 minutes that Watson (the Oracle) is running and starts it if not. Log: data\watchdog.log' -Force | Out-Null
-Write-Host "The Watson watchdog is installed: it checks every 3 minutes."
+Write-Host "The Oracle watchdog is installed: it checks every 3 minutes."

@@ -1,5 +1,5 @@
-// ElevenLabs text-to-speech for Watson's voice. The API key stays on this
-// machine: the browser asks Watson's server for audio, never ElevenLabs directly.
+// ElevenLabs text-to-speech for the Oracle's voice. The API key stays on this
+// machine: the browser asks the Oracle's server for audio, never ElevenLabs directly.
 // If there's no key, or ElevenLabs fails, the browser falls back to its own voice.
 import fs from 'node:fs';
 import { config } from './config.js';

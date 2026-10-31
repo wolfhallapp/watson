@@ -1,5 +1,5 @@
 // Windows desktop notifications from WSL, for reminders that come due while no
-// Watson screen is open. The text travels in an environment variable (WSLENV),
+// The Oracle screen is open. The text travels in an environment variable (WSLENV),
 // never inside the PowerShell command, so nothing in it can run as code.
 import { execFile } from 'node:child_process';
 

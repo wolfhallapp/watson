@@ -1,4 +1,4 @@
-// Watson server: serves the voice web app and relays it to the agent over a
+// The Oracle server: serves the voice web app and relays it to the agent over a
 // token-protected WebSocket. Listens on 127.0.0.1 only.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -209,7 +209,7 @@ function tokenOk(given) {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://x');
-  // Only accept sockets from pages served by Watson itself (blocks other websites).
+  // Only accept sockets from pages served by the Oracle itself (blocks other websites).
   const origin = req.headers.origin;
   let sameOrigin = false;
   try {
@@ -349,7 +349,7 @@ wss.on('connection', (ws, req) => {
 
 startReminderLoop((r) => {
   if (!allClients()) {
-    // Nobody has Watson open: pop up a Windows notification once, and still speak it when a screen connects.
+    // Nobody has the Oracle open: pop up a Windows notification once, and still speak it when a screen connects.
     if (r.toasted) return false;
     windowsNotify(`Reminder: ${r.text}`);
     return 'toasted';
@@ -368,7 +368,7 @@ startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lan
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
 server.listen(config.port, config.host, () => {
-  console.log(`\n  Watson is listening on http://localhost:${config.port}`);
+  console.log(`\n  the Oracle is listening on http://localhost:${config.port}`);
   console.log(`  Project: ${config.projectDir}`);
   console.log(`  Model:   ${config.model} (effort ${config.effort}, permissions ${config.permissionMode})`);
   console.log('  Open the address above in Chrome or Edge. The access token is in .env (WATSON_TOKEN).\n');
@@ -376,7 +376,7 @@ server.listen(config.port, config.host, () => {
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
-    console.log('\n  Watson is shutting down.');
+    console.log('\n  the Oracle is shutting down.');
     agent.shutdown();
     architect.shutdown();
     trinity.shutdown();
