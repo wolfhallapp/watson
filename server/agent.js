@@ -8,6 +8,10 @@ import { createWatsonTools, formatLocal, userTimeZone } from './tools.js';
 import { history, makeHistory, memory, state } from './store.js';
 import { changesSince, knowledgeForPrompt, knowledgeSignature, memoriesForPrompt, projectSnapshot } from './knowledge.js';
 import { morpheusForOracle } from './morpheus.js';
+import { describeConnection } from './starlink.js';
+
+// Claude's engine reports a dropped or stalled connection with text like these.
+const CONNECTION_ERROR = /connection error|ECONNRESET|socket|No response from API|fetch failed|network|timed? ?out|ETIMEDOUT|EAI_AGAIN|overloaded/i;
 
 /** Async queue that feeds user messages into the SDK's streaming input. */
 class InputQueue {
@@ -61,6 +65,7 @@ ${config.trust
 - When Horace says "add this to your knowledge" (or to Watson's notes, or to GitHub), write it as a markdown file in ${ROOT}/knowledge with a clear file name, commit it, and ask to push it. Use remember only for short personal preferences. Watson pulls from GitHub when it starts.
 - As a personal assistant you may have Gmail, Google Calendar, Google Drive and Notion connectors, plus web search. Use them when asked. Reading is fine; anything that sends, creates, changes or deletes needs Horace's yes (spoken, or a tap for sends and deletes).
 - For reminders, call now first, then set_reminder. If no Watson screen is open when one comes due, it pops up as a Windows notification and is spoken once a screen connects.
+- Internet: this house is on Starlink, and there is no proxy or gateway (checked 2026-10-30). Error text that mentions a proxy is generic wording from Claude's engine; never tell Horace a proxy is the problem. When he asks about his internet, or deploys, downloads or your own requests keep failing, call network_check (with speed_test true when he wants a real measurement) and report what it says in plain words, real numbers only. Don't guess about the cause.
 
 ## Memory and what you know
 You share what Claude Code knows on this PC. Use all of it before saying you don't know.
@@ -173,6 +178,13 @@ export function unattendedBlock(toolName, input = {}) {
 
 // The Night Shift (2026-10-28): the Oracle's rules and tools in a separate session that starts fresh each night.
 export const NIGHT = { ...ORACLE, key: 'night', label: 'The Night Shift', sessionKey: 'nightSessionId', history: makeHistory('night-history.jsonl'), knowledgeNotes: false };
+// Daytime routines (morning briefing, casino emails): the Oracle's rules and tools, in a session that starts
+// fresh each run, so their Gmail reading never piles up in the Oracle's own conversation (2026-10-30).
+export const ROUTINE = { ...ORACLE, key: 'routine', label: 'The Oracle (routine)', sessionKey: 'routineSessionId', history: makeHistory('routine-history.jsonl'), knowledgeNotes: false };
+
+const tokensKey = (persona) => `${persona.sessionKey}Tokens`;
+/** How big a conversation is: everything the model read for its latest reply. */
+const contextSize = (u) => (u?.input_tokens || 0) + (u?.cache_read_input_tokens || 0) + (u?.cache_creation_input_tokens || 0);
 
 export class WatsonAgent {
   /** @param {(event: object) => void} send broadcast to this agent's screens */
@@ -186,6 +198,9 @@ export class WatsonAgent {
     this.origin = null; // client that sent the latest request; only it speaks the reply
     this.sessionId = state.get()[persona.sessionKey] || null;
     this.tools = persona.tools(send, () => this.sessionId);
+    // Size of the conversation as of its last reply; a saved oversized one isn't resumed after a restart.
+    this.contextTokens = state.get()[tokensKey(persona)] || 0;
+    this.needsFresh = !!this.sessionId && this.contextTokens > config.contextLimit;
   }
 
   status() {
@@ -247,6 +262,8 @@ export class WatsonAgent {
       },
       ...(this.sessionId ? { resume: this.sessionId } : {}),
       ...(config.maxBudgetUsd ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
+      // More patience on a flaky connection (Starlink): more retries, longer per-request timeout.
+      env: { ...process.env, CLAUDE_CODE_MAX_RETRIES: config.claudeMaxRetries, API_TIMEOUT_MS: config.apiTimeoutMs },
       stderr: (d) => { if (process.env.WATSON_DEBUG) process.stderr.write(d); },
     };
 
@@ -274,6 +291,9 @@ export class WatsonAgent {
       } else if (m.type === 'assistant') {
         if (m.error) this.send({ type: 'error', message: `Problem talking to Claude: ${m.error}` });
         const sub = m.parent_tool_use_id != null;
+        const apiText = (m.message?.content || []).find((b) => b.type === 'text' && /^API Error/i.test(b.text))?.text;
+        if (!sub && (apiText || m.error) && CONNECTION_ERROR.test(`${apiText || ''} ${m.error || ''}`)) this.#explainConnection();
+        if (!sub && contextSize(m.message?.usage)) this.contextTokens = contextSize(m.message.usage); // latest, so compaction counts
         for (const block of m.message?.content || []) {
           if (block.type === 'text' && block.text.trim() && !sub) {
             this.history.append({ role: 'watson', text: block.text });
@@ -289,8 +309,14 @@ export class WatsonAgent {
         if (!ok) {
           const why = m.subtype === 'error_max_budget_usd' ? 'it hit the spending limit' : (m.errors?.join('; ') || m.result || m.subtype);
           this.send({ type: 'error', message: `That request didn't finish: ${why}`, origin: this.origin });
+          if (CONNECTION_ERROR.test(String(why))) this.#explainConnection();
         }
         this.send({ type: 'done', ok, costUsd: m.total_cost_usd, ms: m.duration_ms, turns: m.num_turns });
+        state.set({ [tokensKey(this.p)]: this.contextTokens });
+        if (this.contextTokens > config.contextLimit && !this.needsFresh) {
+          this.needsFresh = true;
+          console.log(`  ${this.p.label}: conversation is ${Math.round(this.contextTokens / 1000)}K tokens; the next message starts a fresh one.`);
+        }
         this.#setBusy(false);
       }
     }
@@ -300,6 +326,8 @@ export class WatsonAgent {
   ask(text, origin) {
     const clean = String(text || '').trim();
     if (!clean) return;
+    // Too-big conversation: switch to a fresh one between turns, carrying the last few exchanges over.
+    const handoff = this.needsFresh && !this.busy ? this.#rollover() : '';
     this.origin = origin || null;
     this.history.append({ role: 'you', text: clean });
     this.send({ type: 'heard', text: clean, origin });
@@ -314,7 +342,48 @@ export class WatsonAgent {
     } catch (e) { console.warn('  Could not check for new knowledge:', e.message); }
     const extra = this.p.pendingNote?.();
     if (extra) content = `${extra}\n[Horace said:]\n${content}`;
+    if (handoff) content = `${handoff}\n[Horace said:]\n${content}`;
     this.input.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null });
+  }
+
+  /**
+   * After a connection error, check the Starlink dish and a quick speed test, and tell Horace the
+   * real cause on screen (at most once every 3 minutes). Runs in the background; never throws.
+   */
+  #explainConnection() {
+    if (Date.now() - (this.lastNetCheck || 0) < 3 * 60 * 1000) return;
+    this.lastNetCheck = Date.now();
+    const origin = this.origin;
+    describeConnection({ speedTest: true }).then(({ text }) => {
+      const message = `Claude's connection dropped. ${text}`;
+      console.warn(`  ${this.p.label}: ${message}`);
+      this.history.append({ role: 'system', text: message });
+      this.send({ type: 'error', message, origin });
+    }).catch((e) => console.warn('  Network check failed:', e.message));
+  }
+
+  /** Drops the oversized conversation and returns a note recapping its last few exchanges. */
+  #rollover() {
+    const size = Math.round(this.contextTokens / 1000);
+    const recent = this.history.recent(40)
+      .filter((h) => (h.role === 'you' || h.role === 'watson') && !/^\[(Watson|Trinity) routine/.test(h.text))
+      .slice(-8)
+      .map((h) => `${h.role === 'you' ? 'Horace' : 'You'}: ${String(h.text).replace(/\s+/g, ' ').slice(0, 300)}`);
+    this.input?.close();
+    try { this.q?.close?.(); } catch {}
+    this.q = null;
+    this.input = null;
+    this.sessionId = null;
+    this.contextTokens = 0;
+    this.needsFresh = false;
+    state.set({ [this.p.sessionKey]: null, [tokensKey(this.p)]: 0 });
+    console.log(`  ${this.p.label}: started a fresh conversation (the old one was ${size}K tokens).`);
+    const note = `Started a fresh conversation to keep replies fast and cheap (the old one had grown to ${size}K tokens). What I remember about you is kept.`;
+    this.history.append({ role: 'system', text: note });
+    this.send({ type: 'notice', text: note });
+    return '[Watson system note, not from Horace: your previous conversation grew too long, so this is a fresh one. '
+      + 'Your memory files are unchanged. The last few exchanges were:\n' + (recent.join('\n') || '(none)')
+      + '\nAnything older is not in this conversation; if Horace refers to it, ask him or check the files.]';
   }
 
   /** Stop whatever Watson is doing right now (the session stays). */
@@ -333,7 +402,9 @@ export class WatsonAgent {
     try { this.q?.close?.(); } catch {}
     this.q = null;
     this.sessionId = null;
-    state.set({ [this.p.sessionKey]: null });
+    this.contextTokens = 0;
+    this.needsFresh = false;
+    state.set({ [this.p.sessionKey]: null, [tokensKey(this.p)]: 0 });
     this.history.append({ role: 'system', text: 'New conversation started.' });
     this.send({ type: 'reset' });
   }

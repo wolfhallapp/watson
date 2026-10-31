@@ -51,6 +51,12 @@ export const config = {
   maxBudgetUsd: env('WATSON_MAX_BUDGET_USD') ? Number(env('WATSON_MAX_BUDGET_USD')) : undefined,
   // How long Watson waits for a yes/no before treating it as "no".
   approvalTimeoutMs: 10 * 60 * 1000,
+  // Past this many tokens of conversation, the next message starts a fresh one (2026-10-30: the
+  // Oracle's conversation reached 658K tokens, so every reply was slow, costly, and timed out).
+  contextLimit: Number(env('WATSON_CONTEXT_LIMIT', '250000')),
+  // Ride out Starlink slow spells and dropouts instead of failing (2026-10-30). Passed to Claude's engine.
+  claudeMaxRetries: env('WATSON_CLAUDE_MAX_RETRIES', '15'),
+  apiTimeoutMs: env('WATSON_API_TIMEOUT_MS', '900000'), // 15 min per request
   // Trust mode (default on, per Horace 2026-10-25): only sending messages to other
   // people and deleting things need a tap. Set WATSON_TRUST=off for the full gate.
   trust: env('WATSON_TRUST', 'on') !== 'off',

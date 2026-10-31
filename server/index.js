@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { DATA_DIR, ROOT, config } from './config.js';
-import { WatsonAgent, NIGHT } from './agent.js';
+import { WatsonAgent, NIGHT, ROUTINE } from './agent.js';
 import { answerApproval, onApprovalEvent, pendingApprovals } from './approvals.js';
 import { startReminderLoop } from './tools.js';
 import { history, reminders, state } from './store.js';
@@ -361,7 +361,9 @@ startReminderLoop((r) => {
 
 // The Night Shift's own session (fresh each night); its activity is kept in data/night-history.jsonl.
 const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
-startRoutines({ main: agent, night: nightAgent, trinity, morpheus });
+// Daytime routines get their own fresh session too, so their email reading stays out of the Oracle's conversation.
+const routineAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Routine:', event.message); }, ROUTINE);
+startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus });
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
@@ -380,6 +382,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     trinity.shutdown();
     morpheus.shutdown();
     nightAgent.shutdown();
+    routineAgent.shutdown();
     server.close();
     setTimeout(() => process.exit(0), 500).unref();
   });

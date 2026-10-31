@@ -546,6 +546,7 @@ function onEvent(ev) {
       $('convo').innerHTML = '';
       addMsg('system', 'New conversation started.');
       break;
+    case 'notice': addMsg('system', ev.text); break; // e.g. an automatic fresh conversation
   }
   // The Architect's tree (construct.js) listens for its own events, and for welcome.
   window.dispatchEvent(new CustomEvent('agent:event', { detail: ev }));

@@ -65,6 +65,8 @@ export const ROUTINES = [
     // Morning briefing (2026-10-26): ready before Horace's 7 AM wake-up, saved to the Morning Log so the
     // Wolf Hall app's Morning screen shows it even if he has to leave before sitting down at the PC.
     key: 'morningBriefing',
+    agent: 'routine', // its own throwaway conversation, so email and calendar reading don't fill the Oracle's (2026-10-30)
+    fresh: true,
     hour: 6, minute: 40, untilHour: 11,
     tuesday: { hour: 3, minute: 15 }, // Horace leaves for work at 4 AM on Tuesdays
     prompt: [
@@ -81,6 +83,8 @@ export const ROUTINES = [
   },
   {
     key: 'casinoOfferScan',
+    agent: 'routine', // its own throwaway conversation: opening every casino email is what overfilled the Oracle's (2026-10-30)
+    fresh: true,
     hour: 7, minute: 30, untilHour: 12,
     tuesday: { hour: 3, minute: 30 },
     prompt: [
@@ -129,7 +133,7 @@ export function routineDue(r, now, lastDay) {
 export function startRoutines(agents, { every = 60000 } = {}) {
   const main = agents.main || agents;
   const tick = async () => {
-    if (main.busy || agents.night?.busy || agents.trinity?.busy || agents.morpheus?.busy) return;
+    if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
       const day = routineDue(r, new Date(), done[r.key]);

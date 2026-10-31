@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { memory, reminders, state } from './store.js';
+import { describeConnection } from './starlink.js';
 import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning } from './knowledge.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
@@ -196,6 +197,15 @@ export function createWatsonTools(send, currentSessionId = () => null) {
           } catch (e) {
             return { ...text(`Could not reach the app: ${e.message}`), isError: true };
           }
+        },
+      ),
+      tool(
+        'network_check',
+        'Check the home internet (Starlink) for real: reads the Starlink dish (outages, latency and whole-house speed over the last 15 minutes) and, with speed_test, times a 5 MB download. Use this whenever Horace asks about his internet, or deploys, downloads or your own requests keep failing. Read-only.',
+        { speed_test: z.boolean().optional().describe('Also run a 5 MB download test (takes up to 30 seconds).') },
+        async ({ speed_test = false }) => {
+          const r = await describeConnection({ speedTest: speed_test });
+          return text(`${r.text}\n\nDetails: ${JSON.stringify({ dish: r.dish, test: r.test })}`);
         },
       ),
       tool(
