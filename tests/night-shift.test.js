@@ -20,7 +20,8 @@ test('unattended runs cannot deploy, push or write live', () => {
 
 test('the night shift waits when the weekly allowance is mostly used or the 5-hour meter is full', () => {
   assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.4 } }), true);
-  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.85 } }), false);
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.96 } }), false);
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.9 } }), true); // 95% cap since 10/31
   const soon = Date.now() + 3600000;
   assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: soon } }), false);
   assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: Date.now() - 1000 } }), true); // refilled
@@ -36,4 +37,11 @@ test('the night shift repeats all night (9:15 PM to 6:30 AM Central), at least 3
   assert.equal(routineDue(r, new Date('2026-10-29T20:00:00Z'), null), null); // 3 PM
   assert.equal(routineDue(r, new Date('2026-10-30T06:31:00Z'), '2026-10-30T06:30:00.000Z'), null); // too soon
   assert.ok(routineDue(r, new Date('2026-10-30T06:34:00Z'), '2026-10-30T06:30:00.000Z'));
+});
+
+test('the Night Shift can be started early with data/night-now (10/31)', () => {
+  const night = ROUTINES.find((r) => r.key === 'nightShift');
+  const noon = new Date('2026-10-31T17:00:00Z'); // noon CDT, outside the window
+  assert.equal(routineDue({ ...night, forceUntil: () => 0 }, noon, null), null);
+  assert.equal(routineDue({ ...night, forceUntil: () => noon.getTime() + 3600e3 }, noon, null), noon.toISOString());
 });

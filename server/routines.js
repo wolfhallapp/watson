@@ -13,12 +13,15 @@ import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 // Nothing is deployed, pushed or changed live; agent.js blocks that for routines.
 export const NIGHT_QUEUE = path.join(DATA_DIR, 'night-queue.md');
 export const NIGHT_REPORTS = path.join(DATA_DIR, 'night-reports');
+// "Start the Night Shift now" (10/31): data/night-now holds an ISO time; until then the shift runs in the daytime too.
+export const NIGHT_NOW = path.join(DATA_DIR, 'night-now');
+export function nightNowUntil() { try { return Date.parse(fs.readFileSync(NIGHT_NOW, 'utf8').trim()) || 0; } catch { return 0; } }
 // Casino purchase deals and discounts, for Horace's information (10/31). Never part of the free Bonus Run.
 export const CASINO_DEALS = path.join(DATA_DIR, 'casino-deals.md');
 // Skip a night when the weekly Claude allowance is mostly used, so Horace keeps enough for his own day.
 export function usageAllowsNightShift(usage = state.get().usage || {}) {
   const w = usage.seven_day, f = usage.five_hour;
-  if (w && typeof w.utilization === 'number' && w.utilization >= 0.8) return false;
+  if (w && typeof w.utilization === 'number' && w.utilization >= 0.95) return false; // 95% per Horace 10/31 (was 80%)
   if (f && typeof f.utilization === 'number' && f.utilization >= 0.95 && f.resetsAt && (f.resetsAt > 1e12 ? f.resetsAt : f.resetsAt * 1000) > Date.now()) return false;
   return true;
 }
@@ -80,6 +83,7 @@ export const ROUTINES = [
     agent: 'night',
     fresh: true,
     repeat: true,
+    forceUntil: nightNowUntil,
     hour: 21, minute: 15, untilHour: 6, untilMinute: 30,
     // 10/31 per Horace: always have a task running overnight. With an empty queue it picks its own improvement.
     guard: () => usageAllowsNightShift(),
@@ -165,7 +169,8 @@ export function routineDue(r, now, lastDay) {
     // Overnight window that wraps past midnight; may run many times, at least 3 minutes apart.
     const start = r.hour * 60 + r.minute, end = r.untilHour * 60 + (r.untilMinute || 0);
     const inWin = start > end ? (mins >= start || mins < end) : (mins >= start && mins < end);
-    if (!inWin || (lastDay && now - Date.parse(lastDay) < 3 * 60000)) return null;
+    const forced = r.forceUntil && r.forceUntil() > now.getTime();
+    if ((!inWin && !forced) || (lastDay && now - Date.parse(lastDay) < 3 * 60000)) return null;
     return now.toISOString();
   }
   if (r.times) {
