@@ -108,7 +108,7 @@ export function createWatsonTools(send, currentSessionId = () => null) {
           + 'claim {site} = he collected that site\'s daily bonus; '
           + 'ten_plus {site, on} = the site\'s balance passed 10 SC (on:true) or was played down (on:false); '
           + 'play_run {results:[{site, won}]} = he did 10 spins at 1 SC on each listed site and won that many SC (this also takes them off 10+); '
-          + 'add_offers {offers:[{site, what, expires?, link?, emailId?, notes?}]} = truly free (no purchase) bonuses found in his casino emails; expires is ISO 8601 with offset if the email gives an end time; link is the email\'s Gmail viewUrl; emailId is the Gmail message id (repeats are skipped). '
+          + 'add_offers {offers:[{site, what, expires?, link?, emailId, claimLink?, notes?}]} = truly free (no purchase) bonuses found in his casino emails; expires is ISO 8601 with offset if the email gives an end time; link is the email\'s Gmail viewUrl; emailId is the Gmail message id (always give it: repeats are skipped and the app uses it to open that exact email); claimLink is the https URL behind the email\'s own claim button, if any. '
           + 'Site names are matched loosely ("chumba" finds Chumba Casino). This never touches the Pool or any money data.',
         {
           action: z.enum(['claim', 'ten_plus', 'play_run', 'add_offers']),
@@ -117,7 +117,7 @@ export function createWatsonTools(send, currentSessionId = () => null) {
           results: z.array(z.object({ site: z.string(), won: z.number().min(0) })).optional(),
           offers: z.array(z.object({
             site: z.string(), what: z.string(), expires: z.string().optional(), link: z.string().optional(),
-            emailId: z.string().optional(), notes: z.string().optional(),
+            emailId: z.string().optional(), claimLink: z.string().optional(), notes: z.string().optional(),
           })).optional(),
         },
         async ({ action, site, on, results, offers }) => {

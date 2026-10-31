@@ -24,6 +24,12 @@ test('the routine prompt keeps purchase offers out', () => {
   assert.match(scan.prompt, /no recommendation to buy/);
 });
 
+test('the casino email check always passes emailId and saves the email\'s claim button (10/31)', () => {
+  assert.match(scan.prompt, /emailId \(ALWAYS/);
+  assert.match(scan.prompt, /claimLink/);
+  assert.match(scan.prompt, /never a purchase, deposit or unsubscribe link/);
+});
+
 test('the Night Shift picks its own task when the queue is empty (10/31)', () => {
   const night = ROUTINES.find((r) => r.key === 'nightShift');
   assert.doesNotMatch(night.guard.toString(), /readQueue/);
