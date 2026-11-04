@@ -19,9 +19,24 @@ export function nightNowUntil() { try { return Date.parse(fs.readFileSync(NIGHT_
 // Casino purchase deals and discounts, for Horace's information (10/31). Never part of the free Bonus Run.
 export const CASINO_DEALS = path.join(DATA_DIR, 'casino-deals.md');
 // Skip a night when the weekly Claude allowance is mostly used, so Horace keeps enough for his own day.
-export function usageAllowsNightShift(usage = state.get().usage || {}) {
+// 11/4 per Horace (after the Night Shift used up his week on 11/1): at most 6% of the week per night,
+// and no Night Shift at all once the week is 75% used.
+export const NIGHT_WEEK_STOP = 0.75;
+export const NIGHT_PER_NIGHT = 0.06;
+/** The night a moment belongs to: the Central date 12 hours earlier (so 9 PM to 6:30 AM is one night). */
+export function nightKey(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(now.getTime() - 12 * 3600000));
+}
+export function usageAllowsNightShift(usage = state.get().usage || {}, now = new Date(), store = state) {
   const w = usage.seven_day, f = usage.five_hour;
-  if (w && typeof w.utilization === 'number' && w.utilization >= 0.95) return false; // 95% per Horace 10/31 (was 80%)
+  if (w && typeof w.utilization === 'number') {
+    if (w.utilization >= NIGHT_WEEK_STOP) return false;
+    // Per-night budget: remember the week's level when this night started (a weekly reset mid-night starts over).
+    const night = nightKey(now);
+    let b = store.get().nightBudget;
+    if (!b || b.night !== night || w.utilization < b.startWeek) { b = { night, startWeek: w.utilization }; store.set({ nightBudget: b }); }
+    if (w.utilization - b.startWeek >= NIGHT_PER_NIGHT) return false;
+  }
   if (f && typeof f.utilization === 'number' && f.utilization >= 0.95 && f.resetsAt && (f.resetsAt > 1e12 ? f.resetsAt : f.resetsAt * 1000) > Date.now()) return false;
   return true;
 }
@@ -134,12 +149,12 @@ export const ROUTINES = [
     key: 'casinoOfferScan',
     agent: 'routine', // its own throwaway conversation: opening every casino email is what overfilled the Oracle's (2026-10-30)
     fresh: true,
-    times: [{ hour: 7, minute: 30 }, { hour: 13, minute: 0 }, { hour: 19, minute: 0 }],
+    times: [{ hour: 7, minute: 30 }, { hour: 19, minute: 0 }], // twice a day from 11/4 (was also 1 PM), to save usage
     untilHour: 23,
     tuesday: { hour: 3, minute: 30 }, // the first check moves earlier on Tuesdays
     prompt: [
       '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
-      'Casino email check (it runs at 7:30 AM, 1 PM and 7 PM). Search Gmail for casino promotion emails from the last day',
+      'Casino email check (it runs at 7:30 AM and 7 PM). Search Gmail for casino promotion emails from the last day',
       '(category:promotions newer_than:1d, plus anything from the senders in the Casino Sites list).',
       'Page through ALL results (follow nextPageToken) and open every casino email: judge each by its content, never by its subject line.',
       '(Lesson 2026-10-27: a Stake.us "your post-monthly is here!" bonus sent at 3 AM was skipped because of its subject.)',

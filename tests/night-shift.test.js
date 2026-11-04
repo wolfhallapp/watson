@@ -18,14 +18,26 @@ test('unattended runs cannot deploy, push or write live', () => {
   assert.equal(unattendedBlock('mcp__watson__casino', { action: 'add_offers' }), null);
 });
 
-test('the night shift waits when the weekly allowance is mostly used or the 5-hour meter is full', () => {
-  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.4 } }), true);
-  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.96 } }), false);
-  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.9 } }), true); // 95% cap since 10/31
+test('the night shift waits when the week is 75% used or the 5-hour meter is full', () => {
+  const mem = () => { let v = {}; return { get: () => v, set: (x) => { v = { ...v, ...x }; } }; };
+  const now = new Date('2026-11-04T04:00:00Z'); // 10 PM Central
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.4 } }, now, mem()), true);
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.76 } }, now, mem()), false);
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.74 } }, now, mem()), true); // 75% stop since 11/4
   const soon = Date.now() + 3600000;
-  assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: soon } }), false);
-  assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: Date.now() - 1000 } }), true); // refilled
-  assert.equal(usageAllowsNightShift({}), true);
+  assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: soon } }, now, mem()), false);
+  assert.equal(usageAllowsNightShift({ five_hour: { utilization: 0.97, resetsAt: Date.now() - 1000 } }, now, mem()), true); // refilled
+  assert.equal(usageAllowsNightShift({}, now, mem()), true);
+});
+
+test('the night shift uses at most 6% of the week per night', () => {
+  let v = {}; const store = { get: () => v, set: (x) => { v = { ...v, ...x }; } };
+  const night = new Date('2026-11-05T03:00:00Z'); // 9 PM Wed Central
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.30 } }, night, store), true); // the night starts at 30%
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.35 } }, new Date('2026-11-05T08:00:00Z'), store), true);
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.36 } }, new Date('2026-11-05T10:00:00Z'), store), false); // 4 AM: 6% used
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.36 } }, new Date('2026-11-06T03:00:00Z'), store), true); // next night starts over
+  assert.equal(usageAllowsNightShift({ seven_day: { utilization: 0.02 } }, new Date('2026-11-06T05:00:00Z'), store), true); // the week reset mid-night
 });
 
 test('the night shift repeats all night (9:15 PM to 6:30 AM Central), at least 3 minutes apart', () => {

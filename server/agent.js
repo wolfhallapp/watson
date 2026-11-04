@@ -1,6 +1,8 @@
 // The Oracle's brain: one long-lived Claude Agent SDK (Claude Code) session running
 // in the project repo. Spoken requests go in as user messages; replies,
 // activity and approval prompts come back out to the screens.
+import fs from 'node:fs';
+import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ROOT, config } from './config.js';
 import { classify, describe, prettyTool, requestApproval, denyAllPending, trustAllows } from './approvals.js';
@@ -117,6 +119,7 @@ Briefing contents:
 - Call now first.
 - Calendar for today and tomorrow, and important unread email from the last day.
 - Bills due in the next 7 days (/upcoming) and the Pool (/pool).
+- Spend Today (/spend-today, read-only, v219): one line with today's number ("Today you can spend $X", or "hold off" when short), the tightest day, and anything under Pay today.
 - The casino Bonus Run (/gambling/bonus-run): one short line on how many free bonuses are ready and any streak at risk. Never a nudge to buy.
 - The Architect's moves for today: the next open step on each strategy that is Researching, Started or Earning, from ${ROOT}/data/construct.json.
 - Upcoming reminders.
@@ -185,6 +188,34 @@ export const ROUTINE = { ...ORACLE, key: 'routine', label: 'The Oracle (routine)
 const tokensKey = (persona) => `${persona.sessionKey}Tokens`;
 /** How big a conversation is: everything the model read for its latest reply. */
 const contextSize = (u) => (u?.input_tokens || 0) + (u?.cache_read_input_tokens || 0) + (u?.cache_creation_input_tokens || 0);
+
+// Plan usage (5-hour session and weekly, percent used) read from Claude's /usage data, so each job can say
+// what it cost (per Horace 2026-11-04). Account-wide: other agents working at the same time count too.
+async function readPlanUsage(q) {
+  try {
+    const r = await Promise.race([
+      q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
+      new Promise((resolve) => setTimeout(() => resolve(null), 15000)),
+    ]);
+    const pct = (w) => (typeof w?.utilization === 'number' ? w.utilization : null);
+    if (!r?.rate_limits) return null;
+    const at = (w) => (w?.resets_at ? Math.round(Date.parse(w.resets_at) / 1000) : undefined);
+    return { session: pct(r.rate_limits.five_hour), week: pct(r.rate_limits.seven_day), sessionResets: at(r.rate_limits.five_hour), weekResets: at(r.rate_limits.seven_day) };
+  } catch { return null; }
+}
+export function usageLine(before, after, costUsd) {
+  const part = (label, k) => {
+    if (after?.[k] == null) return null;
+    const now = Math.round(after[k]);
+    // A 5-hour window that reset mid-job makes the difference meaningless; show the new level only.
+    const d = before?.[k] == null || after[k] < before[k] ? null : Math.round((after[k] - before[k]) * 10) / 10;
+    return d == null ? `${label} now ${now}%` : `${label} +${d}% (now ${now}%)`;
+  };
+  // Percent readings are whole numbers, so a small job shows +0%; the dollar figure (Claude's own estimate of the work) shows finer.
+  const parts = [part('session', 'session'), part('week', 'week'), costUsd > 0 ? `$${costUsd.toFixed(2)} of work` : null].filter(Boolean);
+  return parts.length ? `Usage: ${parts.join(' · ')}` : null;
+}
+const usageLog = path.join(ROOT, 'data', 'usage-log.jsonl');
 
 export class WatsonAgent {
   /** @param {(event: object) => void} send broadcast to this agent's screens */
@@ -312,6 +343,7 @@ export class WatsonAgent {
           if (CONNECTION_ERROR.test(String(why))) this.#explainConnection();
         }
         this.send({ type: 'done', ok, costUsd: m.total_cost_usd, ms: m.duration_ms, turns: m.num_turns });
+        this.#reportUsage(q, m);
         state.set({ [tokensKey(this.p)]: this.contextTokens });
         if (this.contextTokens > config.contextLimit && !this.needsFresh) {
           this.needsFresh = true;
@@ -320,6 +352,28 @@ export class WatsonAgent {
         this.#setBusy(false);
       }
     }
+  }
+
+  // After each job: how much of the 5-hour session and the week it used, shown under the reply and logged.
+  async #reportUsage(q, result) {
+    const before = await this.usageStart;
+    const after = await readPlanUsage(q);
+    this.usageStart = Promise.resolve(after); // a queued follow-up job starts from here
+    const line = usageLine(before, after, result.total_cost_usd);
+    if (!line) return;
+    // Keep the hourglass current too (it takes fractions and epoch seconds, like Claude's rate-limit events).
+    const windows = {};
+    if (after.session != null) windows.five_hour = { utilization: after.session / 100, resetsAt: after.sessionResets };
+    if (after.week != null) windows.seven_day = { utilization: after.week / 100, resetsAt: after.weekResets };
+    this.send({ type: 'usage', info: { unifiedWindows: windows } });
+    this.history.append({ role: 'system', text: line });
+    this.send({ type: 'notice', text: line, usage: true });
+    try {
+      fs.appendFileSync(usageLog, JSON.stringify({
+        at: new Date().toISOString(), agent: this.p.key, origin: this.origin, ask: String(this.jobText || '').slice(0, 120),
+        before, after, costUsd: result.total_cost_usd, turns: result.num_turns, ms: result.duration_ms,
+      }) + '\n');
+    } catch {}
   }
 
   /** Send something Horace said (or typed) to the agent. */
@@ -332,6 +386,7 @@ export class WatsonAgent {
     this.history.append({ role: 'you', text: clean });
     this.send({ type: 'heard', text: clean, origin });
     if (!this.q) this.#start();
+    if (!this.busy) { this.usageStart = readPlanUsage(this.q); this.jobText = clean; }
     this.#setBusy(true);
     let content = clean;
     if (this.p.knowledgeNotes) try {

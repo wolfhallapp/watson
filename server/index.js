@@ -142,6 +142,17 @@ function noteUsage(info) {
   if (!Object.keys(fresh).length) return;
   usage = { ...usage, ...fresh, at: new Date().toISOString() };
   state.set({ usage });
+  // Per Horace (2026-11-04): a heads-up once the week is 70% used (the Night Shift stops at 75%).
+  const wk = fresh.seven_day;
+  if (wk?.utilization >= 0.7 && wk.resetsAt) {
+    const due = new Date(wk.resetsAt > 1e12 ? wk.resetsAt : wk.resetsAt * 1000);
+    const tag = `usage:warn70:${due.toISOString()}`;
+    if (due > new Date() && !reminders.all().some((r) => r.tag === tag)) {
+      const when = due.toLocaleString('en-US', { timeZone: 'America/Chicago', weekday: 'long', hour: 'numeric', minute: '2-digit' });
+      reminders.add({ id: crypto.randomUUID().slice(0, 8), tag, text: `Heads up: your weekly Claude allowance is ${Math.round(wk.utilization * 100)}% used. It refills ${when}. The Night Shift stops at 75%.`, due: new Date().toISOString(), created: new Date().toISOString() });
+      broadcastTo(channels.oracle, { type: 'reminders_changed' });
+    }
+  }
   // Per Horace (2026-10-26): once a window is 80% used, a reminder says when it refills.
   for (const [kind, w] of Object.entries(fresh)) {
     if (!(w.utilization >= 0.8) || !w.resetsAt) continue;
