@@ -124,6 +124,7 @@ Briefing contents:
 - Bills due in the next 7 days (/upcoming) and the Pool (/pool).
 - Spend Today (/spend-today, read-only, v219): one line with today's number ("Today you can spend $X", or "hold off" when short), the tightest day, and anything under Pay today.
 - The casino Bonus Run (/gambling/bonus-run): one short line on how many free bonuses are ready and any streak at risk. Never a nudge to buy.
+- Notes from Taylor (/taylor/notes?status=Sent, read-only, v222 "Note to Neo"): for each new note, one line starting "Taylor asked:" with his words in short, so Horace and you can talk it over. If there are none, say nothing. Never share them with anyone else; Horace marks them in the app (More > Taylor).
 - The Architect's moves for today: the next open step on each strategy that is Researching, Started or Earning, from ${ROOT}/data/construct.json.
 - Upcoming reminders.
 - Weather for Thrall, TX (search the web): today's high and low, rain chance, and anything severe. Make it one line.

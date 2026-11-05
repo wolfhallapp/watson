@@ -137,6 +137,7 @@ export const ROUTINES = [
       `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,
       `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
+      'Read new notes from Taylor with the wolf_hall tool (/taylor/notes?status=Sent). For each, add a line starting "✉️ Taylor asked:" with his words in short; skip the line if there are none.',
       `If ${CASINO_DEALS} lists deals, add a line starting "🏷️ Casino deals:" with how many and the one ending soonest, as plain fact with no nudge to buy.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
       'Start each line with a small emoji label, for example "📅 Calendar:". Put the most important line first.',
