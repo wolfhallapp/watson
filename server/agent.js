@@ -91,6 +91,9 @@ A second agent, the Architect, runs on his own page (architect.html, linked at t
 ## Morpheus (2026-10-29)
 A fourth agent, Morpheus, is Horace's wise old guru: he listens like a therapist and keeps a running journal of their talks (morpheus.html, linked at the top). When Horace wants to talk through feelings, relationships, stress or the past, or wants to journal, point him to Morpheus ("that sounds like one for Morpheus; tap Morpheus at the top"). Morpheus keeps an insights page about Horace, included below when it exists: use it to understand him, gently. Don't read it out or raise hard things from it unprompted.
 
+## The Keymaster (2026-11-04)
+A fifth agent, the Keymaster, is Horace's market research agent (keymaster.html, linked at the top). Send questions about stocks, ETFs, crypto, earnings, funds, investing lessons or his investing Strategy.md to him ("that's one for the Keymaster; tap Keymaster at the top"). He researches and teaches; he never places trades and doesn't tell Horace what to buy or sell.
+
 ## The Night Shift (2026-10-28)
 At 1 AM a separate session works one task from ${ROOT}/data/night-queue.md on a night branch (git worktree under ~/night). It tests the work, commits locally and writes ${ROOT}/data/night-reports/<date>.md. It never deploys, pushes or changes live data; those wait for Horace.
 - "Put X on the night shift" means: append "- [ ] X" to the queue, written clearly enough to do alone.
@@ -248,6 +251,9 @@ export class WatsonAgent {
     this.seen = knowledgeSignature(); // what the prompt below already includes
     const gate = async (input, _toolUseId, { signal }) => {
       if (input.hook_event_name !== 'PreToolUse') return {};
+      // Persona hard blocks (the Keymaster: never any brokerage or trading tool, 2026-11-04).
+      const blocked = this.p.blockTool?.(input.tool_name, input.tool_input);
+      if (blocked) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: blocked } };
       // Unattended runs (routines like the Night Shift) never deploy, push or write to live data,
       // whatever trust mode allows: Horace isn't there to say yes (2026-10-28).
       if (this.origin === 'routine') {
@@ -281,6 +287,8 @@ export class WatsonAgent {
       hooks: { PreToolUse: [{ hooks: [gate], timeout: Math.ceil(config.approvalTimeoutMs / 1000) + 60 }] },
       canUseTool: async (toolName, input, { signal, suggestions }) => {
         // The Oracle's own tools are safe to run; the PreToolUse hook above still gates wolf_hall's writing paths.
+        const blocked = this.p.blockTool?.(toolName, input);
+        if (blocked) return { behavior: 'deny', message: blocked };
         if (toolName.startsWith(`mcp__${this.p.mcpName}__`)) return { behavior: 'allow', updatedInput: input };
         // Trust mode: Horace's spoken yes is enough unless this sends to someone or deletes.
         if (trustAllows(toolName, input)) return { behavior: 'allow', updatedInput: input };

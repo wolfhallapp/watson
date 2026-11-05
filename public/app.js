@@ -1,8 +1,15 @@
-import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE, TRINITY_WAKE, MORPHEUS_WAKE } from './voice.js';
+import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE, TRINITY_WAKE, MORPHEUS_WAKE, KEYMASTER_WAKE } from './voice.js';
 
 // One script for both agents' pages: the Oracle (index.html) and the Architect (architect.html, <body data-agent="architect">).
-const AGENT = ['architect', 'trinity', 'morpheus'].includes(document.body.dataset.agent) ? document.body.dataset.agent : 'oracle';
-const P = AGENT === 'morpheus' ? {
+const AGENT = ['architect', 'trinity', 'morpheus', 'keymaster'].includes(document.body.dataset.agent) ? document.body.dataset.agent : 'oracle';
+const P = AGENT === 'keymaster' ? {
+  name: 'The Keymaster', short: 'Keymaster', settingsKey: 'keymaster.settings', ws: '/ws?agent=keymaster', pronoun: 'he',
+  automatic: 'Automatic (free browser voice, a calm, precise man\'s voice)',
+  test: 'I am the Keymaster. Every door has its key. Which one shall we look at, Horace?',
+  newChat: 'Start a new conversation? The Keymaster will forget this chat (your profile, strategy and watchlist stay).',
+  voicePrefs: [/Ryan.*Natural/i, /Thomas.*Natural/i, /Google UK English Male/i, /Christopher.*Natural/i, /Microsoft (George|David|Mark)/i, /\bmale/i],
+  pitch: 0.9, rateFactor: 0.92, kokoroDefault: 'kk:bm_lewis',
+} : AGENT === 'morpheus' ? {
   name: 'Morpheus', short: 'Morpheus', settingsKey: 'morpheus.settings', ws: '/ws?agent=morpheus', pronoun: 'he',
   automatic: 'Automatic (free browser voice, a deep, calm man\'s voice)',
   test: 'I can only show you the door, Horace. You are the one who has to walk through it. Talk to me.',
@@ -34,6 +41,7 @@ const P = AGENT === 'morpheus' ? {
 if (AGENT === 'architect') setWakeWord(ARCHITECT_WAKE);
 if (AGENT === 'trinity') setWakeWord(TRINITY_WAKE);
 if (AGENT === 'morpheus') setWakeWord(MORPHEUS_WAKE);
+if (AGENT === 'keymaster') setWakeWord(KEYMASTER_WAKE);
 // The other agent, so this page can say when they're working or have something for Horace.
 const PEERS = { oracle: { name: 'The Oracle', href: '/', her: 'her' }, architect: { name: 'The Architect', href: 'architect.html', her: 'him' } };
 

@@ -226,7 +226,7 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       console.log(`  Routine ${r.key} for ${day}`);
       try { await r.run(); } catch (e) { console.log(`  Routine ${r.key} failed: ${e.message}`); }
     }
-    if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy) return;
+    if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy || agents.keymaster?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
       if (r.run) continue;

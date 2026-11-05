@@ -17,6 +17,7 @@ import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
 import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
+import { KEYMASTER } from './keymaster.js';
 import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 
 const PUBLIC = path.join(ROOT, 'public');
@@ -106,6 +107,7 @@ const channels = {
   architect: { key: 'architect', clients: new Set(), screens: screens.load('architect') },
   trinity: { key: 'trinity', clients: new Set(), screens: [] },
   morpheus: { key: 'morpheus', clients: new Set(), screens: [] },
+  keymaster: { key: 'keymaster', clients: new Set(), screens: [] },
 };
 function broadcastTo(ch, event) {
   if (event.type === 'screen') {
@@ -189,6 +191,9 @@ channels.trinity.agent = trinity;
 // Morpheus (2026-10-29): Horace's guru and journal; his own page, no peer banners.
 const morpheus = new WatsonAgent((event) => broadcastTo(channels.morpheus, event), MORPHEUS);
 channels.morpheus.agent = morpheus;
+// The Keymaster (2026-11-04): market research; his own page, no peer banners.
+const keymaster = new WatsonAgent((event) => broadcastTo(channels.keymaster, event), KEYMASTER);
+channels.keymaster.agent = keymaster;
 channels.oracle.agent = agent;
 channels.architect.agent = architect;
 // Approvals are shared: whichever screen is open can answer them.
@@ -325,7 +330,7 @@ wss.on('connection', (ws, req) => {
         reminders: reminders.all().filter((r) => !r.fired),
         ...(ch.key === 'architect' ? { construct: construct.summary() } : { usage }),
         lastSay: lastSayOf(ch.key),
-        ...(ch.key === 'trinity' || ch.key === 'morpheus' ? {} : { peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) } }),
+        ...(ch.key === 'trinity' || ch.key === 'morpheus' || ch.key === 'keymaster' ? {} : { peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) } }),
       }));
       return;
     }
@@ -378,7 +383,7 @@ startReminderLoop((r) => {
 const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
 // Daytime routines get their own fresh session too, so their email reading stays out of the Oracle's conversation.
 const routineAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Routine:', event.message); }, ROUTINE);
-startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus });
+startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster });
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
@@ -396,6 +401,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     architect.shutdown();
     trinity.shutdown();
     morpheus.shutdown();
+    keymaster.shutdown();
     nightAgent.shutdown();
     routineAgent.shutdown();
     server.close();

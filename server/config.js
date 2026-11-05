@@ -62,6 +62,8 @@ export const config = {
   trust: env('WATSON_TRUST', 'on') !== 'off',
   // The Architect's workshop: drafts, listings and research notes for the Construct (Windows side, so Horace can open them).
   workshopDir: env('ARCHITECT_WORKSHOP', '/mnt/c/Users/Owner/Documents/construct'),
+  // Financial Modeling Prep for the Keymaster (2026-11-04): FMP_API_KEY in .env, or in keyFile (`FMP_API_KEY=...`).
+  fmp: { keyFile: env('FMP_KEY_FILE', path.join(os.homedir(), '.config', 'wolf-hall-secrets', 'fmp.env')) },
   // ElevenLabs voice. The key is read from ELEVENLABS_API_KEY or from keyFile
   // (shared with the Wolf Hall sound-effects work), so it isn't copied into .env.
   tts: {
