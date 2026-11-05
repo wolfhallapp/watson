@@ -8,6 +8,7 @@ import { ROOT, config } from './config.js';
 import { classify, describe, prettyTool, requestApproval, denyAllPending, trustAllows } from './approvals.js';
 import { createWatsonTools, formatLocal, userTimeZone } from './tools.js';
 import { history, makeHistory, memory, state } from './store.js';
+import { takeSandboxNote } from './sandbox.js';
 import { changesSince, knowledgeForPrompt, knowledgeSignature, memoriesForPrompt, projectSnapshot } from './knowledge.js';
 import { morpheusForOracle } from './morpheus.js';
 import { describeConnection } from './starlink.js';
@@ -81,6 +82,9 @@ When you learn something lasting:
 
 ## The household budget
 For quick money questions (what's in the pool, what bills are due, how the savings goals look), use the wolf_hall tool. It only reads. GET /forecast and the current week of /week-budget write to Notion, so they stop for Horace's yes; check the memory notes for hazards first and tell him the risk in one sentence. Never pay, log or change budget data except through the app's own features with his explicit yes. Use the wolf_hall tool for live reads rather than curl or scripts.
+
+## The Budget Construct (2026-11-05)
+A what-if sandbox of the household budget on its own page (budget.html, "Budget" at the top of yours). It reads the live plan from GET /spend-today and lets Horace tweak anything (Pool, paychecks, weekly categories, bills, goals, extra items) with live charts, solvers and quick insights. It never changes real data. His tweaks are saved in /mnt/c/Users/Owner/Documents/watson/data/budget-sandbox.json, and what he changed since your last turn arrives as a "Budget Construct note" with his next message, so when he says "look at what I changed" you already know. Questions he types on that page come to you too; answer briefly. Making a what-if real is a normal Wolf Hall change: say what it will do and wait for his yes.
 
 ## Casino Bonus Run
 Horace collects free daily casino bonuses with the Bonus Run on the Wolf Hall Gambling screen. Use the casino tool when he says he collected a site ("got Chumba"), that a site passed 10 SC ("Stake's over ten"), or gives play-run winnings ("did my run: Chumba won 7, Pulsz 12"). Free SC builds up on each site; once about 10 sites are at 10+, he does 10 spins at 1 SC each and logs what he won. Every morning at 7:30 you check his casino emails yourself (a routine message) and add only truly free bonuses. Never encourage buying coins or chasing losses; if he asks how he's doing, give the real numbers.
@@ -163,6 +167,7 @@ export const ORACLE = {
   history,
   sessionKey: 'sessionId',
   knowledgeNotes: true,
+  pendingNote: takeSandboxNote, // what Horace changed on the Budget Construct page since her last turn
 };
 
 /** Why a tool call isn't allowed while nobody is watching (routines), or null when it's fine. */
@@ -183,10 +188,10 @@ export function unattendedBlock(toolName, input = {}) {
 }
 
 // The Night Shift (2026-10-28): the Oracle's rules and tools in a separate session that starts fresh each night.
-export const NIGHT = { ...ORACLE, key: 'night', label: 'The Night Shift', sessionKey: 'nightSessionId', history: makeHistory('night-history.jsonl'), knowledgeNotes: false };
+export const NIGHT = { ...ORACLE, key: 'night', label: 'The Night Shift', sessionKey: 'nightSessionId', history: makeHistory('night-history.jsonl'), knowledgeNotes: false, pendingNote: null };
 // Daytime routines (morning briefing, casino emails): the Oracle's rules and tools, in a session that starts
 // fresh each run, so their Gmail reading never piles up in the Oracle's own conversation (2026-10-30).
-export const ROUTINE = { ...ORACLE, key: 'routine', label: 'The Oracle (routine)', sessionKey: 'routineSessionId', history: makeHistory('routine-history.jsonl'), knowledgeNotes: false };
+export const ROUTINE = { ...ORACLE, key: 'routine', label: 'The Oracle (routine)', sessionKey: 'routineSessionId', history: makeHistory('routine-history.jsonl'), knowledgeNotes: false, pendingNote: null };
 
 const tokensKey = (persona) => `${persona.sessionKey}Tokens`;
 /** How big a conversation is: everything the model read for its latest reply. */

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Budget Construct</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script src="rain.js" defer></script>
+<script type="module" src="budget.js"></script>
+<link rel="stylesheet" href="budget.css">
+</head>
+<body>
+<canvas id="rain" aria-hidden="true"></canvas>
+<div class="ticker" aria-label="Ticker"><div class="run" id="ticker">Loading the Construct…</div></div>
+<div class="wrap">
+  <header class="top">
+    <div><h1>BUDGET CONSTRUCT</h1><div class="sub">A what-if copy of your plan. Tweak anything; nothing real moves. <span id="sync" class="sync">connecting…</span></div></div>
+    <nav><a href="/">Oracle</a><a href="hub.html">Hub</a><button id="refresh" title="Pull fresh numbers from Wolf Hall">⟳ Live data</button><button id="reset" class="warn" title="Throw away every tweak">Reset to live</button></nav>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Key numbers"></section>
+
+  <section class="panel">
+    <h2><span>POOL PROJECTION</span><span class="ctl">
+      <label>Run to <select id="horizon"></select></label>
+      <span class="legend"><i class="lg-s"></i>What-if <i class="lg-b"></i>Live plan <i class="lg-c"></i>Cushion</span>
+    </span></h2>
+    <div class="chart" id="pchart"><div class="tip" id="ptip" hidden></div></div>
+    <p class="note">Counts every bill, goal and paycheck, plus your weekly budget being spent evenly. Tap a day to see what lands on it.</p>
+  </section>
+
+  <div class="grid3">
+    <section class="panel"><h2><span>MONTH BY MONTH</span><span class="legend"><i class="lg-in"></i>In <i class="lg-out"></i>Out</span></h2><div class="chart sm" id="mchart"><div class="tip" id="mtip" hidden></div></div><div id="mtable" class="mini"></div></section>
+    <section class="panel"><h2><span>WHERE IT GOES</span><span id="gwin" class="dim"></span></h2><div id="groups" class="bars"></div></section>
+    <section class="panel"><h2><span>THIS WEEK</span><span id="wkend" class="dim"></span></h2><div id="week" class="bars"></div></section>
+  </div>
+
+  <div class="grid2">
+    <section class="panel">
+      <h2><span>CONTROLS</span><span class="tabs" role="tablist">
+        <button data-tab="levers" class="on">Levers</button><button data-tab="weekly">Weekly</button><button data-tab="bills">Bills</button><button data-tab="goals">Goals</button><button data-tab="extras">What-ifs</button><button data-tab="timeline">Timeline</button>
+      </span></h2>
+      <div class="tab" id="tab-levers"></div>
+      <div class="tab" id="tab-weekly" hidden></div>
+      <div class="tab" id="tab-bills" hidden></div>
+      <div class="tab" id="tab-goals" hidden></div>
+      <div class="tab" id="tab-extras" hidden></div>
+      <div class="tab" id="tab-timeline" hidden></div>
+    </section>
+
+    <section class="panel ai">
+      <h2><span>THE ORACLE'S READ</span><span class="dim">instant · free</span></h2>
+      <ul id="insights" class="insights"></ul>
+      <h3>SOLVERS</h3>
+      <div class="solvers">
+        <button id="s-weekly">Most I can add per week</button>
+        <div class="srow"><span>Biggest safe goal:</span><select id="s-goal"></select><button id="s-goal-go">Solve</button></div>
+        <div class="srow"><span>When can I afford $</span><input id="s-amt" type="number" min="1" step="1" placeholder="300"><button id="s-amt-go">Find date</button></div>
+        <div class="srow"><span>Biggest buy on</span><input id="s-date" type="date"><button id="s-date-go">Solve</button></div>
+        <div id="s-out" class="sout" aria-live="polite"></div>
+      </div>
+      <h3>ASK THE ORACLE <span class="dim">uses Claude usage</span></h3>
+      <form id="ask" class="ask" autocomplete="off"><button type="button" id="mic" class="mic" title="Talk">🎙</button><input id="q" placeholder="What if Taylor gets a raise to $1,300?"><button>Ask</button></form>
+      <div id="answers" class="answers"></div>
+      <h3>SNAPSHOTS</h3>
+      <div class="srow"><input id="snapname" placeholder="Name this scenario"><button id="snapsave">Save</button></div>
+      <div id="snaps" class="snaps"></div>
+    </section>
+  </div>
+  <p class="foot">Live numbers come from Wolf Hall's read-only Spend Today. Debt Consolidation is locked: it never moves, not even in a what-if. Your tweaks save as you go, and the Oracle sees them with your next message.</p>
+</div>
+<div class="login" id="login" hidden><form id="lf"><b class="lt">Jack in</b><p class="lp">Paste your access token (the <code>WATSON_TOKEN</code> in the Oracle's <code>.env</code>), or open the Oracle on this device once and come back.</p><input id="tok" type="password" placeholder="Access token"><button>Connect</button></form></div>
+</body>
+</html>

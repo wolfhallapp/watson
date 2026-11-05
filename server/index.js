@@ -19,6 +19,7 @@ import { TRINITY } from './trinity.js';
 import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
 import { KEYMASTER } from './keymaster.js';
 import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
+import * as sandbox from './sandbox.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -86,8 +87,42 @@ async function handleHub(req, res, url) {
   json(res, 404, { error: 'not found' });
 }
 
+// The Budget Construct (2026-11-05): a what-if sandbox. GET /sandbox/live (read-only /spend-today),
+// GET/POST /sandbox/scenario, POST /sandbox/snapshot, POST /sandbox/ask (a question for the Oracle),
+// GET /sandbox/replies?since=ISO (her answers since then). Same token as speech. Never writes to Notion.
+async function readJson(req, limit = 200000) {
+  let body = '';
+  for await (const chunk of req) { body += chunk; if (body.length > limit) throw Object.assign(new Error('too long'), { status: 413 }); }
+  try { return JSON.parse(body || '{}'); } catch { throw Object.assign(new Error('bad json'), { status: 400 }); }
+}
+async function handleSandbox(req, res, url) {
+  const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const ip = clientIp(req);
+  if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'sandbox request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
+  const p = url.pathname;
+  if (req.method === 'GET' && p === '/sandbox/live') { json(res, 200, await sandbox.liveData({ fresh: url.searchParams.get('fresh') === '1' })); return; }
+  if (req.method === 'GET' && p === '/sandbox/scenario') { const s = sandbox.load(); json(res, 200, { tweaks: s.tweaks, updated: s.updated, snapshots: s.snapshots }); return; }
+  if (req.method === 'POST' && p === '/sandbox/scenario') { json(res, 200, sandbox.saveScenario(await readJson(req))); return; }
+  if (req.method === 'POST' && p === '/sandbox/snapshot') { const b = await readJson(req, 4000); json(res, 200, { snapshots: sandbox.snapshot(b.action, b.name) }); return; }
+  if (req.method === 'POST' && p === '/sandbox/ask') {
+    const b = await readJson(req, 8000);
+    const q = String(b.question || '').trim().slice(0, 2000);
+    if (!q) { json(res, 400, { error: 'no question' }); return; }
+    if (b.summary || b.tweaks) sandbox.saveScenario({ tweaks: b.tweaks || sandbox.load().tweaks, summary: b.summary });
+    agent.ask(`[Asked from the Budget Construct page; answer briefly, his screen shows the sandbox. Read ${sandbox.FILE} for the full scenario if you need it.] ${q}`, 'sandbox');
+    json(res, 200, { ok: true, at: new Date().toISOString() }); return;
+  }
+  if (req.method === 'GET' && p === '/sandbox/replies') {
+    const since = url.searchParams.get('since') || '';
+    const msgs = agent.history.recent(30).filter((m) => m.role === 'watson' && String(m.at) > since).map((m) => ({ at: m.at, text: m.text }));
+    json(res, 200, { replies: msgs, busy: !!agent.busy }); return;
+  }
+  json(res, 404, { error: 'not found' });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname.startsWith('/sandbox/')) { handleSandbox(req, res, url).catch((e) => json(res, e.status || 500, { error: e.message })); return; }
   if (url.pathname.startsWith('/hub/')) { handleHub(req, res, url).catch((e) => json(res, 500, { error: e.message })); return; }
   if (url.pathname === '/tts' || url.pathname.startsWith('/tts/')) { handleTts(req, res, url).catch(() => res.destroy()); return; }
   let rel = decodeURIComponent(url.pathname);
