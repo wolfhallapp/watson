@@ -380,9 +380,11 @@ startReminderLoop((r) => {
 });
 
 // The Night Shift's own session (fresh each night); its activity is kept in data/night-history.jsonl.
-const nightAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
+// 11/5: their usage reports must reach noteUsage, or the Night Shift's budget guard reads a stale meter and never
+// stops (on 11/4-5 it restarted every 3 minutes all night, week 25% -> 38%).
+const nightAgent = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
 // Daytime routines get their own fresh session too, so their email reading stays out of the Oracle's conversation.
-const routineAgent = new WatsonAgent((event) => { if (event.type === 'error') console.warn('  Routine:', event.message); }, ROUTINE);
+const routineAgent = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'error') console.warn('  Routine:', event.message); }, ROUTINE);
 startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster });
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
