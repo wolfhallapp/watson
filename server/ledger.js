@@ -11,10 +11,13 @@ export const LEDGER_DIR = path.join(DATA_DIR, 'ledger');
 const TZ = 'America/Chicago';
 
 const LABELS = { Groceries: 'Groceries', Cigs: 'Cigs', C4: "Taylor's gas station buys", GasTaylor: 'Gas (Taylor)', GasHorace: 'Gas (Horace)',
-  Tithing: 'Tithing', FunMoney: 'Fun Money (eating out)', Pet: 'Pet', Kids: 'Kids', Other: 'Other', Gambling: 'Gambling' };
+  Tithing: 'Tithing', FastFood: 'Fast Food', FunMoney: 'Fun Money', Pet: 'Pet', Kids: 'Kids', Other: 'Other', Gambling: 'Gambling' };
 // Hand-logged expenses are named after their category, not a store ("Cigs — Horace — 2026-10-25").
 const HAND_LOGGED = new Set(['other', 'cigs', 'tithing', 'groceries', 'fun money', 'c4', 'gas', 'pet', 'kids', 'gambling', 'receipt']);
-// Restaurant-looking names logged outside Fun Money, so the report can say eating out may be undercounted.
+// Restaurant-looking names logged outside the eating-out buckets, so the report can say eating out may be undercounted.
+// Wolf Hall v227 (per Horace 11/5) split Fast Food out of Fun Money; before that week, Fun Money was where
+// restaurant receipts went, so it still counts as eating out for receipts dated before FAST_FOOD_SPLIT.
+export const FAST_FOOD_SPLIT = '2026-11-06';
 const FOOD_OUT = /\b(taco|tacos|pizza|grill|dq|dairy queen|mcdonald|sonic|whataburger|burger|chick-fil-a|wendy|subway|starbucks|domino|popeyes|kfc|crawfish|seafood|bbq|barbecue|restaurant|cafe|diner|wings|kolache|donut|chili'?s|applebee|ihop|denny)\b/i;
 
 const round = (n) => Math.round(n * 100) / 100;
@@ -34,15 +37,15 @@ export function topMerchants(receipts, n = 5) {
   return [...by.values()].sort((a, b) => b.total - a.total || a.merchant.localeCompare(b.merchant)).slice(0, n);
 }
 
-/** Eating out = the Fun Money bucket (where restaurant receipts go), plus restaurant-looking receipts logged elsewhere. */
+/** Eating out = the Fast Food bucket (Fun Money too, before FAST_FOOD_SPLIT), plus restaurant-looking receipts logged elsewhere. */
 export function eatingOut(receipts) {
-  let funMoney = 0; const elsewhere = [];
+  let food = 0; const elsewhere = [];
   for (const r of receipts || []) {
-    const fm = Number(r.buckets?.FunMoney) || 0;
-    funMoney += fm;
+    const fm = (Number(r.buckets?.FastFood) || 0) + (String(r.date || '') < FAST_FOOD_SPLIT ? Number(r.buckets?.FunMoney) || 0 : 0);
+    food += fm;
     if (!fm && FOOD_OUT.test(merchantOf(r.name))) elsewhere.push({ merchant: merchantOf(r.name), total: round(Number(r.total) || 0), date: r.date });
   }
-  return { funMoney: round(funMoney), elsewhere };
+  return { food: round(food), elsewhere };
 }
 
 /** One /week-budget response boiled down. A week with no receipts at all is "not tracked", not a $0 week. */
@@ -66,8 +69,8 @@ export function buildLedger(weeks) {
   const [last, ...prior] = weeks.map(summarizeWeek);
   const eo = eatingOut(last.receipts);
   const priorTracked = prior.filter((w) => w.tracked);
-  const priorEating = priorTracked.map((w) => ({ label: w.label, funMoney: eatingOut(w.receipts).funMoney }));
-  const avg = priorEating.length ? round(priorEating.reduce((s, w) => s + w.funMoney, 0) / priorEating.length) : null;
+  const priorEating = priorTracked.map((w) => ({ label: w.label, food: eatingOut(w.receipts).food }));
+  const avg = priorEating.length ? round(priorEating.reduce((s, w) => s + w.food, 0) / priorEating.length) : null;
   return {
     week: { label: last.label, weekStart: last.weekStart, weekEnd: last.weekEnd, tracked: last.tracked, receiptCount: last.receiptCount },
     totalSpent: last.totalSpent, totalCap: last.totalCap,
@@ -75,7 +78,7 @@ export function buildLedger(weeks) {
     overTarget: last.categories.filter((c) => c.over > 0).sort((a, b) => b.over - a.over),
     topMerchants: topMerchants(last.receipts),
     eatingOut: { ...eo, priorWeeks: priorEating, untrackedPriorWeeks: prior.length - priorTracked.length, priorAverage: avg,
-      vsAverage: avg == null ? null : round(eo.funMoney - avg) },
+      vsAverage: avg == null ? null : round(eo.food - avg) },
   };
 }
 
@@ -89,10 +92,10 @@ export function formatLedger(l) {
   out.push('Top merchants:');
   l.topMerchants.forEach((m, i) => out.push(`${i + 1}. ${m.merchant}: ${money(m.total)} (${m.visits} ${m.visits === 1 ? 'receipt' : 'receipts'})${m.handLogged ? ', logged by hand, no store name' : ''}`));
   const e = l.eatingOut;
-  out.push(`Eating out (Fun Money): ${money(e.funMoney)}.`);
+  out.push(`Eating out (Fast Food${l.week.weekStart < FAST_FOOD_SPLIT ? ' and Fun Money' : ''}): ${money(e.food)}.`);
   if (e.priorAverage == null) out.push(`No earlier week in the last ${e.untrackedPriorWeeks} had receipts logged, so there is no trend yet.`);
   else out.push(`Average of the ${e.priorWeeks.length} earlier tracked week(s): ${money(e.priorAverage)} (${e.vsAverage > 0 ? `${money(e.vsAverage)} more` : `${money(-e.vsAverage)} less`} this week)${e.untrackedPriorWeeks ? `; ${e.untrackedPriorWeeks} of the 4 earlier weeks had no receipts logged and are left out` : ''}.`);
-  if (e.elsewhere.length) out.push(`Restaurant-looking receipts logged outside Fun Money (may be eating out): ${e.elsewhere.map((x) => `${x.merchant} ${money(x.total)} on ${x.date}`).join('; ')}.`);
+  if (e.elsewhere.length) out.push(`Restaurant-looking receipts logged outside the eating-out buckets (may be eating out): ${e.elsewhere.map((x) => `${x.merchant} ${money(x.total)} on ${x.date}`).join('; ')}.`);
   return out.join('\n');
 }
 

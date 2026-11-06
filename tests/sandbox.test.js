@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { simulate, solve, insights, fridayOnOrBefore } from '../public/budget-engine.js';
-import { describeChanges, saveScenario, takeSandboxNote, snapshot, load, liveData } from '../server/sandbox.js';
+import { describeChanges, saveScenario, takeSandboxNote, snapshot, load, liveData, PHASES } from '../server/sandbox.js';
+import { LABELS } from '../public/budget-engine.js';
 
 // A small made-up plan (Thursday 2026-11-05 through Friday 11-20).
 const live = {
@@ -122,4 +123,12 @@ test('live data is read from GET /spend-today only', async () => {
   const d = await liveData({ fresh: true, get: async (p) => { asked.push(p); return { status: 200, body: JSON.stringify({ ok: true, today: '2026-11-05', events: [] }) }; } });
   assert.deepEqual(asked, ['/spend-today']);
   assert.ok(d.phases.length >= 1);
+});
+
+test('the phases copy matches the worker v227: Fast Food $25, Fun Money $6, Phase 1 $336', () => {
+  const p1 = PHASES[0].targets;
+  assert.equal(p1.FastFood, 25);
+  assert.equal(p1.FunMoney, 6);
+  assert.equal(Object.values(p1).reduce((t, v) => t + v, 0), 336);
+  assert.equal(LABELS.FastFood, 'Fast Food');
 });

@@ -40,8 +40,19 @@ test('merchants are grouped by store and ranked by money spent', () => {
 
 test('eating out is the Fun Money bucket, and restaurant receipts logged elsewhere are flagged', () => {
   const e = eatingOut(lastWeek.receipts);
-  assert.equal(e.funMoney, 144.37);
+  assert.equal(e.food, 144.37);
   assert.deepEqual(e.elsewhere.map((x) => x.merchant), ['Tacos']);
+});
+
+test('from the 11/6 week (Wolf Hall v227) eating out is the Fast Food bucket, and Fun Money is non-food fun', () => {
+  const e = eatingOut([
+    { name: 'Sonic — Horace — 2026-11-06', total: 24.93, date: '2026-11-06', buckets: B({ FastFood: 24.93 }) },
+    { name: 'Movies — Horace — 2026-11-07', total: 6, date: '2026-11-07', buckets: B({ FunMoney: 6 }) },
+    { name: 'DQ Grill & Chill — Horace — 2026-11-08', total: 9.5, date: '2026-11-08', buckets: B({ FunMoney: 9.5 }) },
+    { name: 'DQ Grill & Chill — Horace — 2026-11-05', total: 7, date: '2026-11-05', buckets: B({ FunMoney: 7 }) },
+  ]);
+  assert.equal(e.food, 31.93); // Sonic as Fast Food, plus the pre-split DQ in Fun Money
+  assert.deepEqual(e.elsewhere.map((x) => x.merchant), ['DQ Grill & Chill']); // the post-split DQ filed as Fun Money
 });
 
 test('untracked weeks are left out of the trend instead of counting as $0', () => {
@@ -52,7 +63,8 @@ test('untracked weeks are left out of the trend instead of counting as $0', () =
   assert.deepEqual(l.overTarget.map((c) => [c.key, c.over]), [['FunMoney', 94.37], ['Groceries', 75.9], ['Tithing', 2.5]]);
   const t = formatLedger(l);
   assert.match(t, /\$622\.68 spent against \$355\.00/);
-  assert.match(t, /Fun Money \(eating out\): \$144\.37 of \$50\.00 \(\$94\.37 over\)/);
+  assert.match(t, /Fun Money: \$144\.37 of \$50\.00 \(\$94\.37 over\)/);
+  assert.match(t, /Eating out \(Fast Food and Fun Money\): \$144\.37\./); // a pre-split week counts Fun Money
   assert.match(t, /Cigs: \$53\.87 of \$55\.00 \(\$1\.13 under\)/);
   assert.match(t, /2 of the 4 earlier weeks had no receipts/);
   assert.match(t, /Tacos \$20\.00/);
