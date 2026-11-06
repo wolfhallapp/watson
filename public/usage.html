@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Usage</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script src="rain.js" defer></script>
+<script type="module" src="usage.js"></script>
+<link rel="stylesheet" href="budget.css">
+<link rel="stylesheet" href="usage.css">
+</head>
+<body>
+<canvas id="rain" aria-hidden="true"></canvas>
+<div class="wrap">
+  <header class="top">
+    <div><h1>USAGE</h1><div class="sub">What uses your Claude allowance, by day and by job. Read-only. <span id="sync" class="sync">connecting…</span></div></div>
+    <nav><a href="/">Oracle</a><a href="budget.html">Budget</a><button id="refresh" title="Read the usage log again">⟳ Refresh</button></nav>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Where the meters stand"></section>
+
+  <section class="panel">
+    <h2><span>DAY BY DAY</span><span class="ctl">
+      <span class="tabs" role="tablist"><button data-m="usd" class="on">Dollars</button><button data-m="week">Week %</button><button data-m="session">5-hour %</button></span>
+      <label>Last <select id="days"><option>7</option><option selected>14</option><option>30</option></select> days</label>
+    </span></h2>
+    <div class="chart" id="dchart"><div class="tip" id="dtip" hidden></div></div>
+    <div class="ulegend" id="legend"></div>
+    <p class="note">Dollars are Claude's own estimate of each job's work. Percent points are account-wide readings, so two jobs running at the same time can both count the same points.</p>
+  </section>
+
+  <div class="grid2">
+    <section class="panel"><h2><span>THIS WEEK BY JOB</span><span id="wkdim" class="dim"></span></h2><div id="kinds" class="bars"></div><p class="mini" id="quick"></p></section>
+    <section class="panel"><h2><span>BIGGEST JOBS THIS WEEK</span></h2><table class="t" id="biggest"></table></section>
+  </div>
+</div>
+<div class="login" id="login" hidden><form id="lf"><b class="lt">Jack in</b><p class="lp">Paste your access token (the <code>WATSON_TOKEN</code> in the Oracle's <code>.env</code>), or open the Oracle on this device once and come back.</p><input id="tok" type="password" placeholder="Access token"><button>Connect</button></form></div>
+</body>
+</html>

@@ -1,0 +1,14 @@
+/* The Usage page (Night Shift 2026-11-06). Built on budget.css; only what's new lives here. */
+.kpis{grid-template-columns:repeat(4,1fr)}
+@media (max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi.warn .v{color:var(--amber);text-shadow:none}.kpi.bad .v{color:var(--red);text-shadow:none}
+.ulegend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--mut);margin-top:6px}
+.ulegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.c0{background:#00ff41}.c1{background:#8cffaa}.c2{background:#1f9c4a}.c3{background:#ffb020}.c4{background:#5fd3ff}
+.c5{background:#c792ff}.c6{background:#ff7aa8}.c7{background:#e8f06b}.c8{background:#9fb8a8}.c9{background:#4d8f63}
+.bars .b .n small{color:var(--mut);margin-left:6px}
+table.t td{vertical-align:top}table.t td:first-child{white-space:nowrap}
+table.t td.ask{color:var(--mut);max-width:0;width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.t td.r,table.t th.r{text-align:right}
+#dchart rect.bar{transition:opacity .15s}#dchart rect.bar:hover{opacity:.75}
+@media (max-width:560px){table.t td.ask{display:none}.chart{height:240px}}

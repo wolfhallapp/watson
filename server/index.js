@@ -20,6 +20,7 @@ import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
 import { KEYMASTER } from './keymaster.js';
 import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 import * as sandbox from './sandbox.js';
+import { readUsageReport } from './usage.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -87,6 +88,16 @@ async function handleHub(req, res, url) {
   json(res, 404, { error: 'not found' });
 }
 
+// The Usage page (Night Shift 2026-11-06): GET /usage/report?days=N sums data/usage-log.jsonl. Same token as speech.
+function handleUsage(req, res, url) {
+  const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const ip = clientIp(req);
+  if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'usage request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
+  if (req.method !== 'GET') { json(res, 404, { error: 'not found' }); return; }
+  const days = Math.min(60, Math.max(1, parseInt(url.searchParams.get('days'), 10) || 14));
+  json(res, 200, readUsageReport({ days }));
+}
+
 // The Budget Construct (2026-11-05): a what-if sandbox. GET /sandbox/live (read-only /spend-today),
 // GET/POST /sandbox/scenario, POST /sandbox/snapshot, POST /sandbox/ask (a question for the Oracle),
 // GET /sandbox/replies?since=ISO (her answers since then). Same token as speech. Never writes to Notion.
@@ -123,6 +134,7 @@ async function handleSandbox(req, res, url) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname.startsWith('/sandbox/')) { handleSandbox(req, res, url).catch((e) => json(res, e.status || 500, { error: e.message })); return; }
+  if (url.pathname === '/usage/report') { handleUsage(req, res, url); return; }
   if (url.pathname.startsWith('/hub/')) { handleHub(req, res, url).catch((e) => json(res, 500, { error: e.message })); return; }
   if (url.pathname === '/tts' || url.pathname.startsWith('/tts/')) { handleTts(req, res, url).catch(() => res.destroy()); return; }
   let rel = decodeURIComponent(url.pathname);
