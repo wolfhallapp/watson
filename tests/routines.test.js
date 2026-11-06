@@ -30,6 +30,19 @@ test('the casino email check always passes emailId and saves the email\'s claim 
   assert.match(scan.prompt, /never a purchase, deposit or unsubscribe link/);
 });
 
+test('the casino email scrub relays only free SC or free spins (11/5)', () => {
+  assert.match(scan.prompt, /FULL body/);
+  assert.match(scan.prompt, /ONLY the ones that are actually free SC or free spins/);
+  assert.match(scan.prompt, /GC-only promos/);
+  assert.match(scan.prompt, /SENT in this window/);
+  assert.match(scan.prompt, /SKIP standing site features/);
+  assert.match(scan.prompt, /login streaks/);
+  assert.match(scan.prompt, /keep "up to" in what/);
+  for (const dropped of ['Splash Coins', 'Chanced', 'SlotsWise', 'Pulsz Bingo', 'Poly Casino']) assert.ok(scan.prompt.includes(dropped), dropped);
+  assert.match(scan.prompt, /not in Casino Sites/);
+  assert.match(scan.prompt, /the sites you skipped/);
+});
+
 test('the Night Shift picks its own task when the queue is empty (10/31)', () => {
   const night = ROUTINES.find((r) => r.key === 'nightShift');
   assert.doesNotMatch(night.guard.toString(), /readQueue/);
