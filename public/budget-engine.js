@@ -8,7 +8,7 @@
 //          off: { 'date|label': true }, extras: [{ id, label, date, amount, repeat: once|weekly|monthly }] }
 
 export const LOCKED = /^Debt Consolidation/i; // CLAUDE.md #20: never moved, delayed or changed, not even in a what-if
-export const LABELS = { Groceries: 'Groceries', Cigs: 'Cigs', C4: "Taylor's gas station buys", Tithing: 'Tithing', FunMoney: 'Fun Money', Gambling: 'Gambling', GasTaylor: "Taylor's gas", GasHorace: "Horace's gas" };
+export const LABELS = { Groceries: 'Groceries', Cigs: 'Cigs', C4: "Taylor's gas station buys", Tithing: 'Tithing', FunMoney: 'Fun Money', FastFood: 'Fast Food', Gambling: 'Gambling', GasTaylor: "Taylor's gas", GasHorace: "Horace's gas" };
 export const GROUPS = [
   ['Debt consolidation', (e) => LOCKED.test(e.label)],
   ['Credit cards', (e) => /card|min pmt|payoff|opensky|capital one|\bself\b/i.test(e.label)],

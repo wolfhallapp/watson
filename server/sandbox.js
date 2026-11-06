@@ -9,10 +9,10 @@ import { DATA_DIR } from './config.js';
 import { workerGet } from './knowledge.js';
 
 export const FILE = path.join(DATA_DIR, 'budget-sandbox.json');
-// A copy of the worker's SPEND_PHASES (cloudflare-worker.js, v219). The worker doesn't return them;
+// A copy of the worker's SPEND_PHASES (cloudflare-worker.js, v227: Fast Food $25 split out, Fun Money $6). The worker doesn't return them;
 // update this when the weekly targets change there.
 export const PHASES = [
-  { from: '0000-01-01', name: 'Phase 1', targets: { Groceries: 140, Cigs: 55, C4: 50, Tithing: 40, FunMoney: 16, Gambling: 20 } },
+  { from: '0000-01-01', name: 'Phase 1', targets: { Groceries: 140, Cigs: 55, C4: 50, Tithing: 40, FunMoney: 6, FastFood: 25, Gambling: 20 } },
   { from: '2026-12-04', name: 'Phase 2', targets: { Groceries: 150, Cigs: 55, C4: 60, Tithing: 40, FunMoney: 50, Gambling: 20 } },
 ];
 
