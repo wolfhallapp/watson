@@ -170,3 +170,12 @@ body.ps-no3d { background: radial-gradient(ellipse at 50% 30%, #3a0a14, #07030a 
   .ps-sched li { grid-template-columns: 1fr; }
   #ps-quality { display: none; }
 }
+
+/* Explore mode (2026-11-07): every panel hides so the whole floor is free to roam. */
+.ps-explore-bar { display: none; }
+body.ps-exploring .top, body.ps-exploring .layout, body.ps-exploring .ps-drawer { display: none !important; }
+body.ps-exploring .ps-explore-bar {
+  display: flex; gap: 14px; align-items: center; position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 50;
+  padding: 6px 8px 6px 14px; border-radius: 999px; background: rgba(10, 4, 6, 0.55); border: 1px solid rgba(216, 178, 90, 0.35);
+  color: #e9d6a8; font: 12px 'Share Tech Mono', monospace; backdrop-filter: blur(4px);
+}

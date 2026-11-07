@@ -131,6 +131,7 @@ document.addEventListener('click', (e) => {
   else if (b.id === 'ps-collected') { const s = site(openId); if (s) act('collected', { siteId: s.id }, `Marking ${s.name} collected…`); }
   else if (b.id === 'ps-prev' || b.id === 'ps-next') window.dispatchEvent(new CustomEvent('ps:step', { detail: { dir: b.id === 'ps-prev' ? -1 : 1 } }));
   else if (b.id === 'ps-overview') { closeDrawer(); window.dispatchEvent(new CustomEvent('ps:focus', { detail: { siteId: null } })); }
+  else if (b.id === 'ps-explore' || b.id === 'ps-explore-exit') { closeDrawer(); window.dispatchEvent(new CustomEvent('ps:explore', { detail: { on: b.id === 'ps-explore' } })); }
   else if (b.id === 'ps-quality') {
     const lvl = (localStorage.getItem('watson.persephone.quality') || 'high') === 'high' ? 'low' : 'high';
     window.dispatchEvent(new CustomEvent('ps:quality', { detail: { level: lvl } })); qualityLabel();

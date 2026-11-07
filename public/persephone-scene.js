@@ -639,14 +639,19 @@ function buildComposer() {
 // tables and chairs are solid. Clicking a table (or picking one in the ledger) glides you to stand at it; any
 // key or drag takes the controls back.
 const EYE = 1.72;
-const me = { x: 0, z: 12, yaw: 0, pitch: -0.04, vx: 0, vz: 0, bob: 0 };
+const me = { x: 0, y: EYE, z: 12, yaw: 0, pitch: -0.04, vx: 0, vz: 0, vy: 0, bob: 0 };
+// Explore mode (2026-11-07, per Horace): every panel hides, the mouse looks without dragging (pointer lock),
+// Space rises and C sinks so he can fly up and see the whole floor. Esc or the Exit button leaves.
+let exploring = false;
 let glide = null, focusId = null;
 const keys = new Set();
 const typing = (el) => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
-const WALK_KEYS = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, KeyQ: 1, KeyE: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, ShiftLeft: 1, ShiftRight: 1 };
+const WALK_KEYS = { Space: 1, KeyC: 1, KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, KeyQ: 1, KeyE: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, ShiftLeft: 1, ShiftRight: 1 };
 window.addEventListener('keydown', (e) => {
+  if (exploring && e.code === 'Escape' && !document.pointerLockElement) { setExplore(false); return; }
   if (!WALK_KEYS[e.code] || typing(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey) return;
-  if (e.code.startsWith('Arrow')) e.preventDefault();
+  if ((e.code === 'Space' || e.code === 'KeyC') && !exploring) return;
+  if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
   keys.add(e.code);
   if (!e.code.startsWith('Shift')) { glide = null; walked(); }
 });
@@ -682,8 +687,9 @@ function obstacles() {
   return out;
 }
 function collide(x, z) {
+  const flying = me.y > 3.4; // above the tables and chairs, only the columns and walls are in the way
   for (let pass = 0; pass < 2; pass++) {
-    for (const [ox, oz, r] of obstacles()) {
+    for (const [ox, oz, r] of flying ? columnSpots.map((c) => [c.x, c.z, 1.15]) : obstacles()) {
       const dx = x - ox, dz = z - oz, d = Math.hypot(dx, dz);
       if (d < r) { const k = d > 1e-4 ? r / d : 1; x = ox + dx * k; z = oz + (d > 1e-4 ? dz * k : r); }
     }
@@ -698,7 +704,11 @@ function stepPlayer(dt) {
   const r = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0);
   const turn = (keys.has('KeyE') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyQ') || keys.has('ArrowLeft') ? 1 : 0);
   me.yaw += turn * dt * 1.9;
-  const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 8.5 : 4.2;
+  const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 8.5 : 4.2) * (exploring && me.y > 3.4 ? 1.6 : 1);
+  // Rise and sink in Explore mode; outside it, settle back to eye height.
+  const up = exploring ? (keys.has('Space') ? 1 : 0) - (keys.has('KeyC') ? 1 : 0) : 0;
+  me.vy += (up * 4.5 - me.vy) * (1 - Math.pow(0.0008, dt));
+  me.y = exploring ? Math.max(EYE, Math.min(H - 1.2, me.y + me.vy * dt)) : me.y + (EYE - me.y) * (1 - Math.pow(0.02, dt));
   let wx = Math.sin(me.yaw) * f + Math.cos(me.yaw) * r, wz = -Math.cos(me.yaw) * f + Math.sin(me.yaw) * r;
   const len = Math.hypot(wx, wz); if (len > 1) { wx /= len; wz /= len; }
   // A little momentum: ease into a walk and out of it.
@@ -718,12 +728,19 @@ function stepPlayer(dt) {
 }
 
 let drag = null;
-canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, yaw: me.yaw, pitch: me.pitch, moved: false }; canvas.focus?.(); });
+canvas.addEventListener('pointerdown', (e) => {
+  if (exploring) { if (!document.pointerLockElement) canvas.requestPointerLock?.(); return; }
+  drag = { x: e.clientX, y: e.clientY, yaw: me.yaw, pitch: me.pitch, moved: false }; canvas.focus?.(); });
 window.addEventListener('pointerup', (e) => {
   if (drag && !drag.moved && e.target === canvas) pick(e);
   drag = null;
 });
 window.addEventListener('pointermove', (e) => {
+  if (exploring && document.pointerLockElement === canvas) {
+    me.yaw += e.movementX * 0.0024;
+    me.pitch = Math.max(-1.45, Math.min(1.2, me.pitch - e.movementY * 0.0022));
+    return;
+  }
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) + Math.abs(dy) > 4) { if (!drag.moved) { glide = null; walked(); } drag.moved = true; }
@@ -736,6 +753,15 @@ canvas.addEventListener('wheel', (e) => {
   const d = -e.deltaY * 0.012;
   [me.x, me.z] = collide(me.x + Math.sin(me.yaw) * d, me.z - Math.cos(me.yaw) * d);
 }, { passive: false });
+
+function setExplore(on) {
+  exploring = !!on;
+  document.body.classList.toggle('ps-exploring', exploring);
+  if (exploring) { glide = null; focusId = null; walked(); canvas.requestPointerLock?.(); }
+  else if (document.pointerLockElement) document.exitPointerLock();
+  window.dispatchEvent(new CustomEvent('ps:exploring', { detail: { on: exploring } }));
+}
+window.addEventListener('ps:explore', (e) => setExplore(e.detail?.on ?? !exploring));
 
 const ray = new THREE.Raycaster();
 function pick(e) {
@@ -806,7 +832,7 @@ function frame() {
   const moving = stepPlayer(Math.min(0.1, raw));
   const bob = reduced ? 0 : Math.sin(me.bob) * 0.035 * Math.min(1, moving / 4);
   const breath = reduced ? 0 : Math.sin(t * 0.8) * 0.008;
-  camera.position.set(me.x, EYE + bob + breath, me.z);
+  camera.position.set(me.x, me.y + bob + breath, me.z);
   camera.rotation.set(0, 0, 0); camera.rotation.order = 'YXZ';
   camera.rotation.y = -me.yaw; camera.rotation.x = me.pitch;
   sun.position.set(me.x + 5, 18, me.z + 4); sun.target.position.set(me.x + Math.sin(me.yaw) * 6, 0, me.z - Math.cos(me.yaw) * 6);

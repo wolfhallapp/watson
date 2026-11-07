@@ -17,6 +17,7 @@
 <body data-agent="persephone" class="persephone">
   <!-- Her chateau: a 3D salon drawn by persephone-scene.js (Three.js), one gaming table per site. -->
   <canvas id="ps-scene" aria-hidden="true"></canvas>
+  <div class="ps-explore-bar"><span>Mouse looks · W A S D walk · Shift runs · Space rises · C sinks · click to grab the mouse again</span><button id="ps-explore-exit" class="ghost">✕ Leave (Esc)</button></div>
   <div id="ps-veil" class="ps-veil" aria-hidden="true"><div class="ps-veil-mark">P</div><div class="ps-veil-text">The house is opening its doors…</div></div>
 
   <header class="top">
@@ -30,6 +31,7 @@
       <a class="navlink" href="trinity.html" title="Go to Trinity, your spiritual advisor">Trinity</a>
       <a class="navlink" href="morpheus.html" title="Go to Morpheus, your guide and journal">Morpheus</a>
       <a class="navlink" href="keymaster.html" title="Go to the Keymaster, your market research">Keymaster</a>
+      <button id="ps-explore" class="ghost" title="Hide every panel and roam the whole floor">⛶ Explore</button>
       <button id="ps-quality" class="ghost" title="Picture quality: lower it if the PC runs warm">✦ High</button>
       <span id="conn" class="pill pill-off">Connecting…</span>
       <button id="btn-new" class="ghost" title="Start a new conversation">New chat</button>
