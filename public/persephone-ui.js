@@ -24,6 +24,10 @@ function toast(msg, bad) {
 }
 let getTimer = null;
 const refreshSoon = () => { clearTimeout(getTimer); getTimer = setTimeout(get, 400); };
+// This module loads after the 3D scene, so the connection's 'welcome' can come and go before it listens
+// (2026-11-07: Horace's tables never arrived). Ask now if already connected, and keep asking until data comes.
+if (app()?.connected?.()) get();
+const firstData = setInterval(() => { if (data) clearInterval(firstData); else if (app()?.connected?.()) get(); }, 3000);
 
 window.addEventListener('agent:event', (e) => {
   const ev = e.detail;
