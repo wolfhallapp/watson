@@ -194,7 +194,8 @@ export async function screenAction(action, a = {}) {
   if (action === 'restore') { await post('/gambling/site', { siteId: site.id, status: 'Active' }); return `${site.name} is back on the list.`; }
   if (action === 'collected') { await post('/gambling/claim', { siteId: site.id, ...(a.sc != null && a.sc !== '' ? { sc: Number(a.sc) } : {}) }); return `${site.name} marked collected.`; }
   if (action === 'add') {
-    const r = await post('/gambling/sites/add', { sites: [{ name: String(a.name || '').trim(), url: String(a.url || '').trim(), ...(a.resetRule ? { resetRule: a.resetRule } : {}), ...(a.resetHour != null ? { resetHour: Number(a.resetHour) } : {}), ...(a.everyHours ? { everyHours: Number(a.everyHours) } : {}) }] });
+    const r = await post('/gambling/sites/add', { sites: [{ name: String(a.name || '').trim(), url: String(a.url || '').trim(), ...(a.resetRule ? { resetRule: a.resetRule } : {}), ...(a.resetHour != null ? { resetHour: Number(a.resetHour) } : {}), ...(a.everyHours ? { everyHours: Number(a.everyHours) } : {}) }], confirm: true });
+    if (r.dryRun) throw new Error('the app only did a trial run; nothing was added');
     return `${a.name} added${r.skipped?.length ? ` (skipped: ${JSON.stringify(r.skipped)})` : ''}.`;
   }
   throw new Error(`Unknown action ${action}`);
@@ -255,7 +256,7 @@ export function createPersephoneTools(send, currentSessionId) {
         act(async ({ site, ...fields }) => { const m = await screenAction('edit', { siteId: (findSite(await bonusRun(), site) || {}).id, fields }); changed(); return text(m); })),
       tool('add_site', 'Add a new site Horace collects on (name and https link; reset rule if known). Dropped sites (Pulsz Bingo, Poly Casino) are refused by the app.',
         { name: z.string().min(1).max(60), url: z.string().url(), resetRule: z.enum(['Daily', 'Rolling 24h', 'Every N Hours']).optional(), resetHour: z.number().int().min(0).max(23).optional(), everyHours: z.number().min(1).max(168).optional(), streak: z.boolean().optional(), notes: z.string().max(1900).optional() },
-        act(async (a) => { const r = await post('/gambling/sites/add', { sites: [a] }); changed(); return text(`Added. ${JSON.stringify(r).slice(0, 600)}`); })),
+        act(async (a) => { const r = await post('/gambling/sites/add', { sites: [a], confirm: true }); if (r.dryRun) return fail(`The app only did a trial run; nothing was added. ${JSON.stringify(r).slice(0, 600)}`); changed(); return text(`Added. ${JSON.stringify(r).slice(0, 600)}`); })),
       tool('remove_site', "Take a site off Horace's list: 'Paused' (may come back) or 'Closed' (done with it). Nothing is deleted; its history stays. Confirm with Horace first.",
         { site: siteArg, status: z.enum(['Paused', 'Closed']) },
         act(async ({ site, status }) => { const s = findSite(await bonusRun(), site); if (!s) return fail(`${site} is not in the list.`); const m = await screenAction('remove', { siteId: s.id, status }); changed(); return text(m); })),

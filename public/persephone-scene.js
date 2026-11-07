@@ -230,7 +230,7 @@ const hall = new THREE.Group(); scene.add(hall);
 const W = 26, H = 14, ROW_GAP = 8.5;
 let L = 60, mirror = null;
 const columnSpots = []; // where the columns stand, so you can't walk through them
-const lights = [];
+const lights = [], chandZ = []; // chandZ: where each chandelier hangs (see placeChandLights)
 
 function clearGroup(g) {
   for (const c of [...g.children]) {
@@ -253,7 +253,7 @@ function fold(geo, depth, waves) {
 function buildHall(rows) {
   clearGroup(hall);
   for (const l of lights) scene.remove(l);
-  lights.length = 0;
+  lights.length = 0; chandZ.length = 0;
   L = Math.max(46, rows * ROW_GAP + 26);
   const z0 = 8, zEnd = z0 - L;
 
@@ -367,9 +367,7 @@ function buildHall(rows) {
   for (let c = 0; c < nCh; c++) {
     const z = z0 - 6 - c * ((L - 10) / Math.max(1, nCh - 1));
     hall.add(chandelier(new THREE.Vector3(0, H - 3.4, z)));
-    const pl = new THREE.PointLight(0xffc98a, quality === 'high' ? 38 : 30, 26, 1.6);
-    pl.position.set(0, H - 4.0, z);
-    scene.add(pl); lights.push(pl);
+    chandZ.push(z);
   }
   // A cool green wash from the code windows, and a soft warm fill.
   const hemi = new THREE.HemisphereLight(0x5a2a1a, 0x050203, 0.5); scene.add(hemi); lights.push(hemi);
@@ -575,6 +573,19 @@ scene.add(sun, sun.target);
 // ── Table spotlights: a few real lights that move to the tables nearest you. A light per table would be 50+ lights,
 // more than a graphics card's shaders can hold (with 53 sites the tables failed to draw at all), so the count is fixed. ──
 const SPOT_N = 6, spots = [];
+// Chandelier lights work the same way (2026-11-07): a long hall used to get one light per chandelier (17 with 53
+// sites). On Horace's PC (Windows, Direct3D) every surface's shader is rebuilt around every light, so the tables took
+// minutes to appear on Gentle and never drew on High. Now a fixed few follow him to the nearest chandeliers.
+const CHAND_N = 3, chandLights = [];
+for (let i = 0; i < CHAND_N; i++) { const pl = new THREE.PointLight(0xffc98a, 0, 26, 1.6); scene.add(pl); chandLights.push(pl); }
+function placeChandLights() {
+  const near = chandZ.map((z) => [Math.abs(z - me.z), z]).sort((a, b) => a[0] - b[0]);
+  chandLights.forEach((pl, i) => {
+    const z = near[i]?.[1];
+    if (z === undefined) { pl.intensity = 0; return; }
+    pl.position.set(0, H - 4.0, z); pl.intensity = quality === 'high' ? 38 : 30;
+  });
+}
 function buildSpots() {
   for (const sp of spots) scene.remove(sp, sp.target);
   spots.length = 0;
@@ -585,6 +596,7 @@ function buildSpots() {
   }
 }
 function placeSpots() {
+  placeChandLights();
   if (!spots.length) return;
   const near = [...tables.values()].map((t) => [Math.hypot(t.pos.x - me.x, t.pos.z - me.z), t]).sort((a, b) => a[0] - b[0]);
   spots.forEach((sp, i) => {
@@ -807,7 +819,10 @@ function applyQuality() {
   buildComposer();
 }
 let lastRun = null;
-window.addEventListener('ps:data', (e) => { lastRun = e.detail.run; });
+window.addEventListener('ps:data', (e) => {
+  lastRun = e.detail.run;
+  try { localStorage.setItem('watson.persephone.lastRun', JSON.stringify(lastRun)); } catch {}
+});
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -859,6 +874,8 @@ function frame() {
 renderer.setPixelRatio(quality === 'high' ? Math.min(devicePixelRatio, 2) : 1);
 renderer.shadowMap.enabled = quality === 'high';
 buildHall(2); builtRows = 2;
+// Set the floor from the last visit's sites right away; the live data (which can take a while) replaces it.
+try { const cached = JSON.parse(localStorage.getItem('watson.persephone.lastRun') || 'null'); if (cached?.sites?.length && !lastRun) setData(cached); } catch (err) { report('cache', err.message); }
 buildComposer();
 requestAnimationFrame(frame);
 window.dispatchEvent(new CustomEvent('ps:scene-ready'));
