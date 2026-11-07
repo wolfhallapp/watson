@@ -21,6 +21,18 @@ import { Reflector } from './vendor/three/addons/objects/Reflector.js';
 import { RoundedBoxGeometry } from './vendor/three/addons/geometries/RoundedBoxGeometry.js';
 
 const canvas = document.getElementById('ps-scene');
+// Diagnostics (2026-11-07): errors and a short report on this PC's graphics go to the Oracle's log
+// (data/voice-log.jsonl, kind 'scene'), so a problem on Horace's screen can be seen without his browser console.
+const diag = [];
+function flushDiag() { if (!diag.length || !window.agentApp?.connected?.()) return; try { window.agentApp.send({ type: 'voicelog', events: diag.splice(0) }); } catch {} }
+function report(kind, detail) { diag.push({ t: new Date().toISOString(), kind: 'scene', what: kind, detail: String(detail).slice(0, 1500) }); flushDiag(); }
+setInterval(flushDiag, 5000);
+window.addEventListener('error', (e) => report('error', `${e.message} @ ${e.filename}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => report('rejection', e.reason?.stack || e.reason));
+for (const level of ['error', 'warn']) {
+  const orig = console[level].bind(console);
+  console[level] = (...a) => { orig(...a); const m = a.map(String).join(' '); if (/THREE|WebGL|shader|program/i.test(m)) report(level, m); };
+}
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let quality = localStorage.getItem('watson.persephone.quality') || 'high';
 
@@ -815,3 +827,10 @@ buildHall(2); builtRows = 2;
 buildComposer();
 requestAnimationFrame(frame);
 window.dispatchEvent(new CustomEvent('ps:scene-ready'));
+setTimeout(() => {
+  const gl = renderer.getContext(), dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  report('startup', JSON.stringify({ gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '?', quality, tables: tables.size,
+    calls: renderer.info.render.calls, programs: renderer.info.programs?.length, fragUniforms: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+    vertUniforms: gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS), lost: gl.isContextLost(), size: [innerWidth, innerHeight] }));
+}, 20000);
+canvas.addEventListener('webglcontextlost', () => report('context-lost', 'WebGL context lost'));

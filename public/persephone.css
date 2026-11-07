@@ -37,6 +37,9 @@ body.persephone .type-form input, body.persephone .row select, body.persephone .
 
 /* Three columns on a desk: talk on the left, the room open in the middle, the ledger on the right. */
 .ps-layout { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(380px, 500px); max-width: none; }
+/* The layout sits over the 3D room: let drags and clicks through its empty middle to the canvas (2026-11-07). */
+.ps-layout { pointer-events: none; }
+.ps-layout > :not(.ps-window) { pointer-events: auto; }
 .ps-layout .panel, .ps-layout .stage {
   background: var(--bg2); border: 1px solid var(--line); backdrop-filter: blur(14px) saturate(1.2);
   box-shadow: 0 10px 40px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 240, 200, .06);

@@ -568,7 +568,7 @@ function onEvent(ev) {
   window.dispatchEvent(new CustomEvent('agent:event', { detail: ev }));
 }
 // For page add-ons (construct.js): talk to the agent and send it events.
-window.agentApp = { send, ask: (text) => send({ type: 'ask', text }), agent: AGENT };
+window.agentApp = { send, ask: (text) => send({ type: 'ask', text }), agent: AGENT, connected: () => !!ws && ws.readyState === WebSocket.OPEN };
 
 function setStatusLine(s) {
   if (!s) return;
