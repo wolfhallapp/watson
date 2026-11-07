@@ -5,14 +5,16 @@ import { ROUTINES, routineDue } from '../server/routines.js';
 
 const scan = ROUTINES.find((r) => r.key === 'casinoOfferScan');
 
-test('casino email check runs at 7:30 AM and 7 PM Central, once per slot', () => {
+test('casino email check runs at 7:30 AM, noon, 4 PM and 8 PM Central, once per slot (11/7)', () => {
   assert.equal(routineDue(scan, new Date('2026-10-26T12:29:00Z'), null), null);                       // 7:29 AM CDT
   assert.equal(routineDue(scan, new Date('2026-10-26T12:30:00Z'), null), '2026-10-26@07:30');         // 7:30 AM CDT
   assert.equal(routineDue(scan, new Date('2026-10-26T15:00:00Z'), '2026-10-26@07:30'), null);         // already ran this slot
-  assert.equal(routineDue(scan, new Date('2026-10-26T18:00:00Z'), '2026-10-26@07:30'), null); // 1 PM: no longer a slot
-  assert.equal(routineDue(scan, new Date('2026-10-27T00:05:00Z'), '2026-10-26@07:30'), '2026-10-26@19:00'); // 7:05 PM
-  assert.equal(routineDue(scan, new Date('2026-10-27T04:00:00Z'), '2026-10-26@07:30'), null);         // 11 PM: too late
-  assert.equal(routineDue(scan, new Date('2026-12-10T13:30:00Z'), '2026-12-09@19:00'), '2026-12-10@07:30'); // 7:30 AM CST
+  assert.equal(routineDue(scan, new Date('2026-10-26T17:00:00Z'), '2026-10-26@07:30'), '2026-10-26@12:00'); // noon
+  assert.equal(routineDue(scan, new Date('2026-10-26T21:10:00Z'), '2026-10-26@12:00'), '2026-10-26@16:00'); // 4:10 PM
+  assert.equal(routineDue(scan, new Date('2026-10-27T01:05:00Z'), '2026-10-26@16:00'), '2026-10-26@20:00'); // 8:05 PM
+  assert.equal(routineDue(scan, new Date('2026-10-27T01:30:00Z'), '2026-10-26@20:00'), null);         // already ran this slot
+  assert.equal(routineDue(scan, new Date('2026-10-27T04:00:00Z'), '2026-10-26@20:00'), null);         // 11 PM: too late
+  assert.equal(routineDue(scan, new Date('2026-12-10T13:30:00Z'), '2026-12-09@20:00'), '2026-12-10@07:30'); // 7:30 AM CST
   assert.equal(routineDue(scan, new Date('2026-12-10T12:30:00Z'), null), null);                       // 6:30 AM CST
   assert.equal(routineDue(scan, new Date('2026-10-27T08:30:00Z'), null), '2026-10-27@03:30');         // Tuesday 3:30 AM
 });

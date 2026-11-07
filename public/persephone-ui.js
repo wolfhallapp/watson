@@ -315,7 +315,7 @@ function spark(pts, unit) {
 function renderEmails() {
   const em = data.emails || [];
   const kinds = { free_sc: 'Free SC', free_spins: 'Free spins', deal: 'Deal', tournament: 'Tournament', streak: 'Streak', promo: 'Promo', account: 'Account', other: 'Other' };
-  let h = `<div class="ps-section-head"><h4>The post</h4><span>${em.length ? `the latest ${em.length} casino emails Persephone has read` : 'Persephone reads your casino email at 7:30 AM and 7 PM and files every one here.'}</span></div>`;
+  let h = `<div class="ps-section-head"><h4>The post</h4><span>${em.length ? `the latest ${em.length} casino emails Persephone has read` : 'Persephone reads your casino email at 7:30 AM, noon, 4 PM and 8 PM and files every one here.'}</span></div>`;
   if (em.length) h += '<ul class="ps-list ps-mail">' + em.map((e) => `
     <li class="k-${esc(e.category)}"><div class="ps-site-main"><b>${esc(e.site)}</b> <span class="ps-tag">${kinds[e.category] || esc(e.category)}</span>${e.addedToApp ? ' <span class="ps-tag ok">in the app</span>' : ''}
       <div class="ps-sub">${esc(e.summary || e.subject)}</div>
