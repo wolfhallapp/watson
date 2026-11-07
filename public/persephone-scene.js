@@ -749,7 +749,16 @@ function pick(e) {
   }
 }
 
-window.addEventListener('ps:data', (e) => setData(e.detail.run));
+let dataReports = 0;
+let casinoReports = 0;
+window.addEventListener('agent:event', (e) => {
+  const ev = e.detail || {};
+  if (/^casino/.test(ev.type || '') && casinoReports++ < 3) report('casino-event', JSON.stringify({ type: ev.type, sites: ev.data?.run?.sites?.length ?? null, ok: ev.ok, message: ev.message }));
+});
+window.addEventListener('ps:data', (e) => {
+  try { setData(e.detail.run); } catch (err) { report('setData-error', err.stack || err); }
+  if (dataReports++ < 2) report('data', JSON.stringify({ sites: e.detail.run?.sites?.length ?? null, keys: Object.keys(e.detail.run || {}).slice(0, 12), tables: tables.size, calls: renderer.info.render.calls, quality }));
+});
 window.addEventListener('ps:focus', (e) => { if (e.detail?.siteId) focusTable(e.detail.siteId); else overview(); });
 window.addEventListener('ps:step', (e) => {
   if (!order.length) return;
