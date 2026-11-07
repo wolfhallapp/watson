@@ -208,9 +208,9 @@ const chipMat = [chipStd(chipSide), chipStd(chipTop), chipStd(chipTop)]; // side
 // The soft beam under each table's lamp: an open cone, brightest at the lamp and fading to the felt, softer at its edges.
 const beamMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
-  uniforms: { uColor: { value: new THREE.Color(0xffd9a0) }, uPower: { value: 0.16 } },
-  vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
-  fragmentShader: 'uniform vec3 uColor; uniform float uPower; varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ float edge = pow(abs(dot(vN, vV)), 2.2); float fall = pow(vUv.y, 1.6); gl_FragColor = vec4(uColor * uPower * edge * fall, 1.0); }',
+  uniforms: { uColor: { value: new THREE.Color(0xffd9a0) }, uPower: { value: 0.13 } },
+  vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying float vD; void main(){ vUv = uv; vec4 p = vec4(position,1.0); vec3 n = normal;\n#ifdef USE_INSTANCING\n p = instanceMatrix * p; n = mat3(instanceMatrix) * n;\n#endif\n vec4 mv = modelViewMatrix * p; vN = normalize(normalMatrix * n); vV = normalize(-mv.xyz); vD = -mv.z; gl_Position = projectionMatrix * mv; }',
+  fragmentShader: 'uniform vec3 uColor; uniform float uPower; varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying float vD; void main(){ float edge = pow(abs(dot(vN, vV)), 2.2); float fall = pow(vUv.y, 1.6); float near = 1.0 - smoothstep(9.0, 20.0, vD); gl_FragColor = vec4(uColor * uPower * edge * fall * near, 1.0); }',
 });
 
 // ── The hall (rebuilt when the number of tables changes, so it's always long enough) ──
@@ -455,10 +455,6 @@ const LAMP_Y = 6.4;
 function makeTable(s, i) {
   const g = new THREE.Group(); g.userData.siteId = s.id;
   const pos = tablePos(i); g.position.copy(pos);
-  const top = new THREE.Mesh(tableTop, M.felt); top.position.y = 1.1; top.castShadow = true; top.receiveShadow = true; g.add(top);
-  const rail = new THREE.Mesh(railGeo, M.gold); rail.rotation.x = Math.PI / 2; rail.position.y = 1.18; rail.castShadow = true; g.add(rail);
-  const stem = new THREE.Mesh(stemGeo, M.goldDark); stem.position.y = 0.55; stem.castShadow = true; g.add(stem);
-  const foot = new THREE.Mesh(footGeo, M.gold); foot.position.y = 0.06; g.add(foot);
   const ring = new THREE.Mesh(ringGeo, M.waitRing.clone()); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; g.add(ring);
   // Up to 4 chip towers on the felt; their total height tracks the SC balance.
   const chips = new THREE.InstancedMesh(chipGeo, chipMat, 160);
@@ -466,18 +462,8 @@ function makeTable(s, i) {
   const pmat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false });
   const placard = new THREE.Mesh(placardGeo, pmat); placard.position.set(0, 3.0, 0); g.add(placard);
   // Two chairs of crimson velvet facing the table.
-  for (const a of CHAIR_ANGLES) g.add(chair(a));
-  // v2: a round rug under it, and a gilded lamp hanging over it with a soft beam of light onto the felt.
-  const rug = new THREE.Mesh(rugGeo, M.rug); rug.rotation.x = -Math.PI / 2; rug.position.y = 0.018; rug.receiveShadow = true; g.add(rug);
-  const cord = new THREE.Mesh(cordGeo, M.goldDark); cord.scale.y = H - LAMP_Y; cord.position.y = (H + LAMP_Y) / 2; g.add(cord);
-  const shade = new THREE.Mesh(shadeGeo, M.shade); shade.position.y = LAMP_Y; g.add(shade);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), M.bulb); bulb.position.y = LAMP_Y - 0.2; g.add(bulb);
-  const beam = new THREE.Mesh(beamGeo, beamMat); beam.position.y = LAMP_Y - 0.25 - 2.3; g.add(beam);
-  if (quality === 'high') {
-    const spot = new THREE.SpotLight(0xffd7a0, 55, 11, 0.62, 0.55, 1.5);
-    spot.position.set(0, LAMP_Y - 0.3, 0); spot.target.position.set(0, 0, 0);
-    g.add(spot, spot.target);
-  }
+  // Its felt top, rail, pedestal, two chairs, rug and hanging lamp are drawn for all tables at once (see buildDecor).
+
   const hit = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 4.2, 16), new THREE.MeshBasicMaterial({ visible: false }));
   hit.position.y = 2; hit.userData.siteId = s.id; g.add(hit);
   tablesGroup.add(g);
@@ -485,17 +471,41 @@ function makeTable(s, i) {
   tables.set(s.id, t);
   return t;
 }
-function chair(angle) {
-  const c = new THREE.Group();
-  const seat = new THREE.Mesh(new RoundedBoxGeometry(0.9, 0.18, 0.9, 3, 0.06), M.velvet); seat.position.y = 0.75; c.add(seat);
-  const back = new THREE.Mesh(new RoundedBoxGeometry(0.9, 1.1, 0.14, 3, 0.06), M.velvet); back.position.set(0, 1.35, 0.42); c.add(back);
-  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.03, 8, 32, Math.PI), M.gold); frame.position.set(0, 1.9, 0.42); c.add(frame);
-  for (const [x, z] of [[-0.38, -0.38], [0.38, -0.38], [-0.38, 0.38], [0.38, 0.38]]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.025, 0.7, 8), M.gold); leg.position.set(x, 0.35, z); c.add(leg);
-  }
-  c.position.set(Math.sin(angle) * 3.0, 0, Math.cos(angle) * 3.0); c.rotation.y = angle;
-  c.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
-  return c;
+// ── Chairs, rugs and lamps for every table, instanced: one draw per kind instead of one per table (53 sites
+// made well over a thousand draws a frame) ──
+const decor = new THREE.Group(); scene.add(decor);
+const bulbGeo = new THREE.SphereGeometry(0.16, 16, 12);
+const seatGeo = new RoundedBoxGeometry(0.9, 0.18, 0.9, 3, 0.06), backGeo = new RoundedBoxGeometry(0.9, 1.1, 0.14, 3, 0.06);
+const cframeGeo = new THREE.TorusGeometry(0.47, 0.03, 8, 32, Math.PI), legGeo = new THREE.CylinderGeometry(0.035, 0.025, 0.7, 8);
+const LEGS = [[-0.38, -0.38], [0.38, -0.38], [-0.38, 0.38], [0.38, 0.38]];
+function buildDecor() {
+  for (const c of [...decor.children]) { decor.remove(c); c.dispose?.(); }
+  const ts = [...tables.values()], n = ts.length; if (!n) return;
+  const inst = (geo, mat, count, shadow) => { const m = new THREE.InstancedMesh(geo, mat, count); m.castShadow = !!shadow; m.receiveShadow = true; decor.add(m); return m; };
+  const rugs = inst(rugGeo, M.rug, n), cords = inst(cordGeo, M.goldDark, n), shades = inst(shadeGeo, M.shade, n), bulbs = inst(bulbGeo, M.bulb, n), beams = inst(beamGeo, beamMat, n);
+  rugs.receiveShadow = true; beams.receiveShadow = bulbs.receiveShadow = false;
+  const tops = inst(tableTop, M.felt, n, true), rails = inst(railGeo, M.gold, n, true), stems = inst(stemGeo, M.goldDark, n, true), feet = inst(footGeo, M.gold, n);
+  const seats = inst(seatGeo, M.velvet, n * 2, true), backs = inst(backGeo, M.velvet, n * 2, true), frames = inst(cframeGeo, M.gold, n * 2, true), legs = inst(legGeo, M.gold, n * 8, true);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+  const flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  const flatUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+  const at = (x, y, z, quat = q, sc = one) => m4.compose(new THREE.Vector3(x, y, z), quat, sc);
+  ts.forEach((t, i) => {
+    const { x, z } = t.pos;
+    rugs.setMatrixAt(i, at(x, 0.018, z, flat));
+    tops.setMatrixAt(i, at(x, 1.1, z)); rails.setMatrixAt(i, at(x, 1.18, z, flatUp)); stems.setMatrixAt(i, at(x, 0.55, z)); feet.setMatrixAt(i, at(x, 0.06, z));
+    cords.setMatrixAt(i, at(x, (H + LAMP_Y) / 2, z, q, new THREE.Vector3(1, H - LAMP_Y, 1)));
+    shades.setMatrixAt(i, at(x, LAMP_Y, z));
+    bulbs.setMatrixAt(i, at(x, LAMP_Y - 0.2, z));
+    beams.setMatrixAt(i, at(x, LAMP_Y - 2.55, z));
+    CHAIR_ANGLES.forEach((a, k) => {
+      const base = new THREE.Matrix4().compose(new THREE.Vector3(x + Math.sin(a) * 3.0, 0, z + Math.cos(a) * 3.0), new THREE.Quaternion().setFromAxisAngle(up, a), one);
+      const put = (mesh, idx, lx, ly, lz) => mesh.setMatrixAt(idx, new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(lx, ly, lz)));
+      const c = i * 2 + k;
+      put(seats, c, 0, 0.75, 0); put(backs, c, 0, 1.35, 0.42); put(frames, c, 0, 1.9, 0.42);
+      LEGS.forEach(([lx, lz], j) => put(legs, c * 4 + j, lx, 0.35, lz));
+    });
+  });
 }
 
 function updateTable(t, s) {
@@ -539,6 +549,7 @@ function setData(run) {
     const p = tablePos(i); t.pos = p; t.group.position.copy(p);
     updateTable(t, s);
   });
+  buildDecor();
   hideVeil();
 }
 
@@ -548,6 +559,30 @@ sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normal
 Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 40 });
 sun.castShadow = true;
 scene.add(sun, sun.target);
+
+// ── Table spotlights: a few real lights that move to the tables nearest you. A light per table would be 50+ lights,
+// more than a graphics card's shaders can hold (with 53 sites the tables failed to draw at all), so the count is fixed. ──
+const SPOT_N = 6, spots = [];
+function buildSpots() {
+  for (const sp of spots) scene.remove(sp, sp.target);
+  spots.length = 0;
+  if (quality !== 'high') return;
+  for (let i = 0; i < SPOT_N; i++) {
+    const sp = new THREE.SpotLight(0xffd7a0, 0, 11, 0.62, 0.55, 1.5);
+    scene.add(sp, sp.target); spots.push(sp);
+  }
+}
+function placeSpots() {
+  if (!spots.length) return;
+  const near = [...tables.values()].map((t) => [Math.hypot(t.pos.x - me.x, t.pos.z - me.z), t]).sort((a, b) => a[0] - b[0]);
+  spots.forEach((sp, i) => {
+    const t = near[i]?.[1];
+    if (!t) { sp.intensity = 0; return; }
+    sp.position.set(t.pos.x, LAMP_Y - 0.3, t.pos.z); sp.target.position.set(t.pos.x, 0, t.pos.z);
+    sp.intensity = 55;
+  });
+}
+buildSpots();
 
 // ── Particles: gold dust in the candlelight ──
 const dustN = 900;
@@ -720,6 +755,7 @@ function applyQuality() {
   renderer.setPixelRatio(quality === 'high' ? Math.min(devicePixelRatio, 2) : 1);
   renderer.shadowMap.enabled = quality === 'high';
   builtRows = -1;
+  buildSpots();
   const run = lastRun; if (run) setData(run); else buildHall(0);
   buildComposer();
 }
@@ -741,7 +777,7 @@ setTimeout(hideVeil, 6000); // even if the app is slow to answer, open the doors
 
 // ── The loop ──
 const clock3 = new THREE.Timer();
-let slowFrames = 0;
+let slowFrames = 0, spotTick = 0;
 function frame() {
   clock3.update();
   const raw = clock3.getDelta(), dt = Math.min(0.05, raw), t = clock3.getElapsed();
@@ -755,11 +791,11 @@ function frame() {
   sun.position.set(me.x + 5, 18, me.z + 4); sun.target.position.set(me.x + Math.sin(me.yaw) * 6, 0, me.z - Math.cos(me.yaw) * 6);
   sun.castShadow = quality === 'high';
   if (grade) grade.uniforms.uTime.value = t % 100;
+  if ((spotTick = (spotTick + 1) % 15) === 0) placeSpots();
   for (const tb of tables.values()) {
     tb.placard.quaternion.copy(camera.quaternion);
     tb.placard.position.y = 3.0 + (reduced ? 0 : Math.sin(t * 1.2 + tb.pos.z) * 0.06);
     if (tb.data?.ready) tb.ring.material.opacity = 0.55 + 0.4 * Math.sin(t * 2.6 + tb.pos.x);
-    tb.group.scale.setScalar(tb.group.userData.siteId === focusId ? 1.02 : 1);
   }
   if (!reduced) {
     const p = dust.geometry.attributes.position;
