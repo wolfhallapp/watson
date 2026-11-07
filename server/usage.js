@@ -15,7 +15,7 @@ export function centralDate(at) {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
-const AGENTS = { oracle: 'Oracle', architect: 'Architect', morpheus: 'Morpheus', trinity: 'Trinity', keymaster: 'Keymaster' };
+const AGENTS = { oracle: 'Oracle', architect: 'Architect', morpheus: 'Morpheus', trinity: 'Trinity', keymaster: 'Keymaster', persephone: 'Persephone', persephoneRoutine: 'Persephone' };
 
 /** A plain name for what a job was: who ran it and why (a routine, a relay from Claude Code, or Horace himself). */
 export function jobKind(j) {

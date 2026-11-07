@@ -18,6 +18,7 @@ import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
 import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
 import { KEYMASTER } from './keymaster.js';
+import { PERSEPHONE, PERSEPHONE_ROUTINE, screenAction as casinoAction, screenState as casinoState, noteScreenEdit as noteCasinoEdit } from './persephone.js';
 import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 import * as sandbox from './sandbox.js';
 import { readUsageReport } from './usage.js';
@@ -155,6 +156,7 @@ const channels = {
   trinity: { key: 'trinity', clients: new Set(), screens: [] },
   morpheus: { key: 'morpheus', clients: new Set(), screens: [] },
   keymaster: { key: 'keymaster', clients: new Set(), screens: [] },
+  persephone: { key: 'persephone', clients: new Set(), screens: screens.load('persephone') },
 };
 function broadcastTo(ch, event) {
   if (event.type === 'screen') {
@@ -241,6 +243,9 @@ channels.morpheus.agent = morpheus;
 // The Keymaster (2026-11-04): market research; his own page, no peer banners.
 const keymaster = new WatsonAgent((event) => broadcastTo(channels.keymaster, event), KEYMASTER);
 channels.keymaster.agent = keymaster;
+// Persephone (2026-11-06): keeper of the casino; her own page (a 3D chateau), no peer banners.
+const persephone = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); broadcastTo(channels.persephone, event); }, PERSEPHONE);
+channels.persephone.agent = persephone;
 channels.oracle.agent = agent;
 channels.architect.agent = architect;
 // Approvals are shared: whichever screen is open can answer them.
@@ -377,7 +382,7 @@ wss.on('connection', (ws, req) => {
         reminders: reminders.all().filter((r) => !r.fired),
         ...(ch.key === 'architect' ? { construct: construct.summary() } : { usage }),
         lastSay: lastSayOf(ch.key),
-        ...(ch.key === 'trinity' || ch.key === 'morpheus' || ch.key === 'keymaster' ? {} : { peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) } }),
+        ...(['trinity', 'morpheus', 'keymaster', 'persephone'].includes(ch.key) ? {} : { peer: { from: otherOf(ch.key), busy: channels[otherOf(ch.key)].agent.busy, last: lastSayOf(otherOf(ch.key)) } }),
       }));
       return;
     }
@@ -397,6 +402,24 @@ wss.on('connection', (ws, req) => {
           noteScreenEdit(r.message);
           reply = { type: 'construct_result', ok: true, message: r.message, ref: msg.ref };
         } catch (e) { reply = { type: 'construct_result', ok: false, message: e.message, ref: msg.ref }; }
+        ws.send(JSON.stringify(reply));
+        break;
+      }
+      case 'casino_get': {
+        if (ch.key !== 'persephone') break;
+        try { ws.send(JSON.stringify({ type: 'casino', data: await casinoState() })); }
+        catch (e) { ws.send(JSON.stringify({ type: 'casino_result', ok: false, message: `Couldn't reach the app: ${e.message}`, ref: msg.ref })); }
+        break;
+      }
+      case 'casino_do': {
+        if (ch.key !== 'persephone') break;
+        let reply;
+        try {
+          const message = await casinoAction(String(msg.action || ''), msg.args || {});
+          noteCasinoEdit(message);
+          reply = { type: 'casino_result', ok: true, message, ref: msg.ref };
+          broadcastTo(channels.persephone, { type: 'casino_changed' });
+        } catch (e) { reply = { type: 'casino_result', ok: false, message: e.message, ref: msg.ref }; }
         ws.send(JSON.stringify(reply));
         break;
       }
@@ -432,7 +455,9 @@ startReminderLoop((r) => {
 const nightAgent = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'error') console.warn('  Night shift:', event.message); }, NIGHT);
 // Daytime routines get their own fresh session too, so their email reading stays out of the Oracle's conversation.
 const routineAgent = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'error') console.warn('  Routine:', event.message); }, ROUTINE);
-startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster });
+// Persephone's casino email checks run in their own fresh session; her page refreshes when they change something.
+const persephoneRoutine = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'casino_changed') broadcastTo(channels.persephone, event); if (event.type === 'error') console.warn('  Persephone routine:', event.message); }, PERSEPHONE_ROUTINE);
+startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster, persephone, persephoneRoutine });
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
@@ -451,6 +476,8 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     trinity.shutdown();
     morpheus.shutdown();
     keymaster.shutdown();
+    persephone.shutdown();
+    persephoneRoutine.shutdown();
     nightAgent.shutdown();
     routineAgent.shutdown();
     server.close();

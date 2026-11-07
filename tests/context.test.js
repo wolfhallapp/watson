@@ -24,9 +24,10 @@ test('the limit is well below the 1M window', () => {
 });
 
 test('email-reading routines run in their own fresh conversation, not the Oracle\'s', () => {
-  for (const key of ['morningBriefing', 'casinoOfferScan']) {
+  // 11/6: the casino email check is Persephone's, in her own throwaway session (persephoneRoutine).
+  for (const [key, agent] of [['morningBriefing', 'routine'], ['casinoOfferScan', 'persephoneRoutine']]) {
     const r = ROUTINES.find((x) => x.key === key);
-    assert.equal(r.agent, 'routine', key);
+    assert.equal(r.agent, agent, key);
     assert.equal(r.fresh, true, key);
   }
 });

@@ -1,0 +1,1 @@
+{ "name": "Persephone", "short_name": "Persephone", "description": "Horace's casino keeper", "start_url": "/persephone.html", "display": "standalone", "background_color": "#0a0406", "theme_color": "#0a0406", "icons": [ { "src": "persephone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" } ] }

@@ -4,8 +4,9 @@
 # -Architect opens the Architect's page (the Construct) instead of the Oracle's, with the mic left as he last had it.
 # -Morpheus opens Morpheus's page.
 # -Keymaster opens the Keymaster's page (market research).
+# -Persephone opens Persephone's chateau (the casino).
 # -Trinity opens Trinity's page in Microsoft Edge, which has the soft natural voices (Ava, Emma, Jenny) for free.
-param([switch]$NoBrowser, [switch]$AtLogin, [switch]$Architect, [switch]$Trinity, [switch]$Morpheus, [switch]$Keymaster)
+param([switch]$NoBrowser, [switch]$AtLogin, [switch]$Architect, [switch]$Trinity, [switch]$Morpheus, [switch]$Keymaster, [switch]$Persephone)
 
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root '.env'
@@ -39,7 +40,7 @@ if (-not $NoBrowser) {
   # Speech recognition needs Chrome or Edge, so prefer those over another default browser.
   $browser = @($chrome, $edge) | Where-Object { Test-Path $_ } | Select-Object -First 1
   # listen=1 turns the microphone on so Watson is always waiting for its name.
-  $page = if ($Keymaster) { "${url}keymaster.html#token=$token" } elseif ($Morpheus) { "${url}morpheus.html#token=$token" } elseif ($Trinity) { "${url}trinity.html#token=$token" } elseif ($Architect) { "${url}architect.html#token=$token" } else { "$url#token=$token&listen=1" }
+  $page = if ($Persephone) { "${url}persephone.html#token=$token" } elseif ($Keymaster) { "${url}keymaster.html#token=$token" } elseif ($Morpheus) { "${url}morpheus.html#token=$token" } elseif ($Trinity) { "${url}trinity.html#token=$token" } elseif ($Architect) { "${url}architect.html#token=$token" } else { "$url#token=$token&listen=1" }
   if ($Trinity -and (Test-Path $edge)) { $browser = $edge }
   if ($browser) {
     # Watson gets its own browser profile so these settings apply even when your normal browser is open:

@@ -181,12 +181,12 @@ export function workerKey() {
   return m[1];
 }
 
-/** POST to the app's own Gambling routes only (Bonus Run claims, 10+, play runs, email bonuses). */
+/** POST to the app's own Gambling routes only (Bonus Run claims, site edits, new sites, play runs, email bonuses). */
 export async function workerPostGambling(p, body) {
-  if (!/^\/gambling\/(claim|site|play-run|offers|offer)$/.test(p)) throw new Error('Only the /gambling/ write routes are allowed');
+  if (!/^\/gambling\/(claim|site|sites\/add|play-run|offers|offer)$/.test(p)) throw new Error('Only the /gambling/ write routes are allowed');
   const r = await fetch(WORKER_URL + p, {
     method: 'POST', headers: { 'X-Worker-Key': workerKey(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, source: 'The Oracle' }), signal: AbortSignal.timeout(60000),
+    body: JSON.stringify({ source: 'The Oracle', ...body }), signal: AbortSignal.timeout(60000),
   });
   const text = await r.text();
   let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }

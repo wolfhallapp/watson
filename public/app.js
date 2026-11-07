@@ -1,8 +1,15 @@
-import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE, TRINITY_WAKE, MORPHEUS_WAKE, KEYMASTER_WAKE } from './voice.js';
+import { Voice, speechSupported, parseYesNo, setWakeWord, ARCHITECT_WAKE, TRINITY_WAKE, MORPHEUS_WAKE, KEYMASTER_WAKE, PERSEPHONE_WAKE } from './voice.js';
 
 // One script for both agents' pages: the Oracle (index.html) and the Architect (architect.html, <body data-agent="architect">).
-const AGENT = ['architect', 'trinity', 'morpheus', 'keymaster'].includes(document.body.dataset.agent) ? document.body.dataset.agent : 'oracle';
-const P = AGENT === 'keymaster' ? {
+const AGENT = ['architect', 'trinity', 'morpheus', 'keymaster', 'persephone'].includes(document.body.dataset.agent) ? document.body.dataset.agent : 'oracle';
+const P = AGENT === 'persephone' ? {
+  name: 'Persephone', short: 'Persephone', settingsKey: 'persephone.settings', ws: '/ws?agent=persephone', pronoun: 'she',
+  automatic: 'Automatic (free browser voice, an elegant woman, a touch of French)',
+  test: 'Bonsoir, Horace. Welcome to my house. Every table is accounted for, and I keep the books myself.',
+  newChat: 'Start a new conversation? Persephone will forget this chat (your sites, balances and her ledger stay).',
+  voicePrefs: [/Denise.*Natural/i, /Vivienne.*Natural/i, /Sonia.*Natural/i, /Libby.*Natural/i, /Google français/i, /Google UK English Female/i, /Microsoft (Hortense|Julie|Hazel)/i, /female/i],
+  pitch: 1.0, rateFactor: 0.9, kokoroDefault: 'kk:bf_emma',
+} : AGENT === 'keymaster' ? {
   name: 'The Keymaster', short: 'Keymaster', settingsKey: 'keymaster.settings', ws: '/ws?agent=keymaster', pronoun: 'he',
   automatic: 'Automatic (free browser voice, a calm, precise man\'s voice)',
   test: 'I am the Keymaster. Every door has its key. Which one shall we look at, Horace?',
@@ -42,6 +49,7 @@ if (AGENT === 'architect') setWakeWord(ARCHITECT_WAKE);
 if (AGENT === 'trinity') setWakeWord(TRINITY_WAKE);
 if (AGENT === 'morpheus') setWakeWord(MORPHEUS_WAKE);
 if (AGENT === 'keymaster') setWakeWord(KEYMASTER_WAKE);
+if (AGENT === 'persephone') setWakeWord(PERSEPHONE_WAKE);
 // The other agent, so this page can say when they're working or have something for Horace.
 const PEERS = { oracle: { name: 'The Oracle', href: '/', her: 'her' }, architect: { name: 'The Architect', href: 'architect.html', her: 'him' } };
 

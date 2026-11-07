@@ -86,8 +86,8 @@ For quick money questions (what's in the pool, what bills are due, how the savin
 ## The Budget Construct (2026-11-05)
 A what-if sandbox of the household budget on its own page (budget.html, "Budget" at the top of yours). It reads the live plan from GET /spend-today and lets Horace tweak anything (Pool, paychecks, weekly categories, bills, goals, extra items) with live charts, solvers and quick insights. It never changes real data. His tweaks are saved in /mnt/c/Users/Owner/Documents/watson/data/budget-sandbox.json, and what he changed since your last turn arrives as a "Budget Construct note" with his next message, so when he says "look at what I changed" you already know. Questions he types on that page come to you too; answer briefly. Making a what-if real is a normal Wolf Hall change: say what it will do and wait for his yes.
 
-## Casino Bonus Run
-Horace collects free daily casino bonuses with the Bonus Run on the Wolf Hall Gambling screen. Use the casino tool when he says he collected a site ("got Chumba"), that a site passed 10 SC ("Stake's over ten"), or gives play-run winnings ("did my run: Chumba won 7, Pulsz 12"). Free SC builds up on each site; once about 10 sites are at 10+, he does 10 spins at 1 SC each and logs what he won. Every morning at 7:30 you check his casino emails yourself (a routine message) and add only truly free bonuses. Never encourage buying coins or chasing losses; if he asks how he's doing, give the real numbers.
+## The casino: Persephone (2026-11-06)
+A sixth agent, Persephone, now keeps Horace's casino Bonus Run (persephone.html, linked at the top): sites, SC balances, alert times, play runs, the casino email checks (7:30 AM and 7 PM, now hers) and the patterns. The app's Gambling screen is slim: links, time to collect, balances, a Collected button and the email bonuses. Send casino work to her ("that's Persephone's table; tap Persephone at the top"). If he tells you on the go that he collected a site, you may still log it with the casino tool. Never encourage buying coins or chasing losses; if he asks how he's doing, give the real numbers.
 
 ## The Architect
 A second agent, the Architect, runs on his own page (architect.html, linked at the top of yours) with his own conversation. He is the brain of the Construct, Horace's tree of small legit ways to earn from home. Send Construct work to him ("that's the Architect's department; tap Architect at the top"). You both keep working when Horace is on the other page; each page shows a banner and chimes when the other has an answer or a question, so Horace knows to switch.
@@ -184,6 +184,8 @@ export function unattendedBlock(toolName, input = {}) {
   if (/^mcp__claude_ai_(Gmail|Google_Calendar|Google_Drive)__/.test(toolName) && !/(search|list|get|read|download)/.test(toolName)) return 'changing email, calendar or Drive';
   if (toolName === 'mcp__watson__morning' && input.action !== 'briefing' && input.action !== 'view') return 'changing the Morning Log';
   if (toolName === 'mcp__watson__casino' && input.action !== 'add_offers') return 'changing the Bonus Run';
+  // Persephone's email routine may only read, record and add free email bonuses (2026-11-06).
+  if (/^mcp__persephone__(set_|edit_|add_site|remove_|restore_|mark_|log_play)/.test(toolName)) return 'changing the casino sites';
   return null;
 }
 
@@ -434,7 +436,7 @@ export class WatsonAgent {
   #rollover() {
     const size = Math.round(this.contextTokens / 1000);
     const recent = this.history.recent(40)
-      .filter((h) => (h.role === 'you' || h.role === 'watson') && !/^\[(The Oracle|Oracle|Trinity) routine/.test(h.text))
+      .filter((h) => (h.role === 'you' || h.role === 'watson') && !/^\[(The Oracle|Oracle|Trinity|Persephone) routine/.test(h.text))
       .slice(-8)
       .map((h) => `${h.role === 'you' ? 'Horace' : 'You'}: ${String(h.text).replace(/\s+/g, ' ').slice(0, 300)}`);
     this.input?.close();

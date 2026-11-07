@@ -20,10 +20,10 @@ test('saved screens come back after a restart, per channel', () => {
   assert.deepEqual(after.load('architect'), [scr(3)]);
 });
 
-test('only the Oracle and the Architect are written to disk', () => {
+test('only the Oracle, the Architect and Persephone are written to disk', () => {
   const f = tmpFile();
   const s = makeScreenStore(f);
-  assert.deepEqual(SAVED_SCREENS, ['oracle', 'architect']);
+  assert.deepEqual(SAVED_SCREENS, ['oracle', 'architect', 'persephone']);
   assert.equal(s.save('morpheus', [scr(1)]), false);
   assert.equal(s.save('trinity', [scr(1)]), false);
   assert.equal(fs.existsSync(f), false);

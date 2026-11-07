@@ -71,10 +71,10 @@ export const reminders = {
 };
 
 // ── Screens: the last few show_on_screen items per agent, kept in data/screens.json so a
-// restart doesn't blank the Screen tab. Only the Oracle and the Architect are saved; Trinity's
+// restart doesn't blank the Screen tab. The Oracle, the Architect and Persephone are saved; Trinity's
 // and Morpheus's screens stay in memory (Morpheus's private material lives in ~/.oracle-private).
 export const SCREEN_LIMIT = 8;
-export const SAVED_SCREENS = ['oracle', 'architect'];
+export const SAVED_SCREENS = ['oracle', 'architect', 'persephone'];
 export function makeScreenStore(filePath = file('screens.json'), keys = SAVED_SCREENS) {
   const read = () => {
     try { const v = JSON.parse(fs.readFileSync(filePath, 'utf8')); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }

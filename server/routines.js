@@ -147,13 +147,14 @@ export const ROUTINES = [
     // Casino email check. 10/31 per Horace: three times a day, and also list purchase deals and discounts
     // (for his information only; they never go on the free Bonus Run list).
     key: 'casinoOfferScan',
-    agent: 'routine', // its own throwaway conversation: opening every casino email is what overfilled the Oracle's (2026-10-30)
+    // 11/6: Persephone's now, in her own throwaway session (opening every casino email is what overfilled the Oracle's, 10/30).
+    agent: 'persephoneRoutine',
     fresh: true,
     times: [{ hour: 7, minute: 30 }, { hour: 19, minute: 0 }], // twice a day from 11/4 (was also 1 PM), to save usage
     untilHour: 23,
     tuesday: { hour: 3, minute: 30 }, // the first check moves earlier on Tuesdays
     prompt: [
-      '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
+      '[Persephone routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Casino email check (it runs at 7:30 AM and 7 PM). Search Gmail for casino promotion emails from the last day',
       '(category:promotions newer_than:1d, plus anything from the senders in the Casino Sites list).',
       'Page through ALL results (follow nextPageToken) and open every casino email: judge each by its content, never by its subject line.',
@@ -168,15 +169,20 @@ export const ROUTINES = [
       'SKIP standing site features even when an email advertises them: login streaks ("10-day login streak"), daily logins, daily or fortune wheels, check-ins, dice rolls, VIP or loyalty ladders, level-ups. Those are the site\'s own daily claim on the Bonus Run, not offers.',
       'Use exact amounts. If the email only gives a maximum ("up to 5 SC"), keep "up to" in what and say so in notes ("amount not stated"); never present a maximum as the amount.',
       'SKIP sites that are not in the Casino Sites list, and sites that are Paused, Closed or dropped (Splash Coins, Chanced, SlotsWise, Pulsz Bingo, Poly Casino, Go Go Gold).',
-      '(Check the list with the casino tool or /gambling/bonus-run: sites are the active ones, paused the rest.) The worker also refuses these and says why under "rejected".',
-      'Add each with the casino tool, action add_offers: site (its exact Casino Sites name), what (short, e.g. "2.2 SC + 2222 GC"),',
+      '(Check the list with casino_state: the active sites, then the paused or closed ones.) The worker also refuses these and says why under "rejected".',
+      'Add each with add_offers: site (its exact Casino Sites name), what (short, e.g. "2.2 SC + 2222 GC"),',
       'expires (ISO 8601 with offset, only if the email says when it ends), link (the email\'s Gmail viewUrl), emailId (ALWAYS: the Gmail message id, so the app can open that exact email on his phone),',
       'claimLink (the https URL behind the email\'s own claim or collect button, if it has one; never a purchase, deposit or unsubscribe link). Repeats are skipped, so re-adding is harmless;',
       'a newer offer from the same site and kind replaces the older one, and old ones are expired automatically.',
+      'THE LEDGER (Horace, 11/6: as much data as possible, so he can find patterns): record EVERY casino email you open with record_emails, not just the free ones,',
+      'in full detail: Gmail id and thread id, when it arrived (ISO), sender, site (its Casino Sites name, or the brand if it is not on the list, with siteOnList false), subject, category',
+      '(free_sc, free_spins, deal, tournament, streak, promo, account, other), the amounts (free SC, GC, spins; deal price, SC, GC and percent off), up-to amounts flagged, when it ends,',
+      'the claim link, the key terms in a sentence, a one-line summary, whether you added it to the app (addedToApp) and, if the worker rejected it or you skipped it, why (rejectReason). Record in batches of up to 100.',
       `DEALS (Horace wants to know them, 10/31): rewrite ${CASINO_DEALS} as the current list of purchase deals and discounts from the emails`,
       '(e.g. "Chumba: 50% off first package, $9.99 for 30 SC, ends Sun 11:59 PM"). One line each: site, the deal with its real price and what you get, and when it ends.',
       'Keep deals from the existing file that have not expired and drop expired ones. Put a "Updated <date time>" line at the top. Plain facts only: no recommendation to buy, no hype.',
-      'Then reply with one line: free bonuses added, any the worker rejected, the sites you skipped because they are not in Casino Sites or are paused or dropped (by name), and how many deals are on the list.',
+      'Finish with history_sync so your claim history stays current.',
+      'Then reply with one line: emails recorded, free bonuses added, any the worker rejected, the sites you skipped because they are not in Casino Sites or are paused or dropped (by name), and how many deals are on the list.',
     ].join(' '),
   },
 ];
@@ -234,7 +240,7 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       console.log(`  Routine ${r.key} for ${day}`);
       try { await r.run(); } catch (e) { console.log(`  Routine ${r.key} failed: ${e.message}`); }
     }
-    if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy || agents.keymaster?.busy) return;
+    if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy || agents.keymaster?.busy || agents.persephone?.busy || agents.persephoneRoutine?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
       if (r.run) continue;
