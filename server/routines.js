@@ -150,12 +150,12 @@ export const ROUTINES = [
     // 11/6: Persephone's now, in her own throwaway session (opening every casino email is what overfilled the Oracle's, 10/30).
     agent: 'persephoneRoutine',
     fresh: true,
-    times: [{ hour: 7, minute: 30 }, { hour: 12, minute: 0 }, { hour: 16, minute: 0 }, { hour: 20, minute: 0 }], // four a day from 11/7 per Horace (twice 11/4-11/6)
+    times: [{ hour: 7, minute: 0 }, { hour: 12, minute: 0 }, { hour: 16, minute: 0 }, { hour: 20, minute: 0 }], // four a day from 11/7 per Horace (twice 11/4-11/6); first at 7:00 from 11/8 (was 7:30)
     untilHour: 23,
     tuesday: { hour: 3, minute: 30 }, // the first check moves earlier on Tuesdays
     prompt: [
       '[Persephone routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
-      'Casino email check (it runs at 7:30 AM, noon, 4 PM and 8 PM). Search Gmail for casino promotion emails from the last day',
+      'Casino email check (it runs at 7 AM, noon, 4 PM and 8 PM). Search Gmail for casino promotion emails from the last day',
       '(category:promotions newer_than:1d, plus anything from the senders in the Casino Sites list).',
       'Page through ALL results (follow nextPageToken) and open every casino email: judge each by its content, never by its subject line.',
       '(Lesson 2026-10-27: a Stake.us "your post-monthly is here!" bonus sent at 3 AM was skipped because of its subject.)',
