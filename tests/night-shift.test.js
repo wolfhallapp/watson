@@ -1,8 +1,11 @@
 // The Night Shift (2026-10-28): unattended routines can't deploy, push or write live, and it skips when usage is high.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { unattendedBlock } from '../server/agent.js';
-import { usageAllowsNightShift, ROUTINES, routineDue } from '../server/routines.js';
+import { usageAllowsNightShift, nightClosed, nightKey, ROUTINES, routineDue } from '../server/routines.js';
 
 test('unattended runs cannot deploy, push or write live', () => {
   for (const c of ['npx wrangler deploy', 'npx netlify deploy --prod', 'git push origin main', 'git -C x push', 'curl -X POST https://w/pool -d {}', 'rm -rf ~/night', 'printf x | npx wrangler secret put K'])
@@ -56,4 +59,20 @@ test('the Night Shift can be started early with data/night-now (10/31)', () => {
   const noon = new Date('2026-10-31T17:00:00Z'); // noon CDT, outside the window
   assert.equal(routineDue({ ...night, forceUntil: () => 0 }, noon, null), null);
   assert.equal(routineDue({ ...night, forceUntil: () => noon.getTime() + 3600e3 }, noon, null), noon.toISOString());
+});
+
+test('a closed night stays closed until the next night, unless started by hand (11/11)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'night-closed-'));
+  const file = path.join(dir, 'night-closed');
+  const lateNight = new Date('2026-11-11T08:30:00Z'); // 2:30 AM Central, the night of 11/10
+  const nextNight = new Date('2026-11-12T03:30:00Z'); // 9:30 PM Central on 11/11
+  assert.equal(nightClosed(lateNight, file, 0), false); // no file yet
+  fs.writeFileSync(file, nightKey(lateNight) + '\n');
+  assert.equal(nightClosed(lateNight, file, 0), true);
+  assert.equal(nightClosed(new Date('2026-11-11T04:00:00Z'), file, 0), true); // 10 PM the same night
+  assert.equal(nightClosed(nextNight, file, 0), false);
+  assert.equal(nightClosed(lateNight, file, lateNight.getTime() + 60000), false); // "start it now" wins
+  const shift = ROUTINES.find((r) => r.key === 'nightShift');
+  assert.match(shift.prompt, /night-closed/);
+  fs.rmSync(dir, { recursive: true });
 });

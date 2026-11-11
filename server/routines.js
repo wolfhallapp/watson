@@ -27,6 +27,13 @@ export const NIGHT_PER_NIGHT = 0.06;
 export function nightKey(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(now.getTime() - 12 * 3600000));
 }
+// A shift that stops because tonight's budget is spent writes the night's key here, so the runner doesn't keep
+// relaunching it just to close again (11/5: about 5% of the week went on those wake-ups). "Start it now" overrides.
+export const NIGHT_CLOSED = path.join(DATA_DIR, 'night-closed');
+export function nightClosed(now = new Date(), file = NIGHT_CLOSED, forcedUntil = nightNowUntil()) {
+  if (forcedUntil > now.getTime()) return false;
+  try { return fs.readFileSync(file, 'utf8').trim() === nightKey(now); } catch { return false; }
+}
 export function usageAllowsNightShift(usage = state.get().usage || {}, now = new Date(), store = state) {
   const w = usage.seven_day, f = usage.five_hour;
   if (w && typeof w.utilization === 'number') {
@@ -101,7 +108,7 @@ export const ROUTINES = [
     forceUntil: nightNowUntil,
     hour: 21, minute: 15, untilHour: 6, untilMinute: 30,
     // 10/31 per Horace: always have a task running overnight. With an empty queue it picks its own improvement.
-    guard: () => usageAllowsNightShift(),
+    guard: () => !nightClosed() && usageAllowsNightShift(),
     prompt: [
       '[Oracle routine: the Night Shift. Not from Horace; he is asleep. Work quietly: no show_on_screen, and keep your final reply to one line.]',
       `Read the task queue ${NIGHT_QUEUE}. Take the FIRST unchecked task (- [ ]) and do exactly that ONE task, carefully and economically. You will be started again for the next one.`,
@@ -110,6 +117,7 @@ export const ROUTINES = [
       'Call the suggestion tool (action list) and favor the kinds of work Horace says yes to most; say in the report why you picked it.',
       'Prefer fixing a known problem over something new. Skip anything already built on an unmerged night branch or already in a report, anything that needs an answer only Horace has, and anything that touches money data.',
       'Before starting, append it to the queue as "- [ ] (self-chosen) <what and why>" so the next run does not pick the same thing, then do it exactly like a queued task and mark it self-chosen in the report.',
+      `If you end this run without doing a task because a budget rule says tonight is spent, first run \`TZ=America/Chicago date -d "-12 hours" +%F > '${NIGHT_CLOSED}'\` so you are not started again tonight.`,
       'NIGHT=$(date -d "+7 hours" +%F) is the date of the morning Horace wakes up; use it for the branch and the report.',
       'Code changes: never touch the main working folders. For the Wolf Hall app, run',
       '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
