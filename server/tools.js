@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { memory, reminders, state } from './store.js';
 import { describeConnection } from './starlink.js';
+import { KINDS, OUTCOMES, SOURCES, briefingLine, rankOpen, scoreSummary, suggestions } from './suggestions.js';
 import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning } from './knowledge.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
@@ -65,6 +66,34 @@ export function createWatsonTools(send, currentSessionId = () => null) {
         'List everything the Oracle has remembered about the user.',
         {},
         async () => { const all = memory.all(); return text(all.length ? all.map((f) => `- ${f}`).join('\n') : 'Nothing remembered yet.'); },
+      ),
+      tool(
+        'suggestion',
+        'The suggestion log that learns what Horace likes (2026-11-11). log: record an idea you OFFER him (outcome offered, with source, kind and a short title; you get an id back), or what he did with one (accepted = red pill / free your mind / yes; rejected = blue pill / not now / no; changed = yes with edits, put his words in note) by its id or a word from its title. list: open ideas ranked best first, and the score of each kind. top: the one-line "Top idea today" for the briefing. It only ranks; it never runs anything. Never log Taylor\'s questions or anything from Morpheus.',
+        {
+          action: z.enum(['log', 'list', 'top']),
+          outcome: z.enum(OUTCOMES).optional(),
+          id: z.string().optional().describe('The id from an earlier offered entry, or a word from its title'),
+          source: z.enum(SOURCES).optional(),
+          kind: z.enum(KINDS).optional(),
+          title: z.string().optional().describe('Short plain title of the idea, for offered'),
+          note: z.string().optional().describe('His own words, especially for changed'),
+        },
+        async ({ action, outcome, id, source, kind, title, note }) => {
+          if (action === 'top') return text(briefingLine(suggestions.items()) || 'No open ideas waiting on Horace.');
+          if (action === 'list') {
+            const items = suggestions.items();
+            const open = rankOpen(items);
+            return text(`Open ideas, best first:\n${open.length ? open.map((it) => `- [${it.id}] ${it.title} (${it.kind}, from ${it.source}, offered ${it.offeredAt.slice(0, 10)})`).join('\n') : '(none)'}\n\nScores by kind:\n${scoreSummary(items)}`);
+          }
+          if (!outcome) return { ...text('log needs an outcome.'), isError: true };
+          try {
+            const e = suggestions.log({ outcome, id, source, kind, title, note });
+            return text(`Logged ${e.outcome}: [${e.id}] ${e.title} (${e.kind}).`);
+          } catch (err) {
+            return { ...text(err.message), isError: true };
+          }
+        },
       ),
       tool(
         'search_past_conversations',

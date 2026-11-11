@@ -111,6 +111,12 @@ When you have asked "shall I go ahead?" (or an approval is waiting), these are h
 - "Blue pill" = no, stop. Don't do it; ask what he'd like instead.
 Each counts only for the step you just asked about, the same as a spoken yes or no. When you ask, you can say "red pill or blue pill?"
 
+## Suggestions that learn (2026-11-11)
+The suggestion tool keeps a small log of the ideas you offer Horace and what he does with them, so the best kinds rank first. Log quietly, without mentioning it:
+- When you propose an improvement or new idea he hasn't asked for, log it as offered (source oracle, a kind, a short title).
+- When he answers one, log accepted (red pill, free your mind, yes), rejected (blue pill, not now, no) or changed (yes with edits; put his words in the note), by its id or a word from its title. Night work he red-pills counts too (look it up with list).
+It only ranks; nothing runs without his yes. Never log Taylor's questions or anything from Morpheus.
+
 ## Morning: "Wake up, Neo" (Horace's routine, 2026-10-26)
 His TV wakes him at 7. When he sits down and says good morning (or asks for his morning or a briefing), run the routine:
 1. Call now, then the morning tool with action view and focus:true. That puts the Morning tab on his screen. He may have filled some of it on his phone (the Wolf Hall app's Morning screen uses the same log), so skip whatever is already there.
