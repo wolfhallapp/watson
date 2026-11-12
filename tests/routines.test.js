@@ -22,6 +22,7 @@ test('casino email check runs at 7 AM, noon, 4 PM and 8 PM Central, once per slo
 test('the routine prompt keeps purchase offers out', () => {
   assert.match(scan.prompt, /no purchase/);
   assert.match(scan.prompt, /add_offers/);
+  assert.match(scan.prompt, /update_deals/);
   assert.match(scan.prompt, /Never add anything tied to buying/);
   assert.match(scan.prompt, /no recommendation to buy/);
 });

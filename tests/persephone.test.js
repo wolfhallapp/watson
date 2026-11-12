@@ -72,7 +72,7 @@ test('her unattended email check may only read, record and add free bonuses', ()
   assert.match(unattendedBlock('mcp__persephone__set_balance', {}), /casino sites/);
   assert.match(unattendedBlock('mcp__persephone__remove_site', {}), /casino sites/);
   assert.match(unattendedBlock('mcp__persephone__log_play_run', {}), /casino sites/);
-  for (const ok of ['add_offers', 'record_emails', 'history_sync', 'casino_state', 'patterns']) assert.equal(unattendedBlock(`mcp__persephone__${ok}`, {}), null);
+  for (const ok of ['add_offers', 'record_emails', 'history_sync', 'casino_state', 'patterns', 'update_deals']) assert.equal(unattendedBlock(`mcp__persephone__${ok}`, {}), null);
 });
 
 test('the casino email check is hers now, and asks for the full ledger', () => {

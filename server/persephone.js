@@ -277,6 +277,15 @@ export function createPersephoneTools(send, currentSessionId) {
       tool('add_offers', 'Add truly free email bonuses (free SC or free spins, no purchase, deposit or required play) to the app\'s Email bonuses list. The worker rejects anything else and says why.',
         { offers: z.array(z.object({ site: z.string(), what: z.string().max(120), expires: z.string().optional(), link: z.string().optional(), emailId: z.string(), claimLink: z.string().optional(), notes: z.string().max(400).optional() })).min(1).max(40) },
         act(async ({ offers }) => { const r = await post('/gambling/offers', { offers }); changed(); return text(JSON.stringify(r).slice(0, 2000)); })),
+      // Wolf Hall v238 (Horace, 11/12: "Yes, add a Deals list"): the purchase deals also show in the app, as plain facts.
+      tool('update_deals', 'Replace the app\'s Deals list with the current purchase deals and discounts from the casino emails (the same deals as the deals file). Send the WHOLE current list every time: it replaces the old one. Plain facts only.',
+        { deals: z.array(z.object({
+          site: z.string(), what: z.string().max(240).describe('the deal in a line, e.g. "40% match on any purchase, up to 10 SC"'),
+          price: z.string().max(60).optional().describe('e.g. "$15"'), get: z.string().max(160).optional().describe('what the price buys, e.g. "15,000,000 GC + 22 SC"'),
+          code: z.string().max(40).optional(), endsAt: z.string().optional().describe('ISO time with offset, or YYYY-MM-DD; leave out if the email gives no end'),
+          endText: z.string().max(60).optional().describe('e.g. "end not stated", "limited time"'), inCasinoSites: z.boolean().describe('false if the site is not on his Casino Sites list'),
+          emailDate: z.string().optional() })).max(150) },
+        act(async ({ deals }) => { const r = await post('/gambling/deals', { deals }); changed(); return text(JSON.stringify(r).slice(0, 1500)); })),
       tool('record_emails', 'Save every casino email you read to your ledger, in as much detail as the email gives, so Horace can find patterns later. Re-recording the same Gmail id updates it.',
         { emails: z.array(z.object({
           emailId: z.string(), threadId: z.string().optional(), receivedAt: z.string().describe('ISO time the email arrived'), from: z.string(), site: z.string().describe('Casino Sites name, or the sender\'s brand if not on the list'),

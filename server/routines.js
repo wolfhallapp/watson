@@ -181,6 +181,7 @@ export const ROUTINES = [
       `DEALS (Horace wants to know them, 10/31): rewrite ${CASINO_DEALS} as the current list of purchase deals and discounts from the emails`,
       '(e.g. "Chumba: 50% off first package, $9.99 for 30 SC, ends Sun 11:59 PM"). One line each: site, the deal with its real price and what you get, and when it ends.',
       'Keep deals from the existing file that have not expired and drop expired ones. Put a "Updated <date time>" line at the top. Plain facts only: no recommendation to buy, no hype.',
+      'Then send the same whole list to the app with update_deals (Horace, 11/12): one entry per deal with site, what, price, what you get, code, endsAt (ISO with offset) or endText, and inCasinoSites.',
       'Finish with history_sync so your claim history stays current.',
       'Then reply with one line: emails recorded, free bonuses added, any the worker rejected, the sites you skipped because they are not in Casino Sites or are paused or dropped (by name), and how many deals are on the list.',
     ].join(' '),
