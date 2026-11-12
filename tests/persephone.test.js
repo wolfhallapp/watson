@@ -92,3 +92,14 @@ test('her prompt carries the house rules', () => {
   assert.match(t, /Only SC/);
   assert.match(t, /ask for all the times as a list/);
 });
+
+test('her deals list may be posted to the app, other worker routes stay closed (11/12)', async () => {
+  const { workerPostGambling } = await import('../server/knowledge.js');
+  const realFetch = global.fetch;
+  global.fetch = async () => new Response('{"ok":true,"saved":0}', { status: 200 });
+  try {
+    await assert.rejects(workerPostGambling('/gambling/bills', {}), /Only the \/gambling\/ write routes/);
+    // /gambling/deals passes the allowlist (it may still fail later on a machine without the app repo, but not on the allowlist)
+    await workerPostGambling('/gambling/deals', { deals: [] }).catch((e) => assert.doesNotMatch(e.message, /Only the \/gambling\/ write routes/));
+  } finally { global.fetch = realFetch; }
+});
