@@ -358,6 +358,9 @@ export class WatsonAgent {
           if (CONNECTION_ERROR.test(String(why))) this.#explainConnection();
         }
         this.send({ type: 'done', ok, costUsd: m.total_cost_usd, ms: m.duration_ms, turns: m.num_turns });
+        // A routine can ask to hear how its job ended (the casino check retries a failed run, 11/12).
+        const after = this.onceDone; this.onceDone = null;
+        if (after) try { after(ok, ok ? '' : (m.errors?.join('; ') || m.result || m.subtype)); } catch (e) { console.warn('  onceDone failed:', e.message); }
         this.#reportUsage(q, m);
         state.set({ [tokensKey(this.p)]: this.contextTokens });
         if (this.contextTokens > config.contextLimit && !this.needsFresh) {

@@ -149,6 +149,7 @@ export const ROUTINES = [
     key: 'casinoOfferScan',
     // 11/6: Persephone's now, in her own throwaway session (opening every casino email is what overfilled the Oracle's, 10/30).
     agent: 'persephoneRoutine',
+    retryOnFail: true, // 11/12: a run that fails (e.g. the usage limit) is tried again in the same slot
     fresh: true,
     times: [{ hour: 7, minute: 0 }, { hour: 12, minute: 0 }, { hour: 16, minute: 0 }, { hour: 20, minute: 0 }], // four a day from 11/7 per Horace (twice 11/4-11/6); first at 7:00 from 11/8 (was 7:30)
     untilHour: 23,
@@ -224,6 +225,27 @@ export function routineDue(r, now, lastDay) {
   return day;
 }
 
+// Retrying a failed run (Horace, 11/12: the noon casino check hit the usage limit, was marked done and never ran).
+// A routine with `retryOnFail` that fails is un-marked, so it runs again in the same slot, at most RETRY_MAX more
+// times and no sooner than RETRY_MS apart. It never spills into the next slot (routineDue stops at the slot's end).
+export const RETRY_MS = 15 * 60000, RETRY_MAX = 8;
+const retries = new Map(); // routine key -> { slot, n, at }
+export function retryWaiting(key, slot, now = Date.now()) {
+  const r = retries.get(key);
+  return !!(r && r.slot === slot && now < r.at);
+}
+/** Called when a routine's job ended badly. Returns what happened, for the log (and tests). */
+export function noteRoutineFailure(key, slot, prev, why, now = Date.now()) {
+  const old = retries.get(key);
+  const n = (old && old.slot === slot ? old.n : 0) + 1;
+  if (n > RETRY_MAX) return `gave up on ${slot} after ${RETRY_MAX} retries (${why})`;
+  retries.set(key, { slot, n, at: now + RETRY_MS });
+  const done = state.get().routinesDone || {};
+  if (done[key] === slot) state.set({ routinesDone: { ...done, [key]: prev ?? null } });
+  return `will retry ${slot} in ${RETRY_MS / 60000} min (try ${n} of ${RETRY_MAX}): ${why}`;
+}
+export function clearRetries() { retries.clear(); }
+
 /**
  * `agents.main` is the Oracle. `agents.night` (optional) is a separate session for routines marked
  * `agent: 'night'`; it starts fresh each run so the Night Shift doesn't grow the Oracle's conversation.
@@ -248,6 +270,8 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       const day = routineDue(r, new Date(), done[r.key]);
       if (!day) continue;
       if (r.repeat && r.guard && !r.guard()) continue; // overnight: just wait for the meter or new tasks
+      if (r.retryOnFail && retryWaiting(r.key, day)) continue; // failed earlier in this slot: wait a bit
+      const prev = done[r.key];
       state.set({ routinesDone: { ...done, [r.key]: day } });
       if (r.guard && !r.guard()) { console.log(`  Routine ${r.key} skipped for ${day} (usage guard)`); continue; }
       console.log(`  Routine ${r.key} for ${day}`);
@@ -258,6 +282,7 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       }
       const a = (r.agent && agents[r.agent]) || main;
       if (r.fresh) await a.reset(); // the Night Shift starts clean; Trinity keeps her conversation
+      if (r.retryOnFail) a.onceDone = (ok, why) => { if (!ok) console.log(`  Routine ${r.key}: ${noteRoutineFailure(r.key, day, prev, why)}`); };
       a.ask(prompt, 'routine');
       return; // one at a time; the next tick picks up any other
     }

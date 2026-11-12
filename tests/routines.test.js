@@ -52,3 +52,18 @@ test('the Night Shift picks its own task when the queue is empty (10/31)', () =>
   assert.match(night.prompt, /IF THE QUEUE HAS NO UNCHECKED TASK, choose one yourself/);
   assert.match(night.prompt, /\(self-chosen\)/);
 });
+
+test('a failed casino check is retried in the same slot, 15 minutes apart, at most 8 times (11/12)', async () => {
+  const { noteRoutineFailure, retryWaiting, clearRetries, RETRY_MS, RETRY_MAX } = await import('../server/routines.js');
+  assert.equal(scan.retryOnFail, true);
+  clearRetries();
+  const k = '__retry_test__', slot = '2026-11-12@12:00', t0 = Date.parse('2026-11-12T18:00:00Z'); // never in routinesDone, so no state write
+  assert.match(noteRoutineFailure(k, slot, '2026-11-12@07:00', 'rate_limit', t0), /will retry .*try 1 of 8/);
+  assert.equal(retryWaiting(k, slot, t0 + RETRY_MS - 1), true);
+  assert.equal(retryWaiting(k, slot, t0 + RETRY_MS), false);
+  assert.equal(retryWaiting(k, '2026-11-12@16:00', t0), false); // the next slot is never held back
+  for (let i = 2; i <= RETRY_MAX; i++) assert.match(noteRoutineFailure(k, slot, null, 'x', t0), new RegExp(`try ${i} of`));
+  assert.match(noteRoutineFailure(k, slot, null, 'x', t0), /gave up/);
+  assert.match(noteRoutineFailure(k, '2026-11-12@16:00', null, 'x', t0), /try 1 of/); // a new slot starts over
+  clearRetries();
+});
