@@ -137,6 +137,10 @@ export const ROUTINES = [
       `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,
       `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
+      // 11/13 Night Shift: an early paycheck gets counted twice by /forecast (and Home's Free) until SKIPPED_INCOME has it.
+      'Horace is paid on the 1st and the 15th. If his next payday is within 3 days and falls on a Saturday, Sunday or US bank holiday,',
+      'and SKIPPED_INCOME in /home/horacehall/projects/wolf-hall-app/cloudflare-worker.js has no Horace entry for that date, add a line starting "💵 Payday:"',
+      'that names the date and its weekday and says: if the check lands early, tell the Oracle the day, so the forecast and Home\'s Free don\'t count it twice (a worker change he approves).',
       `If ${CASINO_DEALS} lists deals, add a line starting "🏷️ Casino deals:" with how many and the one ending soonest, as plain fact with no nudge to buy.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
       'Start each line with a small emoji label, for example "📅 Calendar:". Put the most important line first.',

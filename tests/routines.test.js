@@ -67,3 +67,15 @@ test('a failed casino check is retried in the same slot, 15 minutes apart, at mo
   assert.match(noteRoutineFailure(k, '2026-11-12@16:00', null, 'x', t0), /try 1 of/); // a new slot starts over
   clearRetries();
 });
+
+test('morning briefing: a 💵 Payday heads-up when Horace\'s 1st or 15th falls on a weekend or holiday (11/13)', () => {
+  const brief = ROUTINES.find((r) => r.key === 'morningBriefing');
+  assert.equal(typeof brief.prompt, 'string');
+  assert.match(brief.prompt, /paid on the 1st and the 15th/);
+  assert.match(brief.prompt, /within 3 days and falls on a Saturday, Sunday or US bank holiday/);
+  assert.match(brief.prompt, /SKIPPED_INCOME in \/home\/horacehall\/projects\/wolf-hall-app\/cloudflare-worker\.js has no Horace entry/);
+  assert.match(brief.prompt, /"💵 Payday:"/);
+  assert.match(brief.prompt, /don't count it twice/);
+  // It sits before the "write it as 5 to 10 lines" wrap-up, like the other optional lines.
+  assert.ok(brief.prompt.indexOf('💵 Payday') < brief.prompt.indexOf('Write it as 5 to 10'));
+});
