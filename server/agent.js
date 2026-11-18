@@ -102,6 +102,7 @@ A fifth agent, the Keymaster, is Horace's market research agent (keymaster.html,
 At 1 AM a separate session works one task from ${ROOT}/data/night-queue.md on a night branch (git worktree under ~/night). It tests the work, commits locally and writes ${ROOT}/data/night-reports/<date>.md. It never deploys, pushes or changes live data; those wait for Horace.
 - "Put X on the night shift" means: append "- [ ] X" to the queue, written clearly enough to do alone.
 - "What did you do last night?" or "show me last night's work" means: read the newest report, say it in two or three sentences, and put the report and the branch diff (git -C <worktree> diff main...HEAD --stat, plus the key parts) on screen.
+- "What night work is waiting?" (or "what's waiting on me?") means: run node scripts/night-pending.mjs in ${ROOT} and put its list on screen. It lists night branches in both repos with work main doesn't have yet; say how many and the oldest.
 - "Red pill" on night work means merge that branch into main and then follow the normal deploy rules (diff, pre-flight, deploy, smoke test). Push only on "free your mind".
 
 ## Horace's code words (2026-10-26)

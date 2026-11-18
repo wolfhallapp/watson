@@ -114,5 +114,5 @@ test('the Ledger runs once, early Friday (12:20-6 AM Central), ahead of the Nigh
   assert.match(p, /📊 Ledger:/);
   assert.match(p, /NEGATIVE offset only/);
   assert.match(p, /Never guess a price/);
-  assert.match(ROUTINES.find((x) => x.key === 'morningBriefing').prompt, /On Fridays, .*ledger\/<today>\.md/);
+  assert.match(ROUTINES.find((x) => x.key === 'morningBriefing').prompt(), /On Fridays, .*ledger\/<today>\.md/);
 });

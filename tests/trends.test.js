@@ -68,7 +68,7 @@ test('it runs Saturday 11 PM Central, once, with no agent and only a read of /mo
   assert.equal(routineDue(r, new Date('2026-11-01T05:30:00Z'), null), null);           // Sunday: too late
   assert.equal(routineDue(r, new Date('2026-11-08T05:30:00Z'), null), '2026-11-07');   // Sat 11:30 PM CST
   const brief = ROUTINES.find((x) => x.key === 'morningBriefing');
-  assert.match(brief.prompt, /On Sundays, .*trends\/<today>\.md.*📈 Week/);
+  assert.match(brief.prompt(), /On Sundays, .*trends\/<today>\.md.*📈 Week/);
 });
 
 test('prepare saves Sunday\'s file, compares with last Sunday, and leaves a 📈 line on failure', async () => {

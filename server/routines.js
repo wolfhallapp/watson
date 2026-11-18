@@ -7,6 +7,7 @@ import { state } from './store.js';
 import { DATA_DIR, ROOT } from './config.js';
 import { prepareWeeklyLedger, LEDGER_DIR } from './ledger.js';
 import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
+import { findPendingNightWork, nightPendingLine } from './night-pending.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -128,7 +129,10 @@ export const ROUTINES = [
     fresh: true,
     hour: 6, minute: 40, untilHour: 11,
     tuesday: { hour: 3, minute: 15 }, // Horace leaves for work at 4 AM on Tuesdays
-    prompt: [
+    // 11/18 (Night Shift): night branches still waiting on a red pill, worked out in code (git, read-only).
+    // Never throws: a failure here must not cost Horace his briefing.
+    prepare: async () => { try { return nightPendingLine(findPendingNightWork()); } catch { return ''; } },
+    prompt: (pending = '') => [
       '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
       'calendar for today and tomorrow, important unread email from the last day, bills due in the next 7 days, the Pool,',
@@ -137,11 +141,12 @@ export const ROUTINES = [
       `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,
       `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
+      pending ? `Add this line as is, right after the 🌙 line (it counts night branches not merged yet): ${pending}` : '',
       `If ${CASINO_DEALS} lists deals, add a line starting "🏷️ Casino deals:" with how many and the one ending soonest, as plain fact with no nudge to buy.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
       'Start each line with a small emoji label, for example "📅 Calendar:". Put the most important line first.',
       'Save it with the morning tool, action briefing. Then reply with one line saying it is saved.',
-    ].join(' '),
+    ].filter(Boolean).join(' '),
   },
   {
     // Casino email check. 10/31 per Horace: three times a day, and also list purchase deals and discounts
