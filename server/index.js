@@ -22,6 +22,7 @@ import { PERSEPHONE, PERSEPHONE_ROUTINE, screenAction as casinoAction, screenSta
 import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 import * as sandbox from './sandbox.js';
 import { readUsageReport } from './usage.js';
+import { startWorkshopHelper } from './workshop.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -458,6 +459,7 @@ const routineAgent = new WatsonAgent((event) => { if (event.type === 'usage') re
 // Persephone's casino email checks run in their own fresh session; her page refreshes when they change something.
 const persephoneRoutine = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'casino_changed') broadcastTo(channels.persephone, event); if (event.type === 'error') console.warn('  Persephone routine:', event.message); }, PERSEPHONE_ROUTINE);
 startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster, persephone, persephoneRoutine });
+startWorkshopHelper(); // Wolf Hall v248: answers House Projects questions from the app (its own locked-down session)
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
