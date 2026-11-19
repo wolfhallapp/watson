@@ -79,6 +79,10 @@ function classifyAll(toolName, input) {
     return { level: 'medium', reason: 'read a file that holds secrets' };
   }
   if (SCHEDULING_TOOLS.has(toolName)) return { level: 'medium', reason: 'schedule something to run later' };
+  // Wolf Hall v246: a reply goes to Jake and an add changes House Projects, so both wait for Horace's yes.
+  // keep: true = asked even in trust mode (Horace, 2026-11-18: "only after your yes").
+  if (toolName === 'mcp__watson__jake_inbox' && input.action === 'reply') return { level: 'high', reason: 'send Jake a reply in the Wolf Hall app', keep: true };
+  if (toolName === 'mcp__watson__jake_inbox' && input.action === 'add_to_project') return { level: 'medium', reason: 'add something to a House Project in Wolf Hall', keep: true };
   if (toolName === 'mcp__watson__wolf_hall') {
     const writes = workerGetWrites(String(input.path || '/'));
     return writes ? { level: 'medium', reason: writes } : null;

@@ -173,11 +173,22 @@ export function workerGetWrites(p) {
   return null;
 }
 
-/** The app's own key, read from the repo each call so it never goes stale. */
+/**
+ * The app's master key, read each call so it never goes stale. Wolf Hall v245 took it out of
+ * index.html (it was public there); it now lives in the git-ignored .worker-key file in the app
+ * repo (written by setup/new-auth-secrets.sh). WOLF_HALL_WORKER_KEY overrides it. The old
+ * index.html line is still read as a last resort until v245 is deployed.
+ */
 export function workerKey() {
+  if (process.env.WOLF_HALL_WORKER_KEY) return process.env.WOLF_HALL_WORKER_KEY.trim();
+  const keyFile = path.join(config.projectDir, '.worker-key');
+  if (fs.existsSync(keyFile)) {
+    const k = fs.readFileSync(keyFile, 'utf8').trim();
+    if (k) return k;
+  }
   const html = fs.readFileSync(path.join(config.projectDir, 'index.html'), 'utf8');
   const m = html.match(/const WORKER_KEY = '([^']+)'/);
-  if (!m) throw new Error('Could not find WORKER_KEY in the repo index.html');
+  if (!m) throw new Error('No Wolf Hall key: put it in .worker-key in the app repo (setup/new-auth-secrets.sh writes it)');
   return m[1];
 }
 
@@ -187,6 +198,23 @@ export async function workerPostGambling(p, body) {
   const r = await fetch(WORKER_URL + p, {
     method: 'POST', headers: { 'X-Worker-Key': workerKey(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ source: 'The Oracle', ...body }), signal: AbortSignal.timeout(60000),
+  });
+  const text = await r.text();
+  let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
+  return { status: r.status, body: text, json };
+}
+
+/**
+ * Wolf Hall v246, Messages from Jake: PATCH /inbox/<id> (mark seen, or Horace's reply) and the two
+ * House Projects adds (a material or a step on a project). Nothing else can be written from here.
+ */
+export async function workerInboxWrite(p, method, body) {
+  const ok = (method === 'PATCH' && /^\/inbox\/[0-9a-f-]{32,36}$/i.test(p))
+    || (method === 'POST' && /^\/homestead\/[0-9a-f-]{32,36}\/(materials|steps)$/i.test(p));
+  if (!ok) throw new Error('Only /inbox/<id> (PATCH) and /homestead/<id>/materials|steps (POST) are allowed');
+  const r = await fetch(WORKER_URL + p, {
+    method, headers: { 'X-Worker-Key': workerKey(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(60000),
   });
   const text = await r.text();
   let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
