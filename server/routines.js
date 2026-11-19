@@ -135,6 +135,10 @@ export const ROUTINES = [
       'the casino Bonus Run, the Architect\'s moves for today, upcoming reminders and the weather for Thrall, TX (one line).',
       'If Trinity\'s church digest ran last night (Documents/Trinity study/Church notes.md changed since yesterday), add a line starting "⛪ Church:" with the next event and anything new; if it did not run, say so in that line.',
       `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,
+      // 11/19 per Horace: he wants to know the date he can move Claude from Pro to the $100 Max plan.
+      'On Fridays, also add a line starting "💻 Claude upgrade:" from the wolf_hall tool GET /upgrade-ready (read-only, never /forecast):',
+      'if claudeUpgrade.ready, the date and the extra per month (claudeUpgrade.extra); if not ready, its reason in plain words;',
+      'if claudeUpgrade is null or the call fails, say the Forecast screen needs one look to refresh it. If asOf is more than 7 days old, say how old.',
       `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
       `If ${CASINO_DEALS} lists deals, add a line starting "🏷️ Casino deals:" with how many and the one ending soonest, as plain fact with no nudge to buy.`,

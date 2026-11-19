@@ -67,3 +67,10 @@ test('a failed casino check is retried in the same slot, 15 minutes apart, at mo
   assert.match(noteRoutineFailure(k, '2026-11-12@16:00', null, 'x', t0), /try 1 of/); // a new slot starts over
   clearRetries();
 });
+
+test('the Friday briefing reports the Claude upgrade date from the read-only route (11/19)', () => {
+  const brief = ROUTINES.find((r) => r.key === 'morningBriefing');
+  assert.match(brief.prompt, /On Fridays, also add a line starting "💻 Claude upgrade:"/);
+  assert.match(brief.prompt, /GET \/upgrade-ready \(read-only, never \/forecast\)/);
+  assert.match(brief.prompt, /needs one look to refresh it/);
+});
