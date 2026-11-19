@@ -3,7 +3,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ROUTINES, routineDue } from '../server/routines.js';
 
-const scan = ROUTINES.find((r) => r.key === 'casinoOfferScan');
+const scanReal = ROUTINES.find((r) => r.key === 'casinoOfferScan');
+const scan = { ...scanReal, off: false }; // the slot timing, for when it is turned back on
+
+test('gambling scheduling is off (Horace, 11/19): no casino check, no casino lines in the briefing', () => {
+  assert.equal(scanReal.off, true);
+  for (const t of ['2026-11-20T13:00:00Z', '2026-11-20T18:00:00Z', '2026-11-20T22:00:00Z', '2026-11-21T02:00:00Z']) assert.equal(routineDue(scanReal, new Date(t), null), null);
+  const brief = ROUTINES.find((r) => r.key === 'morningBriefing').prompt;
+  assert.doesNotMatch(brief, /Casino deals:/);
+  assert.doesNotMatch(brief, /the casino Bonus Run,/);
+  assert.match(brief, /Leave out anything about casinos or gambling/);
+});
 
 test('casino email check runs at 7 AM, noon, 4 PM and 8 PM Central, once per slot (11/7)', () => {
   assert.equal(routineDue(scan, new Date('2026-10-26T11:59:00Z'), null), null);                       // 6:59 AM CDT

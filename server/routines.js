@@ -132,7 +132,9 @@ export const ROUTINES = [
       '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
       'calendar for today and tomorrow, important unread email from the last day, bills due in the next 7 days, the Pool,',
-      'the casino Bonus Run, the Architect\'s moves for today, upcoming reminders and the weather for Thrall, TX (one line).',
+      // 11/19 per Horace: gambling is off, so no casino Bonus Run or casino deals lines.
+      'the Architect\'s moves for today, upcoming reminders and the weather for Thrall, TX (one line).',
+      'Leave out anything about casinos or gambling (no Bonus Run, no casino deals); Horace turned that off on 11/19.',
       'If Trinity\'s church digest ran last night (Documents/Trinity study/Church notes.md changed since yesterday), add a line starting "⛪ Church:" with the next event and anything new; if it did not run, say so in that line.',
       `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,
       // 11/19 per Horace: he wants to know the date he can move Claude from Pro to the $100 Max plan.
@@ -141,7 +143,6 @@ export const ROUTINES = [
       'if claudeUpgrade is null or the call fails, say the Forecast screen needs one look to refresh it. If asOf is more than 7 days old, say how old.',
       `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
-      `If ${CASINO_DEALS} lists deals, add a line starting "🏷️ Casino deals:" with how many and the one ending soonest, as plain fact with no nudge to buy.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
       'Start each line with a small emoji label, for example "📅 Calendar:". Put the most important line first.',
       'Save it with the morning tool, action briefing. Then reply with one line saying it is saved.',
@@ -151,6 +152,9 @@ export const ROUTINES = [
     // Casino email check. 10/31 per Horace: three times a day, and also list purchase deals and discounts
     // (for his information only; they never go on the free Bonus Run list).
     key: 'casinoOfferScan',
+    // 11/19 per Horace: OFF, with all gambling scheduling, to save Claude usage (it ran 4x a day).
+    // Delete this line to turn it back on; the prompt below is kept as it was.
+    off: true,
     // 11/6: Persephone's now, in her own throwaway session (opening every casino email is what overfilled the Oracle's, 10/30).
     agent: 'persephoneRoutine',
     retryOnFail: true, // 11/12: a run that fails (e.g. the usage limit) is tried again in the same slot
@@ -197,6 +201,7 @@ function readQueue() { try { return fs.readFileSync(NIGHT_QUEUE, 'utf8'); } catc
 
 /** The Central day this routine should run for now, or null (not time yet, too late, or already ran). */
 export function routineDue(r, now, lastDay) {
+  if (r.off) return null; // switched off (11/19: the casino email check)
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hourCycle: 'h23', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     .formatToParts(now).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]));
   const day = `${p.year}-${p.month}-${p.day}`;
