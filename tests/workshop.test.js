@@ -82,6 +82,11 @@ test('processPending: Working, then Answered with the changes; a failure is mark
   assert.deepEqual(calls.filter((c) => c[1] === '/workshop/c2').map((c) => c[2].status), ['Working', 'Failed']);
 });
 
+test('answers are saved as plain text (no ** or # marks on Jake\'s phone)', async () => {
+  const { plainAnswer } = await import('../server/workshop.js');
+  assert.equal(plainAnswer('## Plan\n- **Shower diverter (Critical):** check the `cartridge`\n* Sand'), 'Plan\n- Shower diverter (Critical): check the cartridge\n- Sand');
+});
+
 test('the Oracle\'s workshop_chats tool is read-only (no approval needed)', () => {
   assert.equal(classify('mcp__watson__workshop_chats', { since: '2026-11-18' }, { trust: false }), null);
 });

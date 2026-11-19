@@ -258,6 +258,14 @@ export async function runHelper(chat, { queryImpl = query, fetcher = helperFetch
   return { answer, changes };
 }
 
+/** The app shows answers as plain text: drop markdown marks the model slips in anyway. */
+export function plainAnswer(s) {
+  return String(s || '')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1').replace(/__([^_\n]+)__/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '').replace(/^\s*\*\s+/gm, '- ').replace(/`([^`\n]+)`/g, '$1')
+    .trim();
+}
+
 /** One pass over waiting questions. */
 export async function processPending({ fetcher = helperFetch, run = runHelper, log = console } = {}) {
   const r = await fetcher('GET', '/workshop/pending');
@@ -267,7 +275,7 @@ export async function processPending({ fetcher = helperFetch, run = runHelper, l
     await fetcher('PATCH', `/workshop/${chat.id}`, { status: 'Working' });
     try {
       const out = await run(chat, { fetcher });
-      await fetcher('PATCH', `/workshop/${chat.id}`, { status: 'Answered', answer: out.answer, changes: out.changes.join('\n') });
+      await fetcher('PATCH', `/workshop/${chat.id}`, { status: 'Answered', answer: plainAnswer(out.answer), changes: out.changes.join('\n') });
       done++;
     } catch (e) {
       log.warn?.(`[workshop] could not answer ${chat.id}: ${e.message}`);
