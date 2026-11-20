@@ -151,8 +151,8 @@ export function createWatsonTools(send, currentSessionId = () => null) {
           + 'use {id, amount} = take an amount out. update {id, quantity?, lowAt?, expires?, location?} = change an item. add_item {item, quantity?, unit?, location?, lowAt?}. '
           + 'need {item, amountText?, store?} / want {item} = add to the list. got {listId | itemId, qty?} = bought (restocks HAVE, logs BOUGHT). Building materials belong on House Projects instead.',
         {
-          action: z.enum(['list', 'use', 'update', 'add_item', 'need', 'want', 'got']), id: z.string().optional(), amount: z.number().optional(),
-          quantity: z.number().min(0).optional(), lowAt: z.number().min(0).optional(), expires: z.string().optional(), location: z.enum(['Fridge', 'Freezer', 'Pantry']).optional(),
+          action: z.enum(['list', 'order', 'order_placed', 'use', 'update', 'add_item', 'need', 'want', 'got']), id: z.string().optional(), amount: z.number().optional(),
+          quantity: z.number().min(0).optional(), lowAt: z.number().min(0).optional(), expires: z.string().optional(), location: z.enum(['Fridge', 'Freezer', 'Pantry', 'Kitchen', 'Bathroom', 'Laundry', 'Closet', 'Garage', 'Storage']).optional(),
           unit: z.string().optional(), item: z.string().optional(), amountText: z.string().optional(), store: z.enum(['HEB', 'Walmart', 'Either']).optional(),
           listId: z.string().optional(), itemId: z.string().optional(), qty: z.number().optional(),
         },
@@ -165,7 +165,19 @@ export function createWatsonTools(send, currentSessionId = () => null) {
               if (r.status >= 400) return { ...text(`HTTP ${r.status}\n${r.body.slice(0, 500)}`), isError: true };
               const d = r.json;
               return text(JSON.stringify({ have: d.have.map((i) => clean({ id: i.id, item: i.item, quantity: i.quantity, unit: i.unit || undefined, location: i.location, lowAt: i.lowAt ?? undefined, expires: i.expires || undefined })),
-                list: d.list.filter((x) => x.status === 'Open').map((x) => clean({ id: x.id, kind: x.kind, item: x.item, amount: x.amount || undefined, store: x.store })) }));
+                list: d.list.filter((x) => x.status === 'Open').map((x) => clean({ id: x.id, kind: x.kind, item: x.item, amount: x.amount || undefined, store: x.store, addedBy: x.addedBy || undefined })),
+                order: d.order }));
+            }
+            if (action === 'order') {
+              r = await workerProvisions('GET', '/provisions');
+              if (r.status >= 400) return { ...text(`HTTP ${r.status}\n${r.body.slice(0, 500)}`), isError: true };
+              const o = r.json.order || {};
+              const waiting = (r.json.orderNeeds || []).filter((n) => !(o.submitted || []).includes(n));
+              return text(JSON.stringify({ status: o.status || 'Collecting', submitted: o.submitted || [], waitingOn: waiting, readyAt: o.readyAt || undefined, store: o.store || 'Walmart' }));
+            }
+            if (action === 'order_placed') {
+              r = await workerProvisions('POST', '/provisions/order/placed', {});
+              return { ...text(`HTTP ${r.status}\n${r.body.slice(0, 500)}`), ...(r.status >= 400 ? { isError: true } : {}) };
             }
             if (action === 'use') r = id && amount > 0 ? await workerProvisions('POST', '/provisions/use', { uses: [{ id, amount }] }) : null;
             else if (action === 'update') r = id ? await workerProvisions('PATCH', `/provisions/items/${id}`, clean(f)) : null;

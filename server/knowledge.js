@@ -221,9 +221,9 @@ export async function workerInboxWrite(p, method, body) {
   return { status: r.status, body: text, json };
 }
 
-/** Wolf Hall v253 Provisions only (food and supplies): GET /provisions and its write routes. */
+/** Wolf Hall v253 Provisions only (v257: plus marking the store order placed) (food and supplies): GET /provisions and its write routes. */
 export async function workerProvisions(method, p, body) {
-  if (!/^\/provisions(\/(items|list|got|use|people|meals)(\/[0-9a-f-]{32,36})?)?$/i.test(p)) throw new Error('Only /provisions routes are allowed');
+  if (!/^\/provisions(\/(items|list|got|use|people|meals)(\/[0-9a-f-]{32,36})?|\/order\/placed)?$/i.test(p)) throw new Error('Only /provisions routes are allowed');
   const r = await fetch(WORKER_URL + p, {
     method, headers: { 'X-Worker-Key': workerKey(), 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(60000),
