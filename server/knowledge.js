@@ -221,6 +221,18 @@ export async function workerInboxWrite(p, method, body) {
   return { status: r.status, body: text, json };
 }
 
+/** Wolf Hall v253 Provisions only (food and supplies): GET /provisions and its write routes. */
+export async function workerProvisions(method, p, body) {
+  if (!/^\/provisions(\/(items|list|got|use|people|meals)(\/[0-9a-f-]{32,36})?)?$/i.test(p)) throw new Error('Only /provisions routes are allowed');
+  const r = await fetch(WORKER_URL + p, {
+    method, headers: { 'X-Worker-Key': workerKey(), 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(60000),
+  });
+  const text = await r.text();
+  let json = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
+  return { status: r.status, body: text, json };
+}
+
 /** POST /morning: Horace's Morning Log ("Wake up, Neo"), the same row the app's Morning screen writes. */
 export async function workerPostMorning(body) {
   const r = await fetch(WORKER_URL + '/morning', {

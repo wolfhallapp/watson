@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { memory, reminders, state } from './store.js';
 import { describeConnection } from './starlink.js';
-import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning, workerInboxWrite } from './knowledge.js';
+import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning, workerInboxWrite, workerProvisions } from './knowledge.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
@@ -139,6 +139,41 @@ export function createWatsonTools(send, currentSessionId = () => null) {
             }
             if (!projectId || !kind) return { ...text('Give projectId and kind.'), isError: true };
             return done(await workerInboxWrite(`/homestead/${projectId}/${kind === 'material' ? 'materials' : 'steps'}`, 'POST', fields));
+          } catch (e) {
+            return { ...text(`Could not reach the app: ${e.message}`), isError: true };
+          }
+        },
+      ),
+      tool(
+        'provisions',
+        'The house\'s food and supplies in the Wolf Hall app (Provisions, v253: HAVE / NEED / WANT / BOUGHT). Use it when Horace says what was used, bought or is needed ("used the last of the rice", "we need paper towels"). '
+          + 'list = HAVE items (id, item, quantity, unit, Fridge/Freezer/Pantry, lowAt, expires) and the open NEED/WANT list. '
+          + 'use {id, amount} = take an amount out. update {id, quantity?, lowAt?, expires?, location?} = change an item. add_item {item, quantity?, unit?, location?, lowAt?}. '
+          + 'need {item, amountText?, store?} / want {item} = add to the list. got {listId | itemId, qty?} = bought (restocks HAVE, logs BOUGHT). Building materials belong on House Projects instead.',
+        {
+          action: z.enum(['list', 'use', 'update', 'add_item', 'need', 'want', 'got']), id: z.string().optional(), amount: z.number().optional(),
+          quantity: z.number().min(0).optional(), lowAt: z.number().min(0).optional(), expires: z.string().optional(), location: z.enum(['Fridge', 'Freezer', 'Pantry']).optional(),
+          unit: z.string().optional(), item: z.string().optional(), amountText: z.string().optional(), store: z.enum(['HEB', 'Walmart', 'Either']).optional(),
+          listId: z.string().optional(), itemId: z.string().optional(), qty: z.number().optional(),
+        },
+        async ({ action, id, amount, amountText, store, listId, itemId, qty, ...f }) => {
+          const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+          try {
+            let r;
+            if (action === 'list') {
+              r = await workerProvisions('GET', '/provisions');
+              if (r.status >= 400) return { ...text(`HTTP ${r.status}\n${r.body.slice(0, 500)}`), isError: true };
+              const d = r.json;
+              return text(JSON.stringify({ have: d.have.map((i) => clean({ id: i.id, item: i.item, quantity: i.quantity, unit: i.unit || undefined, location: i.location, lowAt: i.lowAt ?? undefined, expires: i.expires || undefined })),
+                list: d.list.filter((x) => x.status === 'Open').map((x) => clean({ id: x.id, kind: x.kind, item: x.item, amount: x.amount || undefined, store: x.store })) }));
+            }
+            if (action === 'use') r = id && amount > 0 ? await workerProvisions('POST', '/provisions/use', { uses: [{ id, amount }] }) : null;
+            else if (action === 'update') r = id ? await workerProvisions('PATCH', `/provisions/items/${id}`, clean(f)) : null;
+            else if (action === 'add_item') r = f.item ? await workerProvisions('POST', '/provisions/items', clean(f)) : null;
+            else if (action === 'need' || action === 'want') r = f.item ? await workerProvisions('POST', '/provisions/list', clean({ item: f.item, kind: action === 'need' ? 'Need' : 'Want', amount: amountText, store })) : null;
+            else r = listId || itemId ? await workerProvisions('POST', '/provisions/got', clean({ listId, itemId, qty })) : null;
+            if (!r) return { ...text('Missing what to change (id, item, amount or listId/itemId).'), isError: true };
+            return { ...text(`HTTP ${r.status}\n${r.body.slice(0, 800)}`), ...(r.status >= 400 || r.json?.ok === false ? { isError: true } : {}) };
           } catch (e) {
             return { ...text(`Could not reach the app: ${e.message}`), isError: true };
           }

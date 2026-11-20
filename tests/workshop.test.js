@@ -87,6 +87,15 @@ test('answers are saved as plain text (no ** or # marks on Jake\'s phone)', asyn
   assert.equal(plainAnswer('## Plan\n- **Shower diverter (Critical):** check the `cartridge`\n* Sand'), 'Plan\n- Shower diverter (Critical): check the cartridge\n- Sand');
 });
 
+test('v253: the helper also reaches Provisions, and the Oracle\'s provisions writer reaches nothing else', async () => {
+  assert.equal(helperPathOk('/provisions'), true);
+  assert.equal(helperPathOk('/provisions/items/11111111-1111-4111-8111-111111111111'), true);
+  assert.equal(helperPathOk('/pantry/inventory'), false);
+  const { workerProvisions } = await import('../server/knowledge.js');
+  for (const p of ['/pool', '/provisions/../pool', '/provisions/heb-job', '/pantry/inventory', '/scan/confirm']) await assert.rejects(workerProvisions('POST', p, {}), /Only \/provisions/, p);
+  assert.match(helperSystemPrompt(), /Provisions \(the house's food and supplies/);
+});
+
 test('the Oracle\'s workshop_chats tool is read-only (no approval needed)', () => {
   assert.equal(classify('mcp__watson__workshop_chats', { since: '2026-11-18' }, { trust: false }), null);
 });
