@@ -214,3 +214,17 @@ test('v264 weekend planner: Fridays 6 PM Central, NWS weather for Thrall, posted
   assert.deepEqual(radarWants({ pickup: [{ item: 'Plywood' }, { item: 'Caulk' }] }, [{ item: 'Plywood 4x8' }]).map((w) => w.item), ['Caulk'], 'the radar skips what is on the Leftovers shelf');
   assert.equal(helperPathOk('/workshop/plan'), true);
 });
+
+test('v265: receipts credit the person who asked; the prompt covers receipts and timer-based estimates', async () => {
+  const { createHelperTools } = await import('../server/workshop.js');
+  assert.match(helperSystemPrompt(), /Receipts: when the photo is a store receipt/);
+  assert.match(helperSystemPrompt(), /job timer/);
+  const sent = [];
+  const fetcher = async (m, p, b) => { sent.push([m, p, b]); return { status: 200, json: { ok: true, material: { item: 'Plywood' } }, body: '' }; };
+  const server = createHelperTools([], fetcher);
+  const tool = server.instance?._registeredTools?.materials || server.instance?._tools?.materials;
+  if (tool?.callback || tool?.handler) {
+    await (tool.callback || tool.handler)({ action: 'update', id: 'm1', haveIt: true, cost: 45.98, creditTo: 'Jake' });
+    assert.deepEqual(sent[0], ['PATCH', '/homestead/materials/m1', { haveIt: true, cost: 45.98, creditTo: 'Jake' }]);
+  }
+});

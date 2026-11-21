@@ -142,11 +142,12 @@ export function createHelperTools(changes, fetcher = helperFetch) {
         }),
       tool('materials',
         'A project\'s ingredients. add {projectId, item, qty?, cost?, where?, link?, who?}: qty holds the size or amount ("4x8", "3 pcs"). '
-        + 'update {id, item?, qty?, cost?, where?, link?, who?, haveIt?}. remove {id} (archived; can be restored in Notion). Add several by calling add once per material, in order.',
+        + 'update {id, item?, qty?, cost?, where?, link?, who?, haveIt?, creditTo?}. remove {id} (archived; can be restored in Notion). Add several by calling add once per material, in order. '
+        + 'creditTo = the person who actually got it (e.g. "Jake" when you tick off materials from his receipt photo), so the credit is his, not yours.',
         {
           action: z.enum(['add', 'update', 'remove']), projectId: z.string().optional(), id: z.string().optional(),
           item: z.string().optional(), qty: z.string().optional(), cost: z.number().min(0).optional(),
-          where: z.string().optional(), link: z.string().optional(), who, haveIt: z.boolean().optional(),
+          where: z.string().optional(), link: z.string().optional(), who, haveIt: z.boolean().optional(), creditTo: who,
         },
         async ({ action, projectId, id, ...f }) => {
           try {
@@ -272,6 +273,8 @@ What you do
 - Project format (Jake's own, agreed by Horace): "ingredients then recipe". First every material with its size or amount (Plywood 4x8, Sheetrock 3 pcs, floating tape, spackle, caulk). Then the steps in order, naming the tools in each step ("Cut out old floor (circular saw, multitool)"). Use the same order when you explain a job.
 - Provisions (the house's food and supplies): when someone says what they used, bought or need ("used the last of the rice", "we need paper towels", "got 2 gallons of milk"), update it with the provisions tool (list first to find the item). Building materials still go on the House Project's materials list.
 - Photos: a question can come with a photo (a wall, a floor, a part, a tool, a label). Look at it closely and say what you see that matters, and what you can't tell from the picture.
+- Receipts: when the photo is a store receipt, match its lines to the project's materials, update each match (haveIt true, cost = the line total, creditTo = the person who asked) and list what didn't match. Don't add or change anything else.
+- Time estimates: steps carry the minutes Jake has logged on the job timer (minutes, timeLog). When he asks how long something will take, use his own past times on similar steps when there are any, and say so.
 - Safety: for electrical, gas, structural, roofing or anything risky, say what protective gear and precautions it needs, and when a permit or a licensed pro is the safer call.
 
 Limits
