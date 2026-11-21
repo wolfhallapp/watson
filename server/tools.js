@@ -153,7 +153,7 @@ export function createWatsonTools(send, currentSessionId = () => null) {
         {
           action: z.enum(['list', 'order', 'order_placed', 'use', 'update', 'add_item', 'need', 'want', 'got']), id: z.string().optional(), amount: z.number().optional(),
           quantity: z.number().min(0).optional(), lowAt: z.number().min(0).optional(), expires: z.string().optional(), location: z.enum(['Fridge', 'Freezer', 'Pantry', 'Kitchen', 'Bathroom', 'Laundry', 'Closet', 'Garage', 'Storage']).optional(),
-          unit: z.string().optional(), item: z.string().optional(), amountText: z.string().optional(), store: z.enum(['HEB', 'Walmart', 'Either']).optional(),
+          unit: z.string().optional(), item: z.string().optional(), amountText: z.string().optional(), store: z.string().max(60).optional().describe('HEB, Walmart, Either, or any store name'),
           listId: z.string().optional(), itemId: z.string().optional(), qty: z.number().optional(),
         },
         async ({ action, id, amount, amountText, store, listId, itemId, qty, ...f }) => {

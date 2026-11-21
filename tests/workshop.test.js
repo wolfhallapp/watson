@@ -99,3 +99,42 @@ test('v253: the helper also reaches Provisions, and the Oracle\'s provisions wri
 test('the Oracle\'s workshop_chats tool is read-only (no approval needed)', () => {
   assert.equal(classify('mcp__watson__workshop_chats', { since: '2026-11-18' }, { trust: false }), null);
 });
+
+test('v261: a photo question fetches only that chat\'s photo (helper key) and shows it to the model as an image', async () => {
+  const { helperPhoto, helperInput } = await import('../server/workshop.js');
+  let seen;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const got = await helperPhoto('11111111-1111-4111-8111-111111111111', { key: 'helper-k', fetchImpl: async (url, o) => { seen = { url, o }; return new Response(png, { headers: { 'Content-Type': 'image/png' } }); } });
+  assert.match(seen.url, /\/workshop\/11111111-1111-4111-8111-111111111111\/photo$/);
+  assert.equal(seen.o.headers['X-Helper-Key'], 'helper-k');
+  assert.equal('X-Worker-Key' in seen.o.headers, false);
+  assert.deepEqual(got, { mediaType: 'image/png', data: png.toString('base64') });
+  await assert.rejects(helperPhoto('../../pool', { key: 'k', fetchImpl: async () => { throw new Error('should not fetch'); } }), /bad chat id/);
+  await assert.rejects(helperPhoto('11111111-1111-4111-8111-111111111111', { key: 'k', fetchImpl: async () => new Response('<html>', { headers: { 'Content-Type': 'text/html' } }) }), /not an image/);
+  assert.equal(typeof helperInput({ from: 'Jake', question: 'q' }, null), 'string', 'no photo: the plain text prompt as before');
+  const it = helperInput({ from: 'Jake', question: 'What is this pipe?' }, got);
+  const msgs = []; for await (const m of it) msgs.push(m);
+  assert.equal(msgs.length, 1);
+  assert.equal(msgs[0].type, 'user');
+  assert.deepEqual(msgs[0].message.content[0], { type: 'image', source: { type: 'base64', media_type: 'image/png', data: got.data } });
+  assert.match(msgs[0].message.content[1].text, /What is this pipe\?/);
+});
+
+test('v261: runHelper with a photo keeps the lockdown (same tools, same MCP server, no settings)', async () => {
+  let opts, prompt, asked;
+  const queryImpl = (a) => { opts = a.options; prompt = a.prompt; return (async function* () { yield { type: 'result', subtype: 'success', is_error: false, result: 'That is a P-trap.' }; })(); };
+  const out = await runHelper({ id: 'c1', from: 'Jake', question: 'What is this?', photoId: 'abcdefghijkl' }, { queryImpl, photoFetcher: async (id) => { asked = id; return { mediaType: 'image/jpeg', data: 'AAAA' }; } });
+  assert.equal(out.answer, 'That is a P-trap.');
+  assert.equal(asked, 'c1');
+  assert.equal(typeof prompt[Symbol.asyncIterator], 'function', 'the image goes in as a message, not text');
+  assert.deepEqual(opts.tools, ['WebSearch', 'WebFetch']);
+  assert.deepEqual(Object.keys(opts.mcpServers), ['workshop']);
+  assert.equal(opts.strictMcpConfig, true);
+  assert.deepEqual(opts.settingSources, []);
+  // A photo that can't be loaded still gets an answer, told about the missing photo.
+  await runHelper({ id: 'c2', from: 'Jake', question: 'And this?', photoId: 'abcdefghijkl' }, { queryImpl, photoFetcher: async () => { throw new Error('HTTP 404'); } });
+  assert.equal(typeof prompt, 'string');
+  assert.match(prompt, /could not be loaded: HTTP 404/);
+  assert.equal(helperPathOk('/workshop/11111111-1111-4111-8111-111111111111/photo'), true);
+  assert.equal(helperPathOk('/homestead/../pool'), false);
+});

@@ -44,6 +44,32 @@ export async function helperFetch(method, p, body, { fetchImpl = fetch, key = he
   return { status: r.status, body: t, json };
 }
 
+// v261: a question's photo. The Worker only serves the one photo saved on that chat, to the helper key.
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+export const PHOTO_MAX_BYTES = 5 * 1024 * 1024; // the app sends ~0.3-0.6 MB; the model takes up to 5 MB
+export async function helperPhoto(chatId, { fetchImpl = fetch, key = helperKey() } = {}) {
+  const p = `/workshop/${chatId}/photo`;
+  if (!/^[0-9a-f-]{32,36}$/i.test(String(chatId)) || !helperPathOk(p)) throw new Error('bad chat id');
+  if (!key) throw new Error('No helper key (.helper-key in the app repo)');
+  const r = await fetchImpl(WORKER_URL + p, { headers: { 'X-Helper-Key': key }, signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error(`photo: HTTP ${r.status}`);
+  const type = String(r.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (!PHOTO_TYPES.includes(type)) throw new Error(`photo: not an image (${type || 'no type'})`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (!buf.length || buf.length > PHOTO_MAX_BYTES) throw new Error('photo: empty or too big');
+  return { mediaType: type, data: buf.toString('base64') };
+}
+/** The prompt: plain text, or (with a photo) one user message with the image first, then the text. */
+export function helperInput(chat, photo) {
+  const textPrompt = helperPrompt(chat);
+  if (!photo) return textPrompt;
+  const msg = { type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [
+    { type: 'image', source: { type: 'base64', media_type: photo.mediaType, data: photo.data } },
+    { type: 'text', text: `${textPrompt}\n\n(${chat.from || 'They'} attached the photo above.)` },
+  ] } };
+  return (async function* () { yield msg; })();
+}
+
 // Web pages: public sites only. Never this PC, its LAN or the Oracle's own server.
 export function publicUrlOk(u) {
   let x; try { x = new URL(String(u)); } catch { return false; }
@@ -158,10 +184,12 @@ export function createHelperTools(changes, fetcher = helperFetch) {
           } catch (err) { return { ...text(`Could not reach Wolf Hall: ${err.message}`), isError: true }; }
         }),
       tool('house_tools',
-        'Tools at the house. list. add {tool, status?, location?, notes?}. update {id, tool?, status?, location?, notes?}. remove {id}. Status: Have it, Borrowed, Needs repair, Need one.',
+        'Tools at the house. list. add {tool, status?, location?, notes?}. update {id, tool?, status?, location?, notes?, borrowedFrom?, lentTo?, dueBack?}. remove {id}. Status: Have it, Borrowed, Needs repair, Need one. '
+        + 'borrowedFrom / lentTo = who it came from or went to (free text, "" clears it); dueBack = YYYY-MM-DD ("" clears it).',
         {
           action: z.enum(['list', 'add', 'update', 'remove']), id: z.string().optional(), tool: z.string().optional(),
           status: z.enum(['Have it', 'Borrowed', 'Needs repair', 'Need one']).optional(), location: z.string().optional(), notes: z.string().optional(),
+          borrowedFrom: z.string().max(120).optional(), lentTo: z.string().max(120).optional(), dueBack: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/).optional(),
         },
         async ({ action, id, ...f }) => {
           try {
@@ -182,11 +210,11 @@ export function createHelperTools(changes, fetcher = helperFetch) {
         + 'list = everything: have (items with id, item, quantity, unit, location Fridge/Freezer/Pantry, lowAt, expires), the need/want list, people, meals. '
         + 'use {id, amount} = someone used some up ("used the last of the rice": amount = what\'s left, or set {id, quantity: 0} with update). '
         + 'update {id, quantity?, lowAt?, expires?, location?, unit?, item?} = change a HAVE item. add_item {item, quantity?, unit?, location?, lowAt?, expires?}. '
-        + 'need {item, amount?, store?: HEB|Walmart|Either} / want {item} = add to NEED or WANT. got {listId | itemId, qty?} = bought it (restocks HAVE, logs BOUGHT).',
+        + 'need {item, amount?, store?} / want {item} = add to NEED or WANT; store is HEB, Walmart, Either, or any store name (Home Depot, Lowe\'s, Buy Nothing...). got {listId | itemId, qty?} = bought it (restocks HAVE, logs BOUGHT).',
         {
           action: z.enum(['list', 'use', 'update', 'add_item', 'need', 'want', 'got']), id: z.string().optional(), amount: z.number().optional(),
           quantity: z.number().min(0).optional(), lowAt: z.number().min(0).optional(), expires: z.string().optional(), location: z.enum(['Fridge', 'Freezer', 'Pantry']).optional(),
-          unit: z.string().optional(), item: z.string().optional(), store: z.enum(['HEB', 'Walmart', 'Either']).optional(), listId: z.string().optional(), itemId: z.string().optional(), qty: z.number().optional(),
+          unit: z.string().optional(), item: z.string().optional(), store: z.string().max(60).optional(), listId: z.string().optional(), itemId: z.string().optional(), qty: z.number().optional(),
           amountText: z.string().optional().describe('For need: how much, as words ("2 bags")'),
         },
         async ({ action, id, amount, amountText, listId, itemId, qty, store, ...f }) => {
@@ -240,6 +268,7 @@ What you do
 - Set up and update projects with your tools when asked or when it clearly helps: create projects, add materials and steps, check things off, update tools at the house, write a project's wrap-up. You may make these changes directly. At the end of your answer, say in one short line what you changed.
 - Project format (Jake's own, agreed by Horace): "ingredients then recipe". First every material with its size or amount (Plywood 4x8, Sheetrock 3 pcs, floating tape, spackle, caulk). Then the steps in order, naming the tools in each step ("Cut out old floor (circular saw, multitool)"). Use the same order when you explain a job.
 - Provisions (the house's food and supplies): when someone says what they used, bought or need ("used the last of the rice", "we need paper towels", "got 2 gallons of milk"), update it with the provisions tool (list first to find the item). Building materials still go on the House Project's materials list.
+- Photos: a question can come with a photo (a wall, a floor, a part, a tool, a label). Look at it closely and say what you see that matters, and what you can't tell from the picture.
 - Safety: for electrical, gas, structural, roofing or anything risky, say what protective gear and precautions it needs, and when a permit or a licensed pro is the safer call.
 
 Limits
@@ -259,9 +288,15 @@ export function helperPrompt(chat) {
 }
 
 /** Runs one answer. Returns { answer, changes }. */
-export async function runHelper(chat, { queryImpl = query, fetcher = helperFetch } = {}) {
+export async function runHelper(chat, { queryImpl = query, fetcher = helperFetch, photoFetcher = helperPhoto } = {}) {
   fs.mkdirSync(WORK_DIR, { recursive: true, mode: 0o700 });
   const changes = [];
+  // v261: a photo with the question is fetched (helper key, that chat only) and shown to the model.
+  let photo = null;
+  if (chat.photoId) {
+    try { photo = await photoFetcher(chat.id); }
+    catch (e) { chat = { ...chat, question: `${chat.question}\n\n(They attached a photo, but it could not be loaded: ${e.message}. Say so, and answer as well as you can.)` }; }
+  }
   const gate = async (input) => {
     if (input.hook_event_name !== 'PreToolUse') return {};
     const why = helperBlock(input.tool_name, input.tool_input);
@@ -271,7 +306,7 @@ export async function runHelper(chat, { queryImpl = query, fetcher = helperFetch
   const env = { ...process.env, CLAUDE_CODE_MAX_RETRIES: config.claudeMaxRetries, API_TIMEOUT_MS: config.apiTimeoutMs };
   for (const k of Object.keys(env)) if (/WORKER_KEY|HELPER_KEY|NOTION|SECRET|TOKEN|PASSWORD|ELEVEN|FMP|GMAIL/i.test(k) && !/^ANTHROPIC|^CLAUDE/.test(k)) delete env[k];
   const q = queryImpl({
-    prompt: helperPrompt(chat),
+    prompt: helperInput(chat, photo),
     options: {
       cwd: WORK_DIR,
       model: MODEL,
