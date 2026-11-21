@@ -164,10 +164,13 @@ export function createHelperTools(changes, fetcher = helperFetch) {
         }),
       tool('steps',
         'A project\'s recipe. add {projectId, step, who?, notes?}: steps are added in order, so add them first to last; name the tools in the step text. '
-        + 'update {id, step?, done?, who?, notes?, order?}. remove {id} (archived).',
+        + 'update {id, step?, done?, who?, notes?, order?, video?, safety?}. remove {id} (archived). '
+        + 'video = a how-to video link (https). safety = the safety checklist for a risky step (electrical, gas, roof, ladder, saws, demolition), short plain items like "Breaker OFF and tested dead"; '
+        + 'a risky step can\'t be checked off until every safety item is ticked, so never tick safety items or check a risky step off for someone.',
         {
           action: z.enum(['add', 'update', 'remove']), projectId: z.string().optional(), id: z.string().optional(),
           step: z.string().optional(), done: z.boolean().optional(), who, notes: z.string().optional(), order: z.number().optional(),
+          video: z.string().url().optional(), safety: z.array(z.string().max(200)).max(12).optional(),
         },
         async ({ action, projectId, id, ...f }) => {
           try {
@@ -378,9 +381,10 @@ export function centralParts(now, tz = RADAR.tz) {
 /** Due when it's 6 PM or later in Central time and it hasn't run today (Central date). */
 export function radarDue(now, lastDate) { const c = centralParts(now); return c.hour >= RADAR.hour && lastDate !== c.date; }
 /** What to look for: materials not had yet on open projects, then tools marked Need one. */
-export function radarWants(overview) {
+export function radarWants(overview, leftovers = []) {
   const seen = new Set(); const out = [];
-  const add = (name, qty, project) => { const k = String(name || '').trim().toLowerCase(); if (!k || seen.has(k)) return; seen.add(k); out.push({ item: String(name).trim(), qty: qty || '', project: project || '' }); };
+  const onShelf = (name) => { const n = String(name || '').trim().toLowerCase(); return leftovers.some((l) => { const r = String(l.item || '').toLowerCase(); return r && (r === n || r.includes(n) || n.includes(r)); }); };
+  const add = (name, qty, project) => { const k = String(name || '').trim().toLowerCase(); if (!k || seen.has(k) || onShelf(name)) return; seen.add(k); out.push({ item: String(name).trim(), qty: qty || '', project: project || '' }); }; // v264: leftovers first
   for (const m of overview?.pickup || []) add(m.item, m.qty, m.project);
   for (const t of overview?.tools || []) if (t.status === 'Need one') add(t.tool, '', 'Tools');
   return out.slice(0, RADAR.maxItems);
@@ -398,7 +402,9 @@ export async function runRadar({ fetcher = helperFetch, run = runHelper, now = n
   const today = centralParts(now).date;
   const ov = await fetcher('GET', '/homestead/overview');
   if (ov.status >= 400) throw new Error(`overview: HTTP ${ov.status}`);
-  const wants = radarWants(ov.json);
+  let lefts = [];
+  try { const pv = await fetcher('GET', '/provisions'); lefts = (pv.json?.have || []).filter((i) => i.location === 'Leftovers' && i.quantity > 0); } catch { /* search them all */ }
+  const wants = radarWants(ov.json, lefts);
   if (!wants.length) return { ran: false, reason: 'nothing on the pickup list', today };
   const out = await run({ id: `radar-${today}`, from: 'Jake', askedAt: now.toISOString(), question: radarQuestion(wants, today) }, { fetcher });
   const answer = plainAnswer(out.answer);
@@ -410,6 +416,68 @@ export async function runRadar({ fetcher = helperFetch, run = runHelper, now = n
 }
 function readRadarDate() { try { return JSON.parse(fs.readFileSync(RADAR_FILE(), 'utf8')).date || null; } catch { return null; } }
 function writeRadarDate(date) { fs.mkdirSync(WORK_DIR, { recursive: true, mode: 0o700 }); fs.writeFileSync(RADAR_FILE(), JSON.stringify({ date, at: new Date().toISOString() })); }
+// ── Weekend planner (Wolf Hall v264, Horace 11/21): Fridays at 6 PM Central, Saturday's plan for Jake (what to do
+// in order, tools to grab, what to pick up, leftovers first) with the National Weather Service forecast for Thrall
+// (free, no key). Posted to Jake's helper chat; Jake and Horace get a push.
+export const PLAN = { lat: 30.5916, lon: -97.2933, place: 'Thrall, TX', hour: 18, weekday: 'Fri' };
+const PLAN_FILE = () => path.join(WORK_DIR, 'plan.json');
+export function planDue(now, lastDate) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: RADAR.tz, weekday: 'short' }).formatToParts(now).map((x) => [x.type, x.value]));
+  const c = centralParts(now);
+  return p.weekday === PLAN.weekday && c.hour >= PLAN.hour && lastDate !== c.date;
+}
+/** Saturday and Sunday from api.weather.gov, as short lines ("Saturday: Sunny, 72°F, 10% rain"). */
+export async function weekendWeather({ fetchImpl = fetch } = {}) {
+  const get = async (u) => {
+    const r = await fetchImpl(u, { headers: { 'User-Agent': 'WolfHall-WorkshopHelper/1.0 (home use)', Accept: 'application/geo+json' }, signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`weather: HTTP ${r.status}`);
+    return r.json();
+  };
+  const pt = await get(`https://api.weather.gov/points/${PLAN.lat},${PLAN.lon}`);
+  const url = pt?.properties?.forecast;
+  if (!/^https:\/\/api\.weather\.gov\//.test(String(url))) throw new Error('weather: no forecast link');
+  const fc = await get(url);
+  return (fc?.properties?.periods || []).filter((x) => /^(Saturday|Sunday)( Night)?$/.test(x.name)).slice(0, 4)
+    .map((x) => `${x.name}: ${x.shortForecast}, ${x.temperature}°${x.temperatureUnit}${x.probabilityOfPrecipitation?.value != null ? `, ${x.probabilityOfPrecipitation.value}% rain` : ''}`);
+}
+export function planQuestion(ov, weather, leftovers, today) {
+  const mine = (ov?.next || []).filter((n) => n.who === 'Jake' || (!n.who && (n.projectWho || []).includes('Jake')));
+  const steps = (mine.length ? mine : ov?.next || []).slice(0, 8);
+  return `Weekend plan for Saturday (written ${today}). Do NOT change anything in Wolf Hall: only plan and report.\n`
+    + `Weather for ${PLAN.place}:\n${weather.length ? weather.map((w) => `- ${w}`).join('\n') : '- (forecast not available)'}\n`
+    + `Next steps on Jake's projects:\n${steps.map((s) => `- ${s.step} (${s.project}${s.priority ? `, ${s.priority}` : ''})`).join('\n') || '- none'}\n`
+    + `Pickup list (not had yet):\n${(ov?.pickup || []).slice(0, 15).map((m) => `- ${m.item}${m.qty ? ` (${m.qty})` : ''} for ${m.project}${m.where ? `, where: ${m.where}` : ''}`).join('\n') || '- none'}\n`
+    + `Tools to get or fix: ${(ov?.tools || []).map((t) => `${t.tool} (${t.status})`).join(', ') || 'none'}\n`
+    + `Leftovers shelf (use these first, don't buy them): ${leftovers.map((l) => l.item + (l.unit ? ` (${l.unit})` : '')).join(', ') || 'empty'}\n`
+    + 'Write Saturday\'s plan for Jake: the first line is a one-sentence summary (it becomes the phone notification). Then the steps in order with rough times, '
+    + 'outdoor or messy work in the best weather window, the tools to grab before starting, and what to pick up first (free first, leftovers shelf before buying). '
+    + 'Keep it short enough for a phone. Plain text only.';
+}
+export async function runPlan({ fetcher = helperFetch, run = runHelper, weather = weekendWeather, now = new Date(), log = console } = {}) {
+  const today = centralParts(now).date;
+  const ov = await fetcher('GET', '/homestead/overview');
+  if (ov.status >= 400) throw new Error(`overview: HTTP ${ov.status}`);
+  if (!(ov.json?.next || []).length && !(ov.json?.pickup || []).length) return { ran: false, reason: 'nothing to plan', today };
+  let wx = [];
+  try { wx = await weather(); } catch (e) { log.warn?.(`[workshop] plan weather: ${e.message}`); }
+  let lefts = [];
+  try { const pv = await fetcher('GET', '/provisions'); lefts = (pv.json?.have || []).filter((i) => i.location === 'Leftovers' && i.quantity > 0); } catch { /* plan without them */ }
+  const out = await run({ id: `plan-${today}`, from: 'Jake', askedAt: now.toISOString(), question: planQuestion(ov.json, wx, lefts, today) }, { fetcher });
+  const answer = plainAnswer(out.answer);
+  if (!answer) return { ran: true, posted: false, today };
+  const summary = answer.split('\n').find((l) => l.trim()) || '';
+  const r = await fetcher('POST', '/workshop/plan', { answer, summary: summary.slice(0, 160) });
+  if (r.status >= 400) throw new Error(`plan post: HTTP ${r.status} ${String(r.body).slice(0, 200)}`);
+  return { ran: true, posted: true, today, weather: wx.length };
+}
+function readPlanDate() { try { return JSON.parse(fs.readFileSync(PLAN_FILE(), 'utf8')).date || null; } catch { return null; } }
+function writePlanDate(date) { fs.mkdirSync(WORK_DIR, { recursive: true, mode: 0o700 }); fs.writeFileSync(PLAN_FILE(), JSON.stringify({ date, at: new Date().toISOString() })); }
+export async function maybeRunPlan({ now = new Date(), last = readPlanDate(), save = writePlanDate, runner = runPlan } = {}) {
+  if (process.env.WATSON_PLAN === 'off' || !planDue(now, last)) return null;
+  save(centralParts(now).date);
+  return runner({ now });
+}
+
 /** Called on every helper tick: runs the radar once a day after 6 PM Central. */
 export async function maybeRunRadar({ now = new Date(), last = readRadarDate(), save = writeRadarDate, runner = runRadar } = {}) {
   if (process.env.WATSON_RADAR === 'off' || !radarDue(now, last)) return null;
@@ -429,6 +497,7 @@ export function startWorkshopHelper({ every = 15000 } = {}) {
     busy = true;
     try { await processPending(); } catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[workshop]', e.message); }
     try { await maybeRunRadar(); } catch (e) { console.warn('[workshop] radar:', e.message); }
+    try { await maybeRunPlan(); } catch (e) { console.warn('[workshop] plan:', e.message); }
     finally { busy = false; }
   };
   setTimeout(tick, 5000);

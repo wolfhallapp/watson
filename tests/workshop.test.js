@@ -159,7 +159,7 @@ test('v263 radar: searches the pickup list and Need-one tools near Thrall, posts
   const q = radarQuestion(wants, '2026-11-21');
   assert.match(q, /100 miles of Thrall, Texas/); assert.match(q, /Do NOT change anything/); assert.match(q, /exactly the word NONE/);
   const posts = [];
-  const fetcher = async (m, p, b) => { if (p === '/homestead/overview') return { status: 200, json: ov, body: '' }; posts.push([m, p, b]); return { status: 200, json: { ok: true }, body: '' }; };
+  const fetcher = async (m, p, b) => { if (p === '/homestead/overview') return { status: 200, json: ov, body: '' }; if (p === '/provisions') return { status: 200, json: { have: [] }, body: '' }; posts.push([m, p, b]); return { status: 200, json: { ok: true }, body: '' }; };
   let asked;
   let r = await runRadar({ fetcher, run: async (chat) => { asked = chat; return { answer: 'Plywood:\n- 4 free sheets, Taylor (10 mi) https://austin.craigslist.org/zip/1.html', changes: [] }; }, now: new Date('2026-11-22T00:05:00Z'), log: {} });
   assert.equal(asked.from, 'Jake');
@@ -177,4 +177,40 @@ test('v263 radar: searches the pickup list and Need-one tools near Thrall, posts
   await maybeRunRadar({ now: new Date('2026-11-22T00:06:00Z'), last: '2026-11-21', save: () => { throw new Error('no'); }, runner: async () => { ran++; } });
   assert.equal(ran, 1, 'once a day');
   assert.equal(helperPathOk('/workshop/radar'), true);
+});
+
+test('v264 weekend planner: Fridays 6 PM Central, NWS weather for Thrall, posted for Jake (and Horace gets the push)', async () => {
+  const { planDue, weekendWeather, planQuestion, runPlan, maybeRunPlan, radarWants } = await import('../server/workshop.js');
+  assert.equal(planDue(new Date('2026-11-28T00:00:00Z'), null), true, 'Fri 11/27 6 PM CST');
+  assert.equal(planDue(new Date('2026-11-27T23:59:00Z'), null), false, '5:59 PM');
+  assert.equal(planDue(new Date('2026-11-29T00:00:00Z'), null), false, 'Saturday');
+  assert.equal(planDue(new Date('2026-11-28T03:00:00Z'), '2026-11-27'), false, 'once');
+  assert.equal(planDue(new Date('2026-07-03T23:00:00Z'), null), true, 'Fri 6 PM CDT');
+  const urls = [];
+  const fetchImpl = async (u, o) => {
+    urls.push([u, o.headers['User-Agent']]);
+    if (u.includes('/points/')) return new Response(JSON.stringify({ properties: { forecast: 'https://api.weather.gov/gridpoints/EWX/170,110/forecast' } }));
+    return new Response(JSON.stringify({ properties: { periods: [{ name: 'Tonight', shortForecast: 'Clear', temperature: 50, temperatureUnit: 'F' },
+      { name: 'Saturday', shortForecast: 'Sunny', temperature: 72, temperatureUnit: 'F', probabilityOfPrecipitation: { value: 10 } }, { name: 'Sunday', shortForecast: 'Showers', temperature: 65, temperatureUnit: 'F', probabilityOfPrecipitation: { value: 70 } }] } }));
+  };
+  const wx = await weekendWeather({ fetchImpl });
+  assert.deepEqual(wx, ['Saturday: Sunny, 72°F, 10% rain', 'Sunday: Showers, 65°F, 70% rain']);
+  assert.match(urls[0][0], /api\.weather\.gov\/points\/30\.5916,-97\.2933/);
+  assert.doesNotMatch(urls[0][1], /@/, 'no email or personal details in the User-Agent');
+  const ov = { next: [{ step: 'Hang drywall (drill)', project: 'Kitchen wall and floor', who: 'Jake' }, { step: 'Fix truck rack', project: 'Truck', who: 'Taylor' }], pickup: [{ item: 'Drywall', qty: '4 pcs', project: 'Kitchen wall and floor' }], tools: [] };
+  const q = planQuestion(ov, wx, [{ item: 'Plywood 4x8', unit: 'half sheet' }], '2026-11-27');
+  assert.match(q, /Do NOT change anything/); assert.match(q, /Hang drywall/); assert.doesNotMatch(q, /Fix truck rack/, 'Jake\'s steps only');
+  assert.match(q, /Sunday: Showers/); assert.match(q, /Leftovers shelf.*Plywood 4x8 \(half sheet\)/);
+  const posts = [];
+  const fetcher = async (m, p, b) => { if (p === '/homestead/overview') return { status: 200, json: ov, body: '' }; if (p === '/provisions') return { status: 200, json: { have: [] }, body: '' }; posts.push([m, p, b]); return { status: 200, json: { ok: true }, body: '' }; };
+  const r = await runPlan({ fetcher, run: async () => ({ answer: 'Drywall the kitchen in the morning; rain Sunday.\n1. Hang drywall', changes: [] }), weather: async () => wx, now: new Date('2026-11-28T00:05:00Z'), log: {} });
+  assert.equal(r.posted, true);
+  assert.deepEqual(posts.map((x) => x.slice(0, 2)), [['POST', '/workshop/plan']]);
+  assert.equal(posts[0][2].summary, 'Drywall the kitchen in the morning; rain Sunday.');
+  let ran = 0;
+  await maybeRunPlan({ now: new Date('2026-11-28T00:05:00Z'), last: null, save: () => {}, runner: async () => { ran++; } });
+  await maybeRunPlan({ now: new Date('2026-11-28T00:06:00Z'), last: '2026-11-27', save: () => {}, runner: async () => { ran++; } });
+  assert.equal(ran, 1);
+  assert.deepEqual(radarWants({ pickup: [{ item: 'Plywood' }, { item: 'Caulk' }] }, [{ item: 'Plywood 4x8' }]).map((w) => w.item), ['Caulk'], 'the radar skips what is on the Leftovers shelf');
+  assert.equal(helperPathOk('/workshop/plan'), true);
 });
