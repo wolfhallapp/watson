@@ -365,6 +365,59 @@ export async function processPending({ fetcher = helperFetch, run = runHelper, l
   return done;
 }
 
+// ── Free-stuff radar (Wolf Hall v263, Horace 11/21): every day at 6 PM Central (daylight saving handled by
+// the time zone), the helper searches free listings within 100 miles of Thrall, TX for what's on the pickup
+// list and the tools marked "Need one", and posts any finds to Jake's helper chat (the Worker pushes him).
+// If the PC is off at 6 PM it runs when the Oracle is next on that evening. One run a day.
+export const RADAR = { area: 'Thrall, Texas', miles: 100, hour: 18, tz: 'America/Chicago', maxItems: 12 };
+const RADAR_FILE = () => path.join(WORK_DIR, 'radar.json');
+export function centralParts(now, tz = RADAR.tz) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) };
+}
+/** Due when it's 6 PM or later in Central time and it hasn't run today (Central date). */
+export function radarDue(now, lastDate) { const c = centralParts(now); return c.hour >= RADAR.hour && lastDate !== c.date; }
+/** What to look for: materials not had yet on open projects, then tools marked Need one. */
+export function radarWants(overview) {
+  const seen = new Set(); const out = [];
+  const add = (name, qty, project) => { const k = String(name || '').trim().toLowerCase(); if (!k || seen.has(k)) return; seen.add(k); out.push({ item: String(name).trim(), qty: qty || '', project: project || '' }); };
+  for (const m of overview?.pickup || []) add(m.item, m.qty, m.project);
+  for (const t of overview?.tools || []) if (t.status === 'Need one') add(t.tool, '', 'Tools');
+  return out.slice(0, RADAR.maxItems);
+}
+export function radarQuestion(wants, today) {
+  return `Free-stuff radar for ${today}. Do NOT change anything in Wolf Hall: only search and report.\n`
+    + `Search for FREE listings (Craigslist "free stuff" for Austin, Waco and San Antonio, Freecycle, Buy Nothing groups, Facebook Marketplace free listings if a search shows them, Habitat ReStore notices) within about ${RADAR.miles} miles of ${RADAR.area} (Taylor, Round Rock, Georgetown, Austin, Temple, Bastrop and the like) for these:\n`
+    + wants.map((w) => `- ${w.item}${w.qty ? ` (${w.qty})` : ''}${w.project ? ` for ${w.project}` : ''}`).join('\n')
+    + `\nUse at most 8 web searches. Only report real listings you actually found, recent if you can tell, each as: what it is, the town (and rough miles from ${RADAR.area}), and the link. `
+    + 'Group them by the item they match. If you found nothing worth the drive, answer with exactly the word NONE.';
+}
+/** Counts the listing links in an answer (one push says how many). */
+export const radarFinds = (answer) => (String(answer).match(/https?:\/\/\S+/g) || []).length;
+export async function runRadar({ fetcher = helperFetch, run = runHelper, now = new Date(), log = console } = {}) {
+  const today = centralParts(now).date;
+  const ov = await fetcher('GET', '/homestead/overview');
+  if (ov.status >= 400) throw new Error(`overview: HTTP ${ov.status}`);
+  const wants = radarWants(ov.json);
+  if (!wants.length) return { ran: false, reason: 'nothing on the pickup list', today };
+  const out = await run({ id: `radar-${today}`, from: 'Jake', askedAt: now.toISOString(), question: radarQuestion(wants, today) }, { fetcher });
+  const answer = plainAnswer(out.answer);
+  if (!answer || /^\s*NONE\.?\s*$/i.test(answer)) return { ran: true, posted: false, today, wants: wants.length };
+  const r = await fetcher('POST', '/workshop/radar', { answer, finds: radarFinds(answer) });
+  if (r.status >= 400) throw new Error(`radar post: HTTP ${r.status} ${String(r.body).slice(0, 200)}`);
+  log.log?.(`[workshop] radar posted (${radarFinds(answer)} links)`);
+  return { ran: true, posted: true, today, wants: wants.length, finds: radarFinds(answer) };
+}
+function readRadarDate() { try { return JSON.parse(fs.readFileSync(RADAR_FILE(), 'utf8')).date || null; } catch { return null; } }
+function writeRadarDate(date) { fs.mkdirSync(WORK_DIR, { recursive: true, mode: 0o700 }); fs.writeFileSync(RADAR_FILE(), JSON.stringify({ date, at: new Date().toISOString() })); }
+/** Called on every helper tick: runs the radar once a day after 6 PM Central. */
+export async function maybeRunRadar({ now = new Date(), last = readRadarDate(), save = writeRadarDate, runner = runRadar } = {}) {
+  if (process.env.WATSON_RADAR === 'off' || !radarDue(now, last)) return null;
+  const today = centralParts(now).date;
+  save(today); // mark first, so a failure doesn't retry every 15 seconds
+  return runner({ now });
+}
+
 let started = false;
 export function startWorkshopHelper({ every = 15000 } = {}) {
   if (started || process.env.WATSON_WORKSHOP === 'off') return false;
@@ -375,6 +428,7 @@ export function startWorkshopHelper({ every = 15000 } = {}) {
     if (busy) return;
     busy = true;
     try { await processPending(); } catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[workshop]', e.message); }
+    try { await maybeRunRadar(); } catch (e) { console.warn('[workshop] radar:', e.message); }
     finally { busy = false; }
   };
   setTimeout(tick, 5000);

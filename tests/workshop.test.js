@@ -138,3 +138,43 @@ test('v261: runHelper with a photo keeps the lockdown (same tools, same MCP serv
   assert.equal(helperPathOk('/workshop/11111111-1111-4111-8111-111111111111/photo'), true);
   assert.equal(helperPathOk('/homestead/../pool'), false);
 });
+
+test('v263 radar: 6 PM Central once a day, daylight saving handled', async () => {
+  const { radarDue, centralParts } = await import('../server/workshop.js');
+  assert.deepEqual(centralParts(new Date('2026-11-22T00:00:00Z')), { date: '2026-11-21', hour: 18 }); // CST: 6 PM
+  assert.equal(radarDue(new Date('2026-11-22T00:00:00Z'), null), true);
+  assert.equal(radarDue(new Date('2026-11-21T23:59:00Z'), null), false, '5:59 PM CST is too early');
+  assert.equal(radarDue(new Date('2026-07-01T23:00:00Z'), null), true, '6 PM CDT in summer');
+  assert.equal(radarDue(new Date('2026-07-01T22:59:00Z'), null), false);
+  assert.equal(radarDue(new Date('2026-11-22T03:00:00Z'), '2026-11-21'), false, 'already ran today');
+  assert.equal(radarDue(new Date('2026-11-22T05:30:00Z'), '2026-11-21'), false, '11:30 PM, same Central day');
+  assert.equal(radarDue(new Date('2026-11-23T00:10:00Z'), '2026-11-21'), true, 'next evening');
+});
+
+test('v263 radar: searches the pickup list and Need-one tools near Thrall, posts finds, stays quiet on NONE', async () => {
+  const { runRadar, radarWants, radarQuestion, maybeRunRadar } = await import('../server/workshop.js');
+  const ov = { pickup: [{ item: 'Plywood', qty: '4x8, 3 sheets', project: 'Kitchen wall and floor' }, { item: 'plywood', qty: '' }], tools: [{ tool: 'Miter saw', status: 'Need one' }, { tool: 'Drill', status: 'Needs repair' }] };
+  const wants = radarWants(ov);
+  assert.deepEqual(wants.map((w) => w.item), ['Plywood', 'Miter saw']);
+  const q = radarQuestion(wants, '2026-11-21');
+  assert.match(q, /100 miles of Thrall, Texas/); assert.match(q, /Do NOT change anything/); assert.match(q, /exactly the word NONE/);
+  const posts = [];
+  const fetcher = async (m, p, b) => { if (p === '/homestead/overview') return { status: 200, json: ov, body: '' }; posts.push([m, p, b]); return { status: 200, json: { ok: true }, body: '' }; };
+  let asked;
+  let r = await runRadar({ fetcher, run: async (chat) => { asked = chat; return { answer: 'Plywood:\n- 4 free sheets, Taylor (10 mi) https://austin.craigslist.org/zip/1.html', changes: [] }; }, now: new Date('2026-11-22T00:05:00Z'), log: {} });
+  assert.equal(asked.from, 'Jake');
+  assert.deepEqual(posts.map((x) => x.slice(0, 2)), [['POST', '/workshop/radar']]);
+  assert.equal(posts[0][2].finds, 1);
+  assert.equal(r.posted, true);
+  posts.length = 0;
+  r = await runRadar({ fetcher, run: async () => ({ answer: 'NONE', changes: [] }), now: new Date('2026-11-22T00:05:00Z') });
+  assert.equal(r.posted, false); assert.equal(posts.length, 0);
+  r = await runRadar({ fetcher: async () => ({ status: 200, json: { pickup: [], tools: [] }, body: '' }), run: async () => { throw new Error('should not run'); } });
+  assert.equal(r.ran, false);
+  let saved = null, ran = 0;
+  await maybeRunRadar({ now: new Date('2026-11-22T00:05:00Z'), last: '2026-11-20', save: (d) => { saved = d; }, runner: async () => { ran++; } });
+  assert.equal(saved, '2026-11-21'); assert.equal(ran, 1);
+  await maybeRunRadar({ now: new Date('2026-11-22T00:06:00Z'), last: '2026-11-21', save: () => { throw new Error('no'); }, runner: async () => { ran++; } });
+  assert.equal(ran, 1, 'once a day');
+  assert.equal(helperPathOk('/workshop/radar'), true);
+});
