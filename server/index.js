@@ -23,6 +23,7 @@ import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 import * as sandbox from './sandbox.js';
 import { readUsageReport } from './usage.js';
 import { startWorkshopHelper } from './workshop.js';
+import { startCookVoice } from './cookvoice.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -460,6 +461,7 @@ const routineAgent = new WatsonAgent((event) => { if (event.type === 'usage') re
 const persephoneRoutine = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'casino_changed') broadcastTo(channels.persephone, event); if (event.type === 'error') console.warn('  Persephone routine:', event.message); }, PERSEPHONE_ROUTINE);
 startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster, persephone, persephoneRoutine });
 startWorkshopHelper(); // Wolf Hall v248: answers House Projects questions from the app (its own locked-down session)
+startCookVoice(); // Wolf Hall v274: Cook mode lines in the Southern cook's voice (Chatterbox on the GPU)
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
 
