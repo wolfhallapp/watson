@@ -126,3 +126,14 @@ test('gifts: an existing card that already has the note and step is left alone',
   assert.equal(log.length, 0);
   assert.match(done[0], /^already on Unclaimed money search/);
 });
+
+test('scripts/briefing-off.mjs flips the flag by id or name, and says so', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const c = fresh();
+  const out = execFileSync(process.execPath, ['scripts/briefing-off.mjs', '--file', c.file, 's009', 'prolific', 's013'], { encoding: 'utf8' });
+  assert.match(out, /Off the briefing: Respondent paid interviews/);
+  assert.deepEqual(c.summary().moves.map((m) => m.strategyId), ['s014']);
+  execFileSync(process.execPath, ['scripts/briefing-off.mjs', '--on', '--file', c.file, 's010']);
+  assert.ok(c.summary().moves.some((m) => m.strategyId === 's010'));
+  assert.throws(() => execFileSync(process.execPath, ['scripts/briefing-off.mjs', '--file', c.file, 'nope-not-here'], { stdio: 'pipe' }));
+});
