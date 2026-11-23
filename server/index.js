@@ -23,6 +23,7 @@ import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 import * as sandbox from './sandbox.js';
 import { readUsageReport } from './usage.js';
 import { startWorkshopHelper } from './workshop.js';
+import { startNightBoard } from './nightboard.js';
 import { startCookVoice } from './cookvoice.js';
 import { startUptimeWatch } from './uptime.js';
 import { startNotionBackup } from './notion-backup.js';
@@ -465,6 +466,7 @@ startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, 
 startUptimeWatch(); // 11/23: worker + site every 15 min, no AI; pushes Horace after 2 misses and when it's back
 startNotionBackup(); // 11/23: private nightly copy of every Wolf Hall database after 3 AM, 14 days (needs Wolf Hall v300)
 startWorkshopHelper(); // Wolf Hall v248: answers House Projects questions from the app (its own locked-down session)
+startNightBoard(); // Wolf Hall v310: night branches + questions to the Red Pill board, Horace's taps back to night-answers.md (every 15 min, no AI)
 startCookVoice(); // Wolf Hall v274: Cook mode lines in the Southern cook's voice (Chatterbox on the GPU)
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
 setTimeout(warmKokoro, 5000); // load the free local voices in the background
