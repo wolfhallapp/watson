@@ -200,6 +200,31 @@ test('idea #9 (11/22): the Friday plan adds free fun within 30 miles, free only'
   assert.ok(q.indexOf('Do NOT change anything') < q.indexOf('FREE FUN NEARBY'), 'still read-only, fun comes after the plan');
 });
 
+test('night #35 (11/23): the Friday plan hands that weekend\'s researched free events to the helper', async () => {
+  const { planQuestion, funLeads, funAsk } = await import('../server/workshop.js');
+  const list = { checked: '2026-11-23', events: [
+    { name: 'Stroll', town: 'Town A', miles: 27, from: '2026-12-04', to: '2026-12-06', when: 'Fri-Sun', place: 'Square', free: 'yes', link: 'https://a.example' },
+    { name: 'Parade', town: 'Town B', miles: 9, from: '2026-12-05', to: '2026-12-05', when: 'Sat 6 PM', free: 'likely', freeNote: 'street parade', link: 'https://b.example' },
+    { name: 'Lights all month', town: 'Town A', miles: 27, from: '2026-11-27', to: '2026-12-31', when: 'nightly', free: 'likely', link: 'https://c.example' },
+    { name: 'Too far', town: 'Town C', miles: 45, from: '2026-12-05', to: '2026-12-05', when: 'Sat', free: 'yes', link: 'https://d.example' },
+    { name: 'Next weekend', town: 'Town B', miles: 9, from: '2026-12-12', to: '2026-12-12', when: 'Sat', free: 'yes', link: 'https://e.example' },
+    { name: 'Thursday only', town: 'Town B', miles: 9, from: '2026-12-03', to: '2026-12-03', when: 'Thu', free: 'yes', link: 'https://f.example' },
+  ] };
+  const read = () => list;
+  assert.deepEqual(funLeads('2026-12-04', { read }).map((e) => e.name), ['Stroll', 'Parade', 'Lights all month'], 'Fri-Sun overlap, within 30 miles');
+  assert.deepEqual(funLeads('2026-12-11', { read }).map((e) => e.name), ['Lights all month', 'Next weekend']);
+  assert.deepEqual(funLeads('2026-11-20', { read }).map((e) => e.name), [], 'nothing that weekend');
+  assert.deepEqual(funLeads('2026-12-04', { read: () => { throw new Error('ENOENT'); } }), [], 'no file: plan still runs');
+  assert.deepEqual(funLeads('2026-12-04', { read: () => ({}) }), []);
+  const q = planQuestion({ next: [{ step: 'Sand', project: 'Shelf', who: 'Jake' }], pickup: [], tools: [] }, [], [], '2026-12-04', funLeads('2026-12-04', { read }));
+  assert.match(q, /Leads already researched/);
+  assert.match(q, /- Parade, Town B \(about 9 mi\), Sat 6 PM; free: likely \(street parade\); https:\/\/b\.example/);
+  assert.match(q, /still on this weekend and still free/);
+  assert.ok(!q.includes('Too far') && !q.includes('Next weekend'));
+  assert.ok(q.indexOf('FREE FUN NEARBY') < q.indexOf('Leads already researched'), 'leads sit inside the fun section');
+  assert.ok(!funAsk([]).includes('Leads already researched'), 'no leads: the ask is unchanged');
+});
+
 test('v264 weekend planner: Fridays 6 PM Central, NWS weather for Thrall, posted for Jake (and Horace gets the push)', async () => {
   const { planDue, weekendWeather, planQuestion, runPlan, maybeRunPlan, radarWants } = await import('../server/workshop.js');
   assert.equal(planDue(new Date('2026-11-28T00:00:00Z'), null), true, 'Fri 11/27 6 PM CST');
