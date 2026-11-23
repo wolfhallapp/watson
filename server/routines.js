@@ -34,6 +34,39 @@ export function nightPush(now = new Date()) {
 export function nightKey(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(now.getTime() - 12 * 3600000));
 }
+// 11/23 (queue #20): at 02:57 a run replied "three reviewers are reading the code and I'll check their findings
+// when they report" and ended; the run's end took the reviewers with it and the next run redid the task.
+export const HELPER_RULE = 'Helpers: run every subagent (agent-smith, reviewers, Explore) and every long command in the foreground (run_in_background: false), or wait for each background one to finish and read its result before you reply. Your reply ends the run and anything still working is lost, so never end with "waiting on" helpers, reviewers or a download.';
+const HELPER = String.raw`(?:helpers?|sub-?agents?|reviewers?|agents?|agent[- ]smith|background (?:tasks?|jobs?|commands?|runs?|work)|(?:the |that )?(?:download|build|render|test run|pipeline)s?)`;
+const CUT_OFF = [
+  new RegExp(String.raw`\bwait(?:s|ing)? (?:on|for) (?:the |my |all |both |each )?(?:\w+ )?${HELPER}\b`, 'i'),
+  new RegExp(String.raw`\b${HELPER}\b[^.;]{0,60}?\b(?:is|are) (?:still )?(?:reading|running|working|reviewing|checking|auditing|going)\b`, 'i'),
+  /\bI(?:'|’)?ll\b[^.;]{0,80}\bwhen (?:they|it|each|all|both|the \w+) (?:report|reports|finish|finishes|complete|completes|come back|comes back|return|returns|report back|is done|are done)\b/i,
+  /\b(?:still|now) (?:running|working) in the background\b/i,
+];
+/** True when a run's last words say it ended while helpers were still working (their work is then lost). */
+export function endedWaitingOnHelpers(text) {
+  const t = String(text || '');
+  return CUT_OFF.some((re) => re.test(t));
+}
+/** The date of the morning Horace wakes up for this run (the prompt's NIGHT=$(date -d "+7 hours" +%F)). */
+export function nightReportDate(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(now.getTime() + 7 * 3600000));
+}
+/** Logs a cut-off run in tonight's report so Horace (and the next run) can see the task may be half done. */
+export function noteHelpersCutOff(text, now = new Date(), dir = NIGHT_REPORTS) {
+  if (!endedWaitingOnHelpers(text)) return null;
+  const file = path.join(dir, `${nightReportDate(now)}.md`);
+  const at = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(now);
+  const said = String(text).replace(/\s+/g, ' ').trim().slice(0, 400);
+  const section = `\n\n## ⚠️ A run ended with helpers still working (${at})\n` +
+    `- Its last words: "${said}"\n` +
+    '- Whatever those helpers were doing was lost when the run ended, so its task may be half done (or redone by the next run). Check that task\'s queue line and branch.\n';
+  fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(file)) fs.writeFileSync(file, `# Night Shift report, ${nightReportDate(now)}`);
+  fs.appendFileSync(file, section);
+  return file;
+}
 export function usageAllowsNightShift(usage = state.get().usage || {}, now = new Date(), store = state, push = nightPush(now)) {
   const w = usage.seven_day, f = usage.five_hour;
   if (w && typeof w.utilization === 'number') {
@@ -110,6 +143,7 @@ export const ROUTINES = [
     hour: 21, minute: 15, untilHour: 6, untilMinute: 30,
     // 10/31 per Horace: always have a task running overnight. With an empty queue it picks its own improvement.
     guard: () => usageAllowsNightShift(),
+    checkHelpers: true, // 11/23: a reply that ends "waiting on the reviewers" is logged in the report
     prompt: [
       '[Oracle routine: the Night Shift. Not from Horace; he is asleep. Work quietly: no show_on_screen, and keep your final reply to one line.]',
       `Read the task queue ${NIGHT_QUEUE}. Take the FIRST unchecked task (- [ ]) and do exactly that ONE task, carefully and economically. You will be started again for the next one.`,
@@ -122,6 +156,7 @@ export const ROUTINES = [
       '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
       `for the Oracle itself use \`git -C '${ROOT}' worktree add -B oracle/night-$NIGHT ~/night/watson main\` (reuse it if it exists).`,
       'Follow the repo rules: syntax checks, the tests in tests/, a new test for what you changed, and the agent-smith subagent for Wolf Hall changes. Commit on the night branch with a clear message.',
+      HELPER_RULE,
       'Live checks are read-only GETs only, and never GET /forecast or the current week of /week-budget. Never deploy, push, change Notion or money data, send anything or delete anything. Those are blocked anyway.',
       'If a task needs Horace (a deploy, a money decision, a fact only he knows), do the safe preparation and list exactly what he must approve.',
       `Then APPEND a section to the report ${NIGHT_REPORTS}/$NIGHT.md (create it with a title if missing): the task; what you did; tests and agent-smith results; the branch and commits;`,
@@ -299,7 +334,10 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       }
       const a = (r.agent && agents[r.agent]) || main;
       if (r.fresh) await a.reset(); // the Night Shift starts clean; Trinity keeps her conversation
-      if (r.retryOnFail) a.onceDone = (ok, why) => { if (!ok) console.log(`  Routine ${r.key}: ${noteRoutineFailure(r.key, day, prev, why)}`); };
+      if (r.retryOnFail || r.checkHelpers) a.onceDone = (ok, why, said) => {
+        if (r.retryOnFail && !ok) console.log(`  Routine ${r.key}: ${noteRoutineFailure(r.key, day, prev, why)}`);
+        if (r.checkHelpers) { const f = noteHelpersCutOff(said); if (f) console.log(`  Routine ${r.key} ended with helpers still working; noted in ${path.basename(f)}`); }
+      };
       a.ask(prompt, 'routine');
       return; // one at a time; the next tick picks up any other
     }
