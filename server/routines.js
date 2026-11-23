@@ -21,16 +21,24 @@ export const CASINO_DEALS = path.join(DATA_DIR, 'casino-deals.md');
 // Skip a night when the weekly Claude allowance is mostly used, so Horace keeps enough for his own day.
 // 11/4 per Horace (after the Night Shift used up his week on 11/1): at most 6% of the week per night,
 // and no Night Shift at all once the week is 75% used.
-export const NIGHT_WEEK_STOP = 0.75;
-export const NIGHT_PER_NIGHT = 0.06;
+// 11/22 per Horace (now on Max): 10% of the week per night, and no Night Shift once the week is 80% used.
+export const NIGHT_WEEK_STOP = 0.80;
+export const NIGHT_PER_NIGHT = 0.10;
+// A push window (11/22 per Horace: "I want use all my weekly usage by Tues at 4pm"): until `until`, the shift may
+// spend up to `weekStop` of the week with no per-night cap. Paired with data/night-now so it also runs in the daytime.
+export const NIGHT_PUSH = path.join(DATA_DIR, 'night-push.json');
+export function nightPush(now = new Date()) {
+  try { const p = JSON.parse(fs.readFileSync(NIGHT_PUSH, 'utf8')); return Date.parse(p.until) > now.getTime() ? p : null; } catch { return null; }
+}
 /** The night a moment belongs to: the Central date 12 hours earlier (so 9 PM to 6:30 AM is one night). */
 export function nightKey(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(now.getTime() - 12 * 3600000));
 }
-export function usageAllowsNightShift(usage = state.get().usage || {}, now = new Date(), store = state) {
+export function usageAllowsNightShift(usage = state.get().usage || {}, now = new Date(), store = state, push = nightPush(now)) {
   const w = usage.seven_day, f = usage.five_hour;
   if (w && typeof w.utilization === 'number') {
-    if (w.utilization >= NIGHT_WEEK_STOP) return false;
+    if (w.utilization >= (push ? Math.min(0.99, Number(push.weekStop) || 0.98) : NIGHT_WEEK_STOP)) return false;
+    if (push) return !(f && typeof f.utilization === 'number' && f.utilization >= 0.95 && f.resetsAt && (f.resetsAt > 1e12 ? f.resetsAt : f.resetsAt * 1000) > Date.now());
     // Per-night budget: remember the week's level when this night started (a weekly reset mid-night starts over).
     const night = nightKey(now);
     let b = store.get().nightBudget;
