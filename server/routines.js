@@ -7,6 +7,7 @@ import { state } from './store.js';
 import { DATA_DIR, ROOT } from './config.js';
 import { prepareWeeklyLedger, LEDGER_DIR } from './ledger.js';
 import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
+import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -136,6 +137,9 @@ export const ROUTINES = [
     fresh: true,
     hour: 6, minute: 40, untilHour: 11,
     tuesday: { hour: 3, minute: 15 }, // Horace leaves for work at 4 AM on Tuesdays
+    // 11/23 (Night Shift #53): The Land, Taylor's Ram, Jake's Accountant and the red-pill count, worked out in code
+    // (read-only) and added only when there's something to say. It never throws, so it can't hold up the briefing.
+    extra: async () => extrasPrompt(await prepareBriefingExtras()),
     prompt: [
       '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
@@ -296,6 +300,10 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       if (r.prepare) {
         // Gathers facts in code first (the Ledger). A failure is logged and saved for the briefing; no retry today.
         try { prompt = r.prompt(await r.prepare()); } catch (e) { console.log(`  Routine ${r.key} could not prepare: ${e.message}`); return; }
+      }
+      if (r.extra) {
+        // Extra facts for the prompt (the briefing's Land/Ram/Accountant/red-pill lines). A failure just leaves them out.
+        try { const add = await r.extra(); if (add) prompt += '\n\n' + add; } catch (e) { console.log(`  Routine ${r.key}: extras skipped (${e.message})`); }
       }
       const a = (r.agent && agents[r.agent]) || main;
       if (r.fresh) await a.reset(); // the Night Shift starts clean; Trinity keeps her conversation
