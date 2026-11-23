@@ -125,7 +125,7 @@ export const ROUTINES = [
       'Live checks are read-only GETs only, and never GET /forecast or the current week of /week-budget. Never deploy, push, change Notion or money data, send anything or delete anything. Those are blocked anyway.',
       'If a task needs Horace (a deploy, a money decision, a fact only he knows), do the safe preparation and list exactly what he must approve.',
       `Then APPEND a section to the report ${NIGHT_REPORTS}/$NIGHT.md (create it with a title if missing): the task; what you did; tests and agent-smith results; the branch and commits;`,
-      '"Waiting on you" (anything needing red pill or an answer). Tick the task in the queue (- [x]) with the date, or mark it "- [~] blocked: <why>" so it is not picked again. Reply with one line: the task and its result.',
+      '"Waiting on you" (anything needing red pill or an answer). For the Red Pill board in the app: give the branch on its own "**Branch:** <name>" line, and write each question for Horace as a numbered line followed by lettered options on their own lines ("- A) ..."), marking your guess "(my guess)". Tick the task in the queue (- [x]) with the date, or mark it "- [~] blocked: <why>" so it is not picked again. Reply with one line: the task and its result.',
     ].join(' '),
   },
   {
