@@ -32,11 +32,16 @@ export function helperKey() {
 export function helperPathOk(p) {
   return /^\/(homestead|workshop|provisions)(\/[\w\-/.]*)?(\?[\w\-=&%.]*)?$/.test(p) && !p.includes('..');
 }
-export async function helperFetch(method, p, body, { fetchImpl = fetch, key = helperKey() } = {}) {
+// Wolf Hall v298 (Horace Q4-3A): who asked the question being answered. The Worker lets the helper credit a
+// check-off only to Jake or this person. Set by this code from the chat record, never by the model.
+export const HELPER_ASKERS = ['Horace', 'Taylor', 'Jake'];
+export async function helperFetch(method, p, body, { fetchImpl = fetch, key = helperKey(), asker = '' } = {}) {
   if (!helperPathOk(p)) throw new Error('The Workshop Helper only reaches House Projects');
   if (!key) throw new Error('No helper key (.helper-key in the app repo)');
+  const headers = { 'X-Helper-Key': key, 'Content-Type': 'application/json' };
+  if (HELPER_ASKERS.includes(asker)) headers['X-Helper-For'] = asker;
   const r = await fetchImpl(WORKER_URL + p, {
-    method, headers: { 'X-Helper-Key': key, 'Content-Type': 'application/json' },
+    method, headers,
     body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000),
   });
   const t = await r.text();
@@ -99,8 +104,10 @@ const short = (r) => {
 const who = z.enum(['Horace', 'Taylor', 'Jake']).optional();
 
 /** The helper's tools. `changes` collects a plain list of what it changed, for the chat record. */
-export function createHelperTools(changes, fetcher = helperFetch) {
+export function createHelperTools(changes, rawFetcher = helperFetch, asker = '') {
   const note = (s) => { changes.push(s); };
+  // v298: every call carries who asked, so the Worker can check creditTo against it.
+  const fetcher = HELPER_ASKERS.includes(asker) ? (m, p, b) => rawFetcher(m, p, b, { asker }) : rawFetcher;
   return createSdkMcpServer({
     name: 'workshop',
     version: '0.1.0',
@@ -143,7 +150,8 @@ export function createHelperTools(changes, fetcher = helperFetch) {
       tool('materials',
         'A project\'s ingredients. add {projectId, item, qty?, cost?, where?, link?, who?}: qty holds the size or amount ("4x8", "3 pcs"). '
         + 'update {id, item?, qty?, cost?, where?, link?, who?, haveIt?, creditTo?}. remove {id} (archived; can be restored in Notion). Add several by calling add once per material, in order. '
-        + 'creditTo = the person who actually got it (e.g. "Jake" when you tick off materials from his receipt photo), so the credit is his, not yours.',
+        + 'creditTo = the person who actually got it (e.g. "Jake" when you tick off materials from his receipt photo), so the credit is his, not yours. '
+        + 'It can only be Jake or the person who asked; never give credit to anyone else.',
         {
           action: z.enum(['add', 'update', 'remove']), projectId: z.string().optional(), id: z.string().optional(),
           item: z.string().optional(), qty: z.string().optional(), cost: z.number().min(0).optional(),
@@ -158,6 +166,7 @@ export function createHelperTools(changes, fetcher = helperFetch) {
               return text(JSON.stringify({ id: r.json.material?.id }));
             }
             if (!id) return { ...text('Give the material id.'), isError: true };
+            if (f.creditTo && f.creditTo !== 'Jake' && f.creditTo !== asker) return { ...text(`creditTo can only be Jake${HELPER_ASKERS.includes(asker) && asker !== 'Jake' ? ` or ${asker} (who asked)` : ''}.`), isError: true };
             const r = await fetcher(action === 'remove' ? 'DELETE' : 'PATCH', `/homestead/materials/${id}`, action === 'remove' ? null : fields(f)); const e = short(r); if (e) return e;
             note(action === 'remove' ? `Removed a material (${id})` : `Updated material "${r.json.material?.item || id}"`);
             return text(action === 'remove' ? 'Removed (archived).' : 'Updated.');
@@ -319,7 +328,7 @@ export async function runHelper(chat, { queryImpl = query, fetcher = helperFetch
       effort: EFFORT,
       systemPrompt: helperSystemPrompt(),
       tools: ['WebSearch', 'WebFetch'],           // the only built-in tools it gets
-      mcpServers: { workshop: createHelperTools(changes, fetcher) },
+      mcpServers: { workshop: createHelperTools(changes, fetcher, chat.from) },
       strictMcpConfig: true,                      // no other MCP servers, ever
       settingSources: [],                         // no user/project settings, plugins or memory files
       permissionMode: 'default',

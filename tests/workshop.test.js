@@ -3,6 +3,7 @@
 // only reach /homestead and /workshop, and it gets nothing else from this PC.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { helperPathOk, helperFetch, publicUrlOk, helperBlock, helperPrompt, helperSystemPrompt, processPending, runHelper } from '../server/workshop.js';
 import { classify } from '../server/approvals.js';
 
@@ -248,4 +249,44 @@ test('v265: receipts credit the person who asked; the prompt covers receipts and
     await (tool.callback || tool.handler)({ action: 'update', id: 'm1', haveIt: true, cost: 45.98, creditTo: 'Jake' });
     assert.deepEqual(sent[0], ['PATCH', '/homestead/materials/m1', { haveIt: true, cost: 45.98, creditTo: 'Jake' }]);
   }
+});
+
+test('v298: the helper sends who asked (X-Helper-For) and only credits Jake or the asker', async () => {
+  const { createHelperTools } = await import('../server/workshop.js');
+  // helperFetch sets the header only for a real person
+  let seen = null;
+  const fi = async (url, o) => { seen = o; return new Response('{"ok":true}'); };
+  await helperFetch('PATCH', '/homestead/materials/m1', { haveIt: true }, { key: 'k', fetchImpl: fi, asker: 'Taylor' });
+  assert.equal(seen.headers['X-Helper-For'], 'Taylor');
+  await helperFetch('PATCH', '/homestead/materials/m1', { haveIt: true }, { key: 'k', fetchImpl: fi, asker: 'Workshop Helper' });
+  assert.equal(seen.headers['X-Helper-For'], undefined);
+  await helperFetch('GET', '/homestead', null, { key: 'k', fetchImpl: fi });
+  assert.equal(seen.headers['X-Helper-For'], undefined);
+  // the tools pass the asker on every call, and refuse credit to anyone but Jake or the asker
+  const sent = [];
+  const fetcher = async (m, p, b, o) => { sent.push([m, p, b, o]); return { status: 200, json: { ok: true, material: { item: 'Plywood' } }, body: '' }; };
+  const server = createHelperTools([], fetcher, 'Taylor');
+  const tool = server.instance?._registeredTools?.materials || server.instance?._tools?.materials;
+  const run = tool && (tool.callback || tool.handler);
+  assert.ok(run, 'materials tool handler found');
+  let r = await run({ action: 'update', id: 'm1', haveIt: true, creditTo: 'Horace' });
+  assert.equal(r.isError, true); assert.match(r.content[0].text, /only be Jake or Taylor/);
+  assert.equal(sent.length, 0);
+  r = await run({ action: 'update', id: 'm1', haveIt: true, creditTo: 'Taylor' });
+  assert.ok(!r.isError); assert.deepEqual(sent[0][3], { asker: 'Taylor' });
+  r = await run({ action: 'update', id: 'm1', haveIt: true, creditTo: 'Jake' });
+  assert.ok(!r.isError);
+  // no asker (a radar post has from: 'Jake'; an unknown asker): calls go through unchanged, credit only to Jake
+  const sent2 = [];
+  const plain = createHelperTools([], async (...a) => { sent2.push(a); return { status: 200, json: { ok: true, material: {} }, body: '' }; });
+  const run2 = (plain.instance?._registeredTools?.materials || plain.instance?._tools?.materials);
+  r = await (run2.callback || run2.handler)({ action: 'update', id: 'm1', haveIt: true, creditTo: 'Horace' });
+  assert.equal(r.isError, true); assert.match(r.content[0].text, /only be Jake\./);
+  await (run2.callback || run2.handler)({ action: 'update', id: 'm1', haveIt: true });
+  assert.equal(sent2[0].length, 3);
+});
+
+test('v298: runHelper builds the tools with the chat\'s asker', () => {
+  const src = fs.readFileSync(new URL('../server/workshop.js', import.meta.url), 'utf8');
+  assert.match(src, /createHelperTools\(changes, fetcher, chat\.from\)/);
 });
