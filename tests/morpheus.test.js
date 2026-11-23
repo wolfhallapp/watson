@@ -18,7 +18,8 @@ test('journal entries are appended, dated, and searchable', () => {
   assert.match(all[0], /Follow up: check in Sunday/);
   assert.deepEqual(M.journalRead({ query: 'budget' }).length, 1);
   assert.equal(M.journalRead({ query: 'nothing-like-this' }).length, 0);
-  assert.equal(fs.statSync(M.JOURNAL).mode & 0o777, 0o600);
+  // Owner-only (0600) on Linux/WSL. Windows has no POSIX modes (stat always says 0666), so the folder's user ACL guards it there.
+  if (process.platform !== 'win32') assert.equal(fs.statSync(M.JOURNAL).mode & 0o777, 0o600);
 });
 
 test('the Oracle only sees the insights page once Morpheus has written one', () => {
