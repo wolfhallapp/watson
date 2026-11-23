@@ -6,6 +6,8 @@
  *     session's picks). Upload it to the app (PUT /night-board, master key) only when it changed.
  *  2. Read Horace's taps (GET /night-board) and append any new or changed answer to data/night-answers.md, which
  *     the next Night Shift run reads.
+ *  3. (Wolf Hall v346) Copy Taylor's answers to Horace's new questions (GET /night-board's taylorMore) into the
+ *     same file when they change, so tasks waiting on Taylor's facts can use them.
  * It never merges, deploys or pushes anything, and the app keeps the answers as saved-only.
  */
 import fs from 'node:fs';
@@ -140,6 +142,15 @@ export function answerLines(board, answers, synced = {}) {
   return { lines, synced: next };
 }
 
+/** Pure (v346): Taylor's round-2 answers as lines for night-answers.md when they changed since the last copy. */
+export function taylorLines(more, lastSig = '') {
+  if (!more || more.error || !Array.isArray(more.items) || !more.items.length) return { lines: [], sig: lastSig };
+  const sig = crypto.createHash('sha1').update(JSON.stringify([more.done, more.items])).digest('hex');
+  if (sig === lastSig) return { lines: [], sig };
+  const lines = more.items.map((i) => `- ${i.id} "${clean(i.q)}": ${clean(i.a)}`);
+  return { lines, sig };
+}
+
 // ── IO ──
 function git(dir, args) { return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', timeout: 30000 }).trim(); }
 
@@ -193,9 +204,15 @@ export async function syncOnce(io = {}) {
     const now = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
     fs.appendFileSync(paths.answers, `\n## From the Red Pill board (copied ${now})\nHorace tapped these himself in the app. They override the day session's picks for the same question.\n${lines.join('\n')}\n`);
   }
+  const tl = taylorLines(live.taylorMore, state.taylorSig || '');
+  if (tl.lines.length) {
+    const now = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
+    fs.appendFileSync(paths.answers, `\n## From Taylor's new questions in his app (copied ${now}${live.taylorMore.done ? ', he tapped Finish' : ', still in progress'})\nTaylor answered these himself (Wolf Hall v346 survey, round 2). The newest copy of this section replaces older ones.\n${tl.lines.join('\n')}\n`);
+  }
+  state.taylorSig = tl.sig;
   state.synced = synced;
   fs.writeFileSync(paths.state, JSON.stringify(state, null, 1));
-  return { branches: board.branches.length, uploaded, copied: lines.length };
+  return { branches: board.branches.length, uploaded, copied: lines.length + tl.lines.length };
 }
 
 export function startNightBoard({ every = BOARD_EVERY, firstAfter = 60000 } = {}) {

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { reportSections, sectionTitle, parseQuestions, buildBoard, branchPrefix, answerLines, syncOnce } from '../server/nightboard.js';
+import { reportSections, sectionTitle, parseQuestions, buildBoard, branchPrefix, answerLines, syncOnce, taylorLines } from '../server/nightboard.js';
 import { ROUTINES } from '../server/routines.js';
 
 const REPORT = `# Night report
@@ -130,6 +130,39 @@ test('sync: uploads only when the board changes, appends answers, touches only /
   r = await syncOnce(io);
   assert.equal(r.copied, 0, 'copied once');
   assert.ok(calls.every((c) => c === 'PUT /night-board' || c === 'GET /night-board'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('Taylor\'s new answers (Wolf Hall v346): copied when they change, never twice, nothing on an error', async () => {
+  assert.deepEqual(taylorLines(null).lines, []);
+  assert.deepEqual(taylorLines({ error: 'boom' }, 'x'), { lines: [], sig: 'x' });
+  assert.deepEqual(taylorLines({ done: false, items: [] }).lines, []);
+  const more = { done: false, items: [{ id: 'dayAheadTime', q: 'When should yours come?', a: '4:30 AM' }, { id: 'passports', q: 'Who has a passport?', a: 'Me, Jake' }] };
+  const t1 = taylorLines(more);
+  assert.equal(t1.lines.length, 2);
+  assert.match(t1.lines[0], /^- dayAheadTime "When should yours come\?": 4:30 AM$/);
+  assert.deepEqual(taylorLines(more, t1.sig).lines, [], 'unchanged: nothing');
+  assert.equal(taylorLines({ ...more, done: true }, t1.sig).lines.length, 2, 'Finish copies again');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbt-'));
+  const paths = { state: path.join(dir, 'state.json'), answers: path.join(dir, 'answers.md'), extra: path.join(dir, 'none.json'), reports: dir };
+  fs.writeFileSync(paths.answers, '# answers\n');
+  let taylorMore = null;
+  const io = { paths, sections: [], branches: () => [],
+    worker: async (method, p, body) => (method === 'PUT' ? { ok: true } : { ok: true, board: body || null, answers: {}, taylorMore }) };
+  let r = await syncOnce(io);
+  assert.equal(r.copied, 0);
+  taylorMore = more;
+  r = await syncOnce(io);
+  assert.equal(r.copied, 2);
+  r = await syncOnce(io);
+  assert.equal(r.copied, 0, 'copied once');
+  taylorMore = { ...more, done: true };
+  r = await syncOnce(io);
+  assert.equal(r.copied, 2);
+  const md = fs.readFileSync(paths.answers, 'utf8');
+  assert.match(md, /## From Taylor's new questions in his app \(copied .*still in progress\)/);
+  assert.match(md, /he tapped Finish\)/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
