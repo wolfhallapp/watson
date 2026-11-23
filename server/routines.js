@@ -37,12 +37,12 @@ export function nightPush(now = new Date()) {
 // (and no push window), the shift runs day and night, spread over the week so it ends near PACE.target at the weekly
 // reset instead of burning it early or leaving it unused:
 //  - never more than PACE.ahead above the straight line from 0 at the last reset to PACE.target at the next one;
-//  - daytime (7 AM-10 PM Central) it waits once the 5-hour meter reaches PACE.dayCap, so Horace always keeps 40%
+//  - daytime (7 AM-11 PM Central) it waits once the 5-hour meter reaches PACE.dayCap, so Horace always keeps 40%
 //    of his window; overnight it may go to PACE.nightCap. In the last 24 h before the reset, with the week under
 //    PACE.useItUnder, the daytime cap is lifted (use it or lose it);
 //  - a hard stop at PACE.target.
 export const NIGHT_PACE = path.join(DATA_DIR, 'night-pace.json');
-export const PACE = { target: 0.95, ahead: 0.05, dayCap: 0.60, nightCap: 0.95, useItUnder: 0.80, dayStart: 7, dayEnd: 22 };
+export const PACE = { target: 0.95, ahead: 0.05, dayCap: 0.60, nightCap: 0.95, useItUnder: 0.80, dayStart: 7, dayEnd: 23 }; // Horace is up 7 AM-11 PM (11/23)
 export function nightPace() {
   try { const p = JSON.parse(fs.readFileSync(NIGHT_PACE, 'utf8')); return p && p.on !== false ? { ...PACE, ...(p.pace || {}) } : null; } catch { return null; }
 }
