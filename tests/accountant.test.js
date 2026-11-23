@@ -2,7 +2,7 @@
 // his tree after the Initiation. Run: node --test tests/accountant.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { accountantPathOk, accountantBlock, accountantInput, accountantSystemPrompt, processAccountant, createAccountantTools } from '../server/accountant.js';
+import { accountantPathOk, accountantBlock, accountantInput, accountantSystemPrompt, processAccountant, createAccountantTools, runAccountant } from '../server/accountant.js';
 
 test('the Accountant only reaches /accountant routes', () => {
   assert.equal(accountantPathOk('/accountant/pending'), true);
@@ -50,4 +50,28 @@ test('the plant tool posts one strategy to /accountant/tree and notes the change
     await plant.callback({ name: 'Dresser flips', branch: '2 Flip & resell', steps: ['Find one free dresser'] });
     assert.deepEqual(sent[0].slice(0, 2), ['POST', '/accountant/tree']); assert.equal(sent[0][2].action, 'plant'); assert.deepEqual(changes, ['Planted: Dresser flips (2 Flip & resell)']);
   }
+});
+
+// Night Shift #24 (11/23): the Sunday check-in. Wolf Hall queues a CHECKIN with the facts; the Accountant writes a short
+// note with no tools at all, and Wolf Hall pushes it to Jake.
+test('the Sunday check-in: its own rules, the facts as given, no tools at all', async () => {
+  const p = accountantSystemPrompt();
+  for (const s of ['CHECKIN:', 'under 60 words', 'exactly the number given', 'No tools']) assert.ok(p.includes(s), s);
+  assert.doesNotMatch(accountantInput({ kind: 'Checkin', question: 'CHECKIN: facts' }, {}), /New question/);
+  for (const t of ['WebSearch', 'WebFetch', 'mcp__ledger__plant', 'mcp__ledger__update', 'Bash']) assert.match(accountantBlock(t, 'Checkin'), /no tools/, t);
+  assert.equal(accountantBlock('WebSearch', 'Chat'), null);
+  let opts = null;
+  const queryImpl = ({ options }) => { opts = options; return (async function* () { yield { type: 'result', subtype: 'success', result: 'This week: $12.50.\n1. DM 5 shops.\nOne step at a time.' }; })(); };
+  const out = await runAccountant({ kind: 'Checkin', question: 'CHECKIN: x' }, {}, { queryImpl, fetcher: async () => { throw new Error('no fetch on a check-in'); } });
+  assert.match(out.answer, /\$12\.50/); assert.deepEqual(out.changes, []);
+  assert.deepEqual(opts.tools, []); assert.deepEqual(opts.mcpServers, {}); assert.equal(opts.maxTurns, 3); assert.equal(opts.effort, 'low'); assert.doesNotMatch(opts.model, /opus/);
+  assert.equal((await opts.canUseTool('WebSearch', {})).behavior, 'deny');
+});
+
+test('a normal question still gets the ledger and web search', async () => {
+  let opts = null;
+  const queryImpl = ({ options }) => { opts = options; return (async function* () { yield { type: 'result', subtype: 'success', result: 'ok' }; })(); };
+  await runAccountant({ kind: 'Chat', question: 'hi' }, {}, { queryImpl, fetcher: async () => ({ status: 200, json: {}, body: '' }) });
+  assert.deepEqual(opts.tools, ['WebSearch', 'WebFetch']); assert.ok(opts.mcpServers.ledger); assert.equal(opts.maxTurns, 30);
+  assert.equal((await opts.canUseTool('WebSearch', {})).behavior, 'allow');
 });
