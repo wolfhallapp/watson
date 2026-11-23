@@ -51,6 +51,7 @@ test('plain words: no markdown, email, phone or link', () => {
   assert.equal(plain('**Call** 512-555-0199 or joe@example.com, see https://x.y/z now'), 'Call or, see now');
   assert.ok(!/\d{3}-\d{4}|@|https?:/.test(plain('phone (512) 555-0199, a@b.co, www.site.cc')));
   assert.ok(plain('word '.repeat(100), 40).endsWith('…'));
+  assert.equal(plain('Join zoom.us/j/845 or centralchurchofchrist.cc/live, ask @kirk, +1 512 555 0199 ok'), 'Join or, ask, ok');
 });
 
 test('events: date, time, title and place from the bold date line', () => {
