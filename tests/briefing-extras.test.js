@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { landLine, ramLine, ramDue, accountantLine, redPillLine, prepareBriefingExtras, extrasPrompt, centralDay } from '../server/briefing-extras.js';
 import { ROUTINES } from '../server/routines.js';
+import { WEATHER_UNAVAILABLE } from '../server/weather.js';
 
 const TODAY = '2026-11-23';
 const care = (id, job, last, due) => ({ id, job, last, due, inSeason: true, dueOn: TODAY });
@@ -96,15 +97,17 @@ test('prepareBriefingExtras: read-only GETs only, a failed source is skipped, st
   const now = new Date('2026-11-23T12:40:00Z');
   const lines = await prepareBriefingExtras({ get, branches: () => [{ repo: 'oracle', branch: 'b', date: '2026-11-20' }], statePath, now, log: (m) => logs.push(m) });
   assert.deepEqual(asked, ['/property', '/vehicles', '/accountant']);
-  assert.equal(lines.length, 3);
-  assert.match(lines[0], /^🛻/); assert.match(lines[1], /^💼/); assert.match(lines[2], /^🔴/);
-  assert.match(logs.join('\n'), /land skipped/);
+  // #63: the weather line is always first; with /property down it says NWS didn't answer instead of leaving a gap.
+  assert.equal(lines.length, 4);
+  assert.equal(lines[0], WEATHER_UNAVAILABLE);
+  assert.match(lines[1], /^🛻/); assert.match(lines[2], /^💼/); assert.match(lines[3], /^🔴/);
+  assert.match(logs.join('\n'), /\/property skipped/);
   assert.deepEqual(JSON.parse(fs.readFileSync(statePath, 'utf8')).accountant, { level: 10, finished: true, count: 34, earned: 0, on: '2026-11-23' });
   // The next morning: the Accountant has nothing new to say.
   const next = await prepareBriefingExtras({ get, branches: () => [], statePath, now: new Date('2026-11-24T12:40:00Z'), log: () => {} });
-  assert.deepEqual(next.map((l) => l.slice(0, 2)), ['🛻']);
+  assert.deepEqual(next.slice(1).map((l) => l.slice(0, 2)), ['🛻']);
   // Everything failing still never throws.
-  assert.deepEqual(await prepareBriefingExtras({ get: async () => { throw new Error('offline'); }, branches: () => { throw new Error('no git'); }, statePath, now, log: () => {} }), []);
+  assert.deepEqual(await prepareBriefingExtras({ get: async () => { throw new Error('offline'); }, branches: () => { throw new Error('no git'); }, statePath, now, log: () => {} }), [WEATHER_UNAVAILABLE]);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

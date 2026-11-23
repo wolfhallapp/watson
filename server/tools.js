@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { memory, reminders, state } from './store.js';
 import { describeConnection } from './starlink.js';
+import { houseWeather, WEATHER_UNAVAILABLE } from './weather.js';
 import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning, workerInboxWrite, workerProvisions } from './knowledge.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
@@ -315,6 +316,14 @@ export function createWatsonTools(send, currentSessionId = () => null) {
         async ({ speed_test = false }) => {
           const r = await describeConnection({ speedTest: speed_test });
           return text(`${r.text}\n\nDetails: ${JSON.stringify({ dish: r.dish, test: r.test })}`);
+        },
+      ),
+      tool(
+        'weather',
+        'The weather at the house (on The Land, not the town of Thrall): today\'s high and tonight\'s low, rain chance, tomorrow, and any NWS alert, from the National Weather Service through Wolf Hall\'s read-only GET /property. Use this for the morning briefing and whenever Horace asks about the weather at home. Don\'t search the web for home weather.',
+        {},
+        async () => {
+          try { return text((await houseWeather()).line); } catch (e) { return { ...text(`${WEATHER_UNAVAILABLE} (${e.message})`), isError: true }; }
         },
       ),
       tool(
