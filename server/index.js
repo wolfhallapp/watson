@@ -25,6 +25,7 @@ import { readUsageReport } from './usage.js';
 import { startWorkshopHelper } from './workshop.js';
 import { startCookVoice } from './cookvoice.js';
 import { startUptimeWatch } from './uptime.js';
+import { startNotionBackup } from './notion-backup.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = {
@@ -462,6 +463,7 @@ const routineAgent = new WatsonAgent((event) => { if (event.type === 'usage') re
 const persephoneRoutine = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'casino_changed') broadcastTo(channels.persephone, event); if (event.type === 'error') console.warn('  Persephone routine:', event.message); }, PERSEPHONE_ROUTINE);
 startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster, persephone, persephoneRoutine });
 startUptimeWatch(); // 11/23: worker + site every 15 min, no AI; pushes Horace after 2 misses and when it's back
+startNotionBackup(); // 11/23: private nightly copy of every Wolf Hall database after 3 AM, 14 days (needs Wolf Hall v300)
 startWorkshopHelper(); // Wolf Hall v248: answers House Projects questions from the app (its own locked-down session)
 startCookVoice(); // Wolf Hall v274: Cook mode lines in the Southern cook's voice (Chatterbox on the GPU)
 startPhotoWatcher(); // imports his Google Photos Takeout from Drive once it lands (for Morpheus)
