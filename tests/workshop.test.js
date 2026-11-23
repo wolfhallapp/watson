@@ -168,15 +168,36 @@ test('v263 radar: searches the pickup list and Need-one tools near Thrall, posts
   assert.equal(r.posted, true);
   posts.length = 0;
   r = await runRadar({ fetcher, run: async () => ({ answer: 'NONE', changes: [] }), now: new Date('2026-11-22T00:05:00Z') });
-  assert.equal(r.posted, false); assert.equal(posts.length, 0);
-  r = await runRadar({ fetcher: async () => ({ status: 200, json: { pickup: [], tools: [] }, body: '' }), run: async () => { throw new Error('should not run'); } });
-  assert.equal(r.ran, false);
+  // 11/22 (idea #8): NONE still checks in, so Jake's 6 PM ping goes out every day ("quiet": push only, no chat).
+  assert.equal(r.posted, false); assert.equal(r.quiet, true); assert.deepEqual(posts, [['POST', '/workshop/radar', { quiet: true }]]);
+  posts.length = 0;
+  // An empty pickup list still runs the flip search.
+  let flipQ = '';
+  r = await runRadar({ fetcher: async (m, p, b) => { if (p === '/homestead/overview') return { status: 200, json: { pickup: [], tools: [] }, body: '' }; if (p === '/provisions') return { status: 200, json: { have: [] }, body: '' }; posts.push([m, p, b]); return { status: 200, json: { ok: true }, body: '' }; },
+    run: async (chat) => { flipQ = chat.question; return { answer: 'FLIP FINDS\n- Free Craftsman tool chest, Taylor (9 mi) https://austin.craigslist.org/zip/2.html sells ~$120 used, gas ~$4, needs the truck', changes: [] }; }, now: new Date('2026-11-22T00:05:00Z') });
+  assert.equal(r.ran, true); assert.equal(r.flips, 1);
+  assert.match(flipQ, /only do the flip part/); assert.match(flipQ, /FLIP FINDS/); assert.match(flipQ, /within 30 miles/); assert.match(flipQ, /at least \$40 more than the gas/);
+  assert.match(flipQ, /baby car seats and cribs, recalled items/);
+  assert.equal(posts[0][2].flips, 1); assert.equal(posts[0][2].finds, 1);
+  posts.length = 0;
   let saved = null, ran = 0;
   await maybeRunRadar({ now: new Date('2026-11-22T00:05:00Z'), last: '2026-11-20', save: (d) => { saved = d; }, runner: async () => { ran++; } });
   assert.equal(saved, '2026-11-21'); assert.equal(ran, 1);
   await maybeRunRadar({ now: new Date('2026-11-22T00:06:00Z'), last: '2026-11-21', save: () => { throw new Error('no'); }, runner: async () => { ran++; } });
   assert.equal(ran, 1, 'once a day');
   assert.equal(helperPathOk('/workshop/radar'), true);
+});
+
+test('idea #9 (11/22): the Friday plan adds free fun within 30 miles, free only', async () => {
+  const { planQuestion, FUN } = await import('../server/workshop.js');
+  const q = planQuestion({ next: [{ step: 'Sand the shelf', project: 'Shelf', who: 'Jake' }], pickup: [], tools: [] }, [], [], '2026-11-27');
+  assert.equal(FUN.miles, 30);
+  assert.match(q, /FREE FUN NEARBY/);
+  assert.match(q, /within 30 miles of Thrall, TX/);
+  assert.match(q, /no ticket, entry fee, parking fee, required purchase or "suggested donation"/);
+  assert.match(q, /at most 4 web searches/);
+  assert.match(q, /Taylor, Hutto, Granger/);
+  assert.ok(q.indexOf('Do NOT change anything') < q.indexOf('FREE FUN NEARBY'), 'still read-only, fun comes after the plan');
 });
 
 test('v264 weekend planner: Fridays 6 PM Central, NWS weather for Thrall, posted for Jake (and Horace gets the push)', async () => {

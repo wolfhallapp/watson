@@ -397,10 +397,24 @@ export function radarQuestion(wants, today) {
     + `Search for FREE listings (Craigslist "free stuff" for Austin, Waco and San Antonio, Freecycle, Buy Nothing groups, Facebook Marketplace free listings if a search shows them, Habitat ReStore notices) within about ${RADAR.miles} miles of ${RADAR.area} (Taylor, Round Rock, Georgetown, Austin, Temple, Bastrop and the like) for these:\n`
     + wants.map((w) => `- ${w.item}${w.qty ? ` (${w.qty})` : ''}${w.project ? ` for ${w.project}` : ''}`).join('\n')
     + `\nUse at most 8 web searches. Only report real listings you actually found, recent if you can tell, each as: what it is, the town (and rough miles from ${RADAR.area}), and the link. `
-    + 'Group them by the item they match. If you found nothing worth the drive, answer with exactly the word NONE.';
+    + 'Group them by the item they match.' + (wants.length ? '' : ' (Nothing is on the pickup list today, so only do the flip part below.)') + '\n'
+    + flipAsk()
+    + '\nIf you found nothing worth the drive for either part, answer with exactly the word NONE.';
+}
+// ── Curb-to-cash flips (Horace 11/22, idea #8): free things close by that resell for real money. Jake has no
+// vehicle, so each one says whether it needs Taylor's truck.
+export const FLIP = { miles: 30, minNet: 40, searches: 3, mpg: 15, gas: 3 };
+export function flipAsk() {
+  return `Then add a section that starts with the line "FLIP FINDS". Use at most ${FLIP.searches} more searches for FREE curb alerts and free listings within ${FLIP.miles} miles of ${RADAR.area} `
+    + `that resell used for at least $${FLIP.minNet} more than the gas to get them (round trip at about ${FLIP.mpg} mpg and $${FLIP.gas} a gallon). `
+    + 'For each: what it is, the town and miles, the link, what it usually sells for used (check sold listings, like eBay "sold"), the gas cost, and whether it needs a truck. '
+    + 'Skip: anything not free, baby car seats and cribs, recalled items, mattresses, big old TVs, anything with a title (cars, trailers, boats), and anything that looks like a scam. Up to 3. '
+    + 'If none pass, leave the FLIP FINDS section out.';
 }
 /** Counts the listing links in an answer (one push says how many). */
 export const radarFinds = (answer) => (String(answer).match(/https?:\/\/\S+/g) || []).length;
+/** Links under the FLIP FINDS line. */
+export const radarFlips = (answer) => { const i = String(answer).search(/^\s*FLIP FINDS/m); return i < 0 ? 0 : radarFinds(String(answer).slice(i)); };
 export async function runRadar({ fetcher = helperFetch, run = runHelper, now = new Date(), log = console } = {}) {
   const today = centralParts(now).date;
   const ov = await fetcher('GET', '/homestead/overview');
@@ -408,14 +422,18 @@ export async function runRadar({ fetcher = helperFetch, run = runHelper, now = n
   let lefts = [];
   try { const pv = await fetcher('GET', '/provisions'); lefts = (pv.json?.have || []).filter((i) => i.location === 'Leftovers' && i.quantity > 0); } catch { /* search them all */ }
   const wants = radarWants(ov.json, lefts);
-  if (!wants.length) return { ran: false, reason: 'nothing on the pickup list', today };
+  // 11/22: an empty pickup list still runs the flip search, and every evening ends with a ping (quiet when nothing).
   const out = await run({ id: `radar-${today}`, from: 'Jake', askedAt: now.toISOString(), question: radarQuestion(wants, today) }, { fetcher });
   const answer = plainAnswer(out.answer);
-  if (!answer || /^\s*NONE\.?\s*$/i.test(answer)) return { ran: true, posted: false, today, wants: wants.length };
-  const r = await fetcher('POST', '/workshop/radar', { answer, finds: radarFinds(answer) });
+  if (!answer || /^\s*NONE\.?\s*$/i.test(answer)) {
+    const q = await fetcher('POST', '/workshop/radar', { quiet: true });
+    if (q.status >= 400) throw new Error(`radar check-in: HTTP ${q.status} ${String(q.body).slice(0, 200)}`);
+    return { ran: true, posted: false, quiet: true, today, wants: wants.length };
+  }
+  const r = await fetcher('POST', '/workshop/radar', { answer, finds: radarFinds(answer), flips: radarFlips(answer) });
   if (r.status >= 400) throw new Error(`radar post: HTTP ${r.status} ${String(r.body).slice(0, 200)}`);
   log.log?.(`[workshop] radar posted (${radarFinds(answer)} links)`);
-  return { ran: true, posted: true, today, wants: wants.length, finds: radarFinds(answer) };
+  return { ran: true, posted: true, today, wants: wants.length, finds: radarFinds(answer), flips: radarFlips(answer) };
 }
 function readRadarDate() { try { return JSON.parse(fs.readFileSync(RADAR_FILE(), 'utf8')).date || null; } catch { return null; } }
 function writeRadarDate(date) { fs.mkdirSync(WORK_DIR, { recursive: true, mode: 0o700 }); fs.writeFileSync(RADAR_FILE(), JSON.stringify({ date, at: new Date().toISOString() })); }
@@ -454,7 +472,18 @@ export function planQuestion(ov, weather, leftovers, today) {
     + `Leftovers shelf (use these first, don't buy them): ${leftovers.map((l) => l.item + (l.unit ? ` (${l.unit})` : '')).join(', ') || 'empty'}\n`
     + 'Write Saturday\'s plan for Jake: the first line is a one-sentence summary (it becomes the phone notification). Then the steps in order with rough times, '
     + 'outdoor or messy work in the best weather window, the tools to grab before starting, and what to pick up first (free first, leftovers shelf before buying). '
-    + 'Keep it short enough for a phone. Plain text only.';
+    + 'Keep it short enough for a phone. Plain text only.\n'
+    + funAsk();
+}
+// ── Free fun this weekend (Horace 11/22, idea #9): "Only if its free, and within a 30 mile radius." Added to the
+// Friday plan as its own section, for the whole house.
+export const FUN = { miles: 30, towns: ['Thrall', 'Taylor', 'Hutto', 'Granger', 'Bartlett', 'Coupland', 'Rockdale', 'Thorndale', 'Georgetown', 'Round Rock', 'Pflugerville', 'Elgin'], searches: 4 };
+export function funAsk() {
+  return `\nAfter the plan, add a section that starts with the line "FREE FUN NEARBY". Use at most ${FUN.searches} web searches for free things to do this Saturday and Sunday `
+    + `within ${FUN.miles} miles of ${PLAN.place} (${FUN.towns.join(', ')}). Rules: only list it if it is truly free: no ticket, entry fee, parking fee, `
+    + 'required purchase or "suggested donation". Leave out anything farther than ' + FUN.miles + ' miles, anything you can\'t confirm is happening this weekend, '
+    + 'and anything you only saw on an ad. Each line: what it is, the town (and rough miles), the day and time, and the link. Up to 5. '
+    + 'If you found nothing that passes, write "FREE FUN NEARBY: nothing free within 30 miles this weekend."';
 }
 export async function runPlan({ fetcher = helperFetch, run = runHelper, weather = weekendWeather, now = new Date(), log = console } = {}) {
   const today = centralParts(now).date;
