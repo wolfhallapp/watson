@@ -461,7 +461,7 @@ export async function weekendWeather({ fetchImpl = fetch } = {}) {
   return (fc?.properties?.periods || []).filter((x) => /^(Saturday|Sunday)( Night)?$/.test(x.name)).slice(0, 4)
     .map((x) => `${x.name}: ${x.shortForecast}, ${x.temperature}°${x.temperatureUnit}${x.probabilityOfPrecipitation?.value != null ? `, ${x.probabilityOfPrecipitation.value}% rain` : ''}`);
 }
-export function planQuestion(ov, weather, leftovers, today) {
+export function planQuestion(ov, weather, leftovers, today, leads = funLeads(today)) {
   const mine = (ov?.next || []).filter((n) => n.who === 'Jake' || (!n.who && (n.projectWho || []).includes('Jake')));
   const steps = (mine.length ? mine : ov?.next || []).slice(0, 8);
   return `Weekend plan for Saturday (written ${today}). Do NOT change anything in Wolf Hall: only plan and report.\n`
@@ -473,17 +473,31 @@ export function planQuestion(ov, weather, leftovers, today) {
     + 'Write Saturday\'s plan for Jake: the first line is a one-sentence summary (it becomes the phone notification). Then the steps in order with rough times, '
     + 'outdoor or messy work in the best weather window, the tools to grab before starting, and what to pick up first (free first, leftovers shelf before buying). '
     + 'Keep it short enough for a phone. Plain text only.\n'
-    + funAsk();
+    + funAsk(leads);
 }
 // ── Free fun this weekend (Horace 11/22, idea #9): "Only if its free, and within a 30 mile radius." Added to the
 // Friday plan as its own section, for the whole house.
 export const FUN = { miles: 30, towns: ['Thrall', 'Taylor', 'Hutto', 'Granger', 'Bartlett', 'Coupland', 'Rockdale', 'Thorndale', 'Georgetown', 'Round Rock', 'Pflugerville', 'Elgin'], searches: 4 };
-export function funAsk() {
+// Night Shift #35 (11/23): a researched list of dated free events (December holidays first) lives in data/free-fun.json,
+// out of git because it names places. The Friday plan hands that weekend's leads to the helper to re-check.
+export const FUN_FILE = () => path.join(DATA_DIR, 'free-fun.json');
+function addDays(iso, n) { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+/** Events from the list that touch the weekend the plan is written for (Friday `today` through Sunday); anything past FUN.miles is dropped. */
+export function funLeads(today, { read = () => JSON.parse(fs.readFileSync(FUN_FILE(), 'utf8')) } = {}) {
+  let list;
+  try { list = read(); } catch { return []; }
+  const end = addDays(today, 2);
+  return (list?.events || []).filter((e) => e?.name && e.from && e.to && e.from <= end && e.to >= today && !(Number(e.miles) > FUN.miles)).slice(0, 8);
+}
+export function funAsk(leads = []) {
+  const known = leads.map((e) => `- ${e.name}, ${e.town} (about ${e.miles} mi), ${e.when}${e.place ? `, ${e.place}` : ''}; free: ${e.free}${e.freeNote ? ` (${e.freeNote})` : ''}; ${e.link}`);
   return `\nAfter the plan, add a section that starts with the line "FREE FUN NEARBY". Use at most ${FUN.searches} web searches for free things to do this Saturday and Sunday `
     + `within ${FUN.miles} miles of ${PLAN.place} (${FUN.towns.join(', ')}). Rules: only list it if it is truly free: no ticket, entry fee, parking fee, `
     + 'required purchase or "suggested donation". Leave out anything farther than ' + FUN.miles + ' miles, anything you can\'t confirm is happening this weekend, '
     + 'and anything you only saw on an ad. Each line: what it is, the town (and rough miles), the day and time, and the link. Up to 5. '
-    + 'If you found nothing that passes, write "FREE FUN NEARBY: nothing free within 30 miles this weekend."';
+    + 'If you found nothing that passes, write "FREE FUN NEARBY: nothing free within 30 miles this weekend."'
+    + (known.length ? '\nLeads already researched (spend your searches re-checking these first: list one only if it is still on this weekend and still free; '
+      + '"free: check" means the date or cost was not confirmed yet):\n' + known.join('\n') : '');
 }
 export async function runPlan({ fetcher = helperFetch, run = runHelper, weather = weekendWeather, now = new Date(), log = console } = {}) {
   const today = centralParts(now).date;
