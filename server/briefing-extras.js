@@ -2,6 +2,7 @@
 // briefing routine runs, each only when there's something to say. All reads are read-only worker GETs
 // (/property, /vehicles, /accountant) plus the local git branches; nothing is written anywhere except the
 // small data/briefing-extras.json that remembers what the Accountant line last said.
+//  - 🌤️ Weather at the house (#63): today's high and tonight's low from the NWS forecast in /property (server/weather.js).
 //  - 🌳 The Land: weather guard warnings, the fire picture (burn ban / red flag, once Wolf Hall v304 ships),
 //    and care jobs that came due again (jobs never ticked are left out, or the line would say the same 10 every day).
 //  - 🛻 Taylor's Ram: the v293 owner's-manual schedule (logged items overdue or within 1,000 mi / 30 days) and an oil change due.
@@ -12,6 +13,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DATA_DIR, ROOT, config } from './config.js';
 import { workerGet } from './knowledge.js';
+import { weatherLine, WEATHER_UNAVAILABLE } from './weather.js';
 
 export const EXTRAS_STATE = path.join(DATA_DIR, 'briefing-extras.json');
 const TZ = 'America/Chicago';
@@ -136,7 +138,12 @@ export async function prepareBriefingExtras({ get = workerGet, branches = waitin
   const today = centralDay(now), lines = [];
   let st = {}; try { st = JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch { st = {}; }
   const tryIt = async (name, fn) => { try { const l = await fn(); if (l) lines.push(l); } catch (e) { log(`  Briefing extras: ${name} skipped (${e.message})`); } };
-  await tryIt('land', async () => landLine(await getJson(get, '/property'), today));
+  // One /property read for both lines. #63 (11/23): the weather line is always there, from the NWS forecast for the
+  // house (the land's own point), and says so plainly when NWS didn't answer instead of leaving a gap to fill.
+  let prop = null;
+  try { prop = await getJson(get, '/property'); } catch (e) { log(`  Briefing extras: /property skipped (${e.message})`); }
+  lines.push((prop?.ok && prop.weather?.ok && weatherLine(prop.weather.periods, prop.weather.alerts, now)) || WEATHER_UNAVAILABLE);
+  await tryIt('land', async () => landLine(prop, today));
   await tryIt('ram', async () => ramLine((await getJson(get, '/vehicles')).vehicles, today));
   await tryIt('accountant', async () => {
     const { line, seen } = accountantLine(await getJson(get, '/accountant'), st.accountant);

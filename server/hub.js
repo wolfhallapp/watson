@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { MDIR } from './morpheus.js';
 import { workerGet } from './knowledge.js';
+import { houseWeather } from './weather.js';
 
 export const LOG = path.join(MDIR, 'construct-log.json');
 const TZ = 'America/Chicago';
@@ -314,9 +315,10 @@ export function hubState({ now = new Date(), file = LOG, log = loadLog(file), fu
 
 // ── Ticker extras: budget left this week and Thrall weather, cached. ──
 const cache = {};
-async function cached(key, ms, fn) {
+// keepMs: how long an old value may stand in when a refresh fails (default: forever, as before).
+async function cached(key, ms, fn, keepMs = Infinity) {
   if (cache[key] && Date.now() - cache[key].at < ms) return cache[key].v;
-  try { const v = await fn(); cache[key] = { at: Date.now(), v }; return v; } catch { return cache[key]?.v ?? null; }
+  try { const v = await fn(); cache[key] = { at: Date.now(), v }; return v; } catch { return cache[key] && Date.now() - cache[key].at < keepMs ? cache[key].v : null; }
 }
 export async function tickerExtras() {
   const budget = await cached('budget', 30 * 60000, async () => {
@@ -326,13 +328,8 @@ export async function tickerExtras() {
     const fun = (d.categories || []).find((c) => c.key === 'FunMoney');
     return { left: Math.round((avail - d.totalSpent) * 100) / 100, funOver: fun ? fun.overUnder > 0 : null };
   });
-  const weather = await cached('weather', 60 * 60000, async () => {
-    const h = { 'User-Agent': 'watson-hub (personal)' };
-    const pt = await (await fetch('https://api.weather.gov/points/30.592,-97.293', { headers: h, signal: AbortSignal.timeout(15000) })).json();
-    const fc = await (await fetch(pt.properties.forecast, { headers: h, signal: AbortSignal.timeout(15000) })).json();
-    const p = fc.properties.periods[0];
-    return `${p.name}: ${p.temperature}°, ${p.shortForecast}${p.probabilityOfPrecipitation?.value ? `, ${p.probabilityOfPrecipitation.value}% rain` : ''}`;
-  });
+  // #63 (11/23): NWS for the house (Wolf Hall's read-only /property), not a fixed town point.
+  const weather = await cached('weather', 30 * 60000, async () => (await houseWeather()).short, 3 * 3600000);
   return { budget: budget ? budget.left : null, weather };
 }
 // Fun Money for the Agent Smith boss, from the ticker's cached budget read (no extra worker call). null = not known.
