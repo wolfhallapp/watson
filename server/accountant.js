@@ -108,7 +108,14 @@ When the request starts with "INTAKE:", Jake just finished the Initiation. Read 
 - A few bigger, slower ones that fit his goal (priority 9+).
 - At least 3 in "9 Level up" (skills or free certifications that raise what he can earn), and a few in "10 Found money & saving" (unclaimed money search, cashback he'd use anyway).
 - Use the land, the workshop tools and his cooking where they fit. For food, mention Texas cottage-food rules (what can be sold from home, labeling) and check them with a search.
-Then answer him with: his archetype in one line, the 3 strategies to start this week and why, the next step for the first one, and how far his goal is at a realistic pace. Keep the whole answer under 200 words, sources included (about: archetype 1 sentence, each starter 1 line, the first step 2-3 sentences, the goal 2-3 sentences, taxes 1 sentence). No source list: name at most two sources in a few words (the links live on each strategy), and never use markdown links.`;
+Then answer him with: his archetype in one line, the 3 strategies to start this week and why, the next step for the first one, and how far his goal is at a realistic pace. Keep the whole answer under 200 words, sources included (about: archetype 1 sentence, each starter 1 line, the first step 2-3 sentences, the goal 2-3 sentences, taxes 1 sentence). No source list: name at most two sources in a few words (the links live on each strategy), and never use markdown links.
+
+## The CHECKIN request
+When the request starts with "CHECKIN:", it's Sunday evening and Wolf Hall pushes your note to Jake's phone. The request gives you the facts: what he earned this week (from his logged payouts only), his total and goal, and his next open steps. Write him one short note, under 60 words, plain text, no greeting line:
+- First line: this week's earnings, exactly the number given (never another number; if it's $0, say so plainly, no guilt).
+- Then his next steps as given, one short line each, numbered 1-3, in your own words but the same steps.
+- End with one encouragement that's honest and tied to something real (a step he finished, a payout, his goal), never hype or promises of money.
+No tools, no new advice, no new strategies, nothing changed on the tree, no questions he has to answer.`;
 }
 
 /** What the model sees for one request. */
@@ -116,11 +123,12 @@ export function accountantInput(req, profile) {
   const hist = (req.history || []).map((h) => `Earlier question: ${h.question}\nYour earlier answer: ${String(h.answer || '').slice(0, 1200)}`).join('\n\n');
   return `${hist ? `Recent conversation with Jake (oldest first):\n\n${hist}\n\n---\n\n` : ''}`
     + `Jake's Initiation dossier (JSON): ${JSON.stringify(profile || null).slice(0, 6000)}\n\n`
-    + `${req.kind === 'Intake' ? '' : 'New question from Jake: '}${req.question}`;
+    + `${req.kind === 'Intake' || req.kind === 'Checkin' ? '' : 'New question from Jake: '}${req.question}`;
 }
 
-/** Only web search/fetch and the ledger tools; everything else is refused. */
-export function accountantBlock(name) {
+/** Only web search/fetch and the ledger tools; everything else is refused. A Sunday check-in uses no tools at all. */
+export function accountantBlock(name, kind) {
+  if (kind === 'Checkin') return `The Sunday check-in uses no tools (${name} is not allowed): write the note from the facts given.`;
   if (name === 'WebSearch' || name === 'WebFetch' || /^mcp__ledger__/.test(String(name))) return null;
   return `The Accountant can only use web search and Jake's tree (${name} is not allowed).`;
 }
@@ -131,26 +139,27 @@ export async function runAccountant(req, profile, { queryImpl = query, fetcher =
   const changes = [];
   const gate = async (input) => {
     if (input.hook_event_name !== 'PreToolUse') return {};
-    const why = accountantBlock(input.tool_name);
+    const why = accountantBlock(input.tool_name, req.kind);
     return why ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: why } } : {};
   };
   const env = { ...process.env, CLAUDE_CODE_MAX_RETRIES: config.claudeMaxRetries, API_TIMEOUT_MS: config.apiTimeoutMs };
   for (const k of Object.keys(env)) if (/WORKER_KEY|HELPER_KEY|NOTION|SECRET|TOKEN|PASSWORD|ELEVEN|FMP|GMAIL/i.test(k) && !/^ANTHROPIC|^CLAUDE/.test(k)) delete env[k];
+  const checkin = req.kind === 'Checkin';
   const q = queryImpl({
     prompt: accountantInput(req, profile),
     options: {
       cwd: acctDir(),
       model: req.kind === 'Intake' ? INTAKE_MODEL : MODEL,
-      effort: req.kind === 'Intake' ? 'high' : 'medium',
+      effort: req.kind === 'Intake' ? 'high' : checkin ? 'low' : 'medium',
       systemPrompt: accountantSystemPrompt(),
-      tools: ['WebSearch', 'WebFetch'],
-      mcpServers: { ledger: createAccountantTools(changes, fetcher) },
+      tools: checkin ? [] : ['WebSearch', 'WebFetch'],
+      mcpServers: checkin ? {} : { ledger: createAccountantTools(changes, fetcher) },
       strictMcpConfig: true,
       settingSources: [],
       permissionMode: 'default',
-      maxTurns: req.kind === 'Intake' ? 90 : 30,
+      maxTurns: req.kind === 'Intake' ? 90 : checkin ? 3 : 30,
       hooks: { PreToolUse: [{ hooks: [gate] }] },
-      canUseTool: async (name, input) => { const why = accountantBlock(name); return why ? { behavior: 'deny', message: why } : { behavior: 'allow', updatedInput: input }; },
+      canUseTool: async (name, input) => { const why = accountantBlock(name, req.kind); return why ? { behavior: 'deny', message: why } : { behavior: 'allow', updatedInput: input }; },
       env,
       stderr: (d) => { if (process.env.WATSON_DEBUG) process.stderr.write(d); },
     },
