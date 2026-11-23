@@ -530,6 +530,8 @@ export function startWorkshopHelper({ every = 15000 } = {}) {
     try { await processPending(); } catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[workshop]', e.message); }
     try { await maybeRunRadar(); } catch (e) { console.warn('[workshop] radar:', e.message); }
     try { await maybeRunPlan(); } catch (e) { console.warn('[workshop] plan:', e.message); }
+    // 11/22: the Accountant (Jake's own agent) answers on the same tick; loaded here to avoid a circular import.
+    try { const { processAccountant } = await import('./accountant.js'); await processAccountant(); } catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[accountant]', e.message); }
     finally { busy = false; }
   };
   setTimeout(tick, 5000);
