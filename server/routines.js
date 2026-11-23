@@ -8,6 +8,7 @@ import { DATA_DIR, ROOT } from './config.js';
 import { prepareWeeklyLedger, LEDGER_DIR } from './ledger.js';
 import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
+import { checkSignins } from './signin-watch.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -132,6 +133,13 @@ export const ROUTINES = [
     weekday: 'Sat',
     hour: 23, minute: 0, untilHour: 24,
     run: () => prepareWeeklyTrends(),
+  },
+  {
+    // Sign-in watch for deploys (night shift 11/23): 6 PM daily, code only. If wrangler or Netlify says it is
+    // signed out on the PC, Horace gets one push so he can sign in before the next deploy.
+    key: 'signinWatch',
+    hour: 18, minute: 0, untilHour: 23,
+    run: () => checkSignins(),
   },
   {
     // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
