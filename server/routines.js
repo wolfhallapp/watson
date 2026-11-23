@@ -239,7 +239,8 @@ export const ROUTINES = [
       'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
       'calendar for today and tomorrow, important unread email from the last day, bills due in the next 7 days, the Pool,',
       // 11/19 per Horace: gambling is off, so no casino Bonus Run or casino deals lines.
-      'the Architect\'s moves for today and upcoming reminders.',
+      'and upcoming reminders. For the Architect\'s moves use only the "🏗️" line given below (Horace took some strategies off',
+      'his briefing on 11/23); if there is no such line, leave the moves out. Never list the unclaimed-property search, Prolific or Respondent.',
       // 11/23 (Night Shift #63): the weather line is worked out in code (NWS for the house, via /property) and comes with the extras below.
       'For the weather use only the "Weather" line given below, word for word; never search the web or call the weather service yourself for it.',
       'Leave out anything about casinos or gambling (no Bonus Run, no casino deals); Horace turned that off on 11/19.',

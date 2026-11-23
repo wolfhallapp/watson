@@ -7,6 +7,7 @@
 // files, no other Wolf Hall data. Nothing touches the household Pool or budget.
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { query, createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { config } from './config.js';
@@ -175,12 +176,56 @@ export async function runAccountant(req, profile, { queryImpl = query, fetcher =
   return { answer, changes };
 }
 
+// Night Shift #92 (Horace 11/23): cards Horace sends to Jake's tree (server/accountant-gifts.json). Each is done once,
+// and only after the Initiation's intake has planted his tree, so the intake never sees them as its own. When Jake
+// already has a matching card, only the note (appended) and any missing step are added, keeping his ticks.
+const GIFTS_FILE = fileURLToPath(new URL('./accountant-gifts.json', import.meta.url));
+export async function plantGifts(pending, { fetcher = accountantFetch, gifts = null, statePath = path.join(acctDir(), 'gifts.json'), log = console } = {}) {
+  const tree = pending?.strategies || [];
+  if (!pending?.profile?.finishedAt || !tree.length || (pending.pending || []).some((p) => p.kind === 'Intake')) return [];
+  if (!gifts) { try { gifts = JSON.parse(fs.readFileSync(GIFTS_FILE, 'utf8')).gifts || []; } catch { gifts = []; } }
+  let st = {}; try { st = JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch { st = {}; }
+  const done = [];
+  for (const g of gifts) {
+    if (st[g.key]) continue;
+    try {
+      const re = new RegExp(g.match, 'i');
+      const have = tree.find((s) => re.test(s.name));
+      let what;
+      if (!have) {
+        const r = await fetcher('POST', '/accountant/tree', { action: 'plant', ...g.plant, plantedBy: 'Horace' });
+        if (r.status === 409) what = `already there: ${g.plant.name}`;
+        else if (r.status >= 400 || r.json?.ok === false) throw new Error(`HTTP ${r.status} ${r.json?.error || ''}`);
+        else what = `planted ${g.plant.name}`;
+      } else {
+        const body = { action: 'update', id: have.id };
+        const note = g.ifThere?.note;
+        if (note && !String(have.notes || '').includes(note)) body.notes = [have.notes, note].filter(Boolean).join('\n\n');
+        const step = g.ifThere?.step, steps = have.steps || [];
+        if (step && !steps.some((x) => x.t === step) && steps.length < 20) body.steps = [...steps.map((x) => ({ t: x.t, d: !!x.d })), { t: step, d: false }];
+        if (body.notes || body.steps) {
+          const r = await fetcher('POST', '/accountant/tree', body);
+          if (r.status >= 400 || r.json?.ok === false) throw new Error(`HTTP ${r.status} ${r.json?.error || ''}`);
+        }
+        what = body.notes || body.steps ? `added Horace's note to ${have.name}` : `already on ${have.name}`;
+      }
+      st[g.key] = { at: new Date().toISOString(), what };
+      done.push(what);
+      fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(statePath, JSON.stringify(st, null, 1));
+    } catch (e) { log.warn?.(`[accountant] gift ${g.key} not sent yet: ${e.message}`); }
+  }
+  if (done.length) log.log?.(`[accountant] from Horace: ${done.join('; ')}`);
+  return done;
+}
+
 /** One pass over Jake's waiting requests (called from the Workshop Helper's tick). */
 export async function processAccountant({ fetcher = accountantFetch, run = runAccountant, log = console } = {}) {
   if (process.env.WATSON_ACCOUNTANT === 'off') return 0;
   const r = await fetcher('GET', '/accountant/pending');
   if (r.status === 404) return 0; // the Wolf Hall side isn't deployed yet (v287)
   if (r.status >= 400) throw new Error(`accountant pending: HTTP ${r.status} ${r.body.slice(0, 200)}`);
+  await plantGifts(r.json, { fetcher, log });
   let done = 0;
   for (const req of r.json?.pending || []) {
     await fetcher('PATCH', `/accountant/chat/${req.id}`, { status: 'Working' });

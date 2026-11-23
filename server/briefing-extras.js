@@ -7,6 +7,8 @@
 //    and care jobs that came due again (jobs never ticked are left out, or the line would say the same 10 every day).
 //  - 🛻 Taylor's Ram: the v293 owner's-manual schedule (logged items overdue or within 1,000 mi / 30 days) and an oil change due.
 //  - 💼 Jake's Accountant: Horace's view only, and only what changed: Initiation levels, tree size, payouts. Never his chats.
+//  - 🏗️ The Architect's moves (#92): the next open step on each live Construct strategy, minus the ones Horace
+//    took off his briefing (briefing:false, e.g. the unclaimed-property search, Prolific and Respondent, which went to Jake).
 //  - 🔴 Red pill: night branches still waiting to be merged in both repos, and the oldest one.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,6 +16,7 @@ import { execFileSync } from 'node:child_process';
 import { DATA_DIR, ROOT, config } from './config.js';
 import { workerGet } from './knowledge.js';
 import { weatherLine, WEATHER_UNAVAILABLE } from './weather.js';
+import { Construct } from './construct.js';
 
 export const EXTRAS_STATE = path.join(DATA_DIR, 'briefing-extras.json');
 const TZ = 'America/Chicago';
@@ -90,6 +93,17 @@ export function ramLine(vehicles, today) {
   return "🛻 Taylor's Ram: " + [bad.length ? list(bad, 3) : '', soon.length ? 'coming up: ' + list(soon, 2) : ''].filter(Boolean).join('. ') + '.';
 }
 
+// ── The Architect's moves (#92, Horace 11/23): worked out in code, so what he took off his briefing stays off ──
+/** The live tree's summary, read only: null when there's no tree yet (never seeds one). */
+function constructSummary() { const c = new Construct(); return fs.existsSync(c.file) ? c.summary() : null; }
+/** Construct summary -> one line, or null when nothing is being worked on. */
+export function movesLine(summary, max = 6) {
+  const m = summary?.moves || [];
+  if (!m.length) return null;
+  const shown = m.slice(0, max).map((x) => `${x.strategy}: ${x.step.text}`);
+  return "🏗️ The Architect's moves: " + shown.join('; ') + (m.length > max ? `; plus ${m.length - max} more on the Architect's page` : '') + '.';
+}
+
 // ── Jake's Accountant (Horace's view: levels, tree size, payouts; never chats) ──
 /** GET /accountant + what the last briefing saw -> { line, seen }. Says something only when it changed. */
 export function accountantLine(acct, prev) {
@@ -134,7 +148,7 @@ async function getJson(get, p) {
   if (r.status !== 200) throw new Error(`${p} answered ${r.status}`);
   return JSON.parse(r.body);
 }
-export async function prepareBriefingExtras({ get = workerGet, branches = waitingBranches, statePath = EXTRAS_STATE, now = new Date(), log = console.log } = {}) {
+export async function prepareBriefingExtras({ get = workerGet, branches = waitingBranches, statePath = EXTRAS_STATE, now = new Date(), log = console.log, construct = constructSummary } = {}) {
   const today = centralDay(now), lines = [];
   let st = {}; try { st = JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch { st = {}; }
   const tryIt = async (name, fn) => { try { const l = await fn(); if (l) lines.push(l); } catch (e) { log(`  Briefing extras: ${name} skipped (${e.message})`); } };
@@ -150,6 +164,7 @@ export async function prepareBriefingExtras({ get = workerGet, branches = waitin
     if (seen) { st.accountant = { ...seen, on: today }; try { fs.writeFileSync(statePath, JSON.stringify(st, null, 2)); } catch (e) { log(`  Briefing extras: state not saved (${e.message})`); } }
     return line;
   });
+  await tryIt('moves', async () => movesLine(construct()));
   await tryIt('red pill', async () => redPillLine(branches(), today));
   return lines;
 }
