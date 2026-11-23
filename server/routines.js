@@ -9,6 +9,7 @@ import { prepareWeeklyLedger, LEDGER_DIR } from './ledger.js';
 import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
 import { checkSignins } from './signin-watch.js';
+import { uploadChurchFeed } from './church-feed.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -134,6 +135,8 @@ export const ROUTINES = [
       'If the file does not exist yet, look back 90 days; otherwise cover the last 3 days and skip emails already noted (keep their Gmail ids in the file).',
       'Keep the file organized under these headings: Upcoming events (dates, times, places); Prayer requests and care (who, what, date, and update or remove old ones);',
       'Announcements; Daily readings and sermon notes; Members (name, email, role if stated: elder, deacon, minister, teacher; family ties mentioned).',
+      'Keep two formats exactly, because the church reminders on Horace\'s phone are read from them in code: under Upcoming events, start each dated event with its date (and time if known) in bold, then the event name in bold and where it is,',
+      'like "- **Sat Dec 5, 10:30 AM**: **Ladies Cookie Exchange** at the building."; under Prayer requests, start each with the name in bold and the date in brackets, like "- **Brian Hatherly** (Nov 21): what to pray for."',
       'Read only, never reply or change email. Keep it factual and kind; this is private to Horace. Then reply with one line: what was added.',
     ].join(' '),
   },
@@ -167,6 +170,14 @@ export const ROUTINES = [
     weekday: 'Sat',
     hour: 23, minute: 0, untilHour: 24,
     run: () => prepareWeeklyTrends(),
+  },
+  {
+    // Church reminders (Night Shift #64, 11/23): code only. Reads Trinity's Church notes.md and uploads its dated
+    // events and prayer requests to Wolf Hall, which pushes at 7 AM and 7 PM. 6 AM catches last night's digest.
+    key: 'churchFeed',
+    times: [{ hour: 6, minute: 0 }, { hour: 18, minute: 30 }],
+    untilHour: 23,
+    run: () => uploadChurchFeed(),
   },
   {
     // Sign-in watch for deploys (night shift 11/23): 6 PM daily, code only. If wrangler or Netlify says it is
