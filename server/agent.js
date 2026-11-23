@@ -179,7 +179,10 @@ export function unattendedBlock(toolName, input = {}) {
     const c = String(input.command || '');
     if (/\bwrangler\s+(deploy|publish|secret|delete|rollback|kv|d1|r2)\b/.test(c)) return 'Cloudflare deploys and secrets';
     if (/\bnetlify\s+(deploy|api|sites)/.test(c)) return 'Netlify deploys';
-    if (/\bgit\b[^|;&]*\s(push|reset\s+--hard|clean|branch\s+-D|checkout\s+main|merge|rebase)\b/.test(c)) return 'pushing or rewriting git branches';
+    // 11/23 per Horace (one rolling release branch): a plain merge inside the oracle/next worktree is the one merge
+    // a night run may do (it moves oracle/next, never main). merge-base is read-only.
+    const nextMerge = /^\s*git -C ~\/night\/wolf-hall-next merge(\s+--(ff-only|no-edit|no-ff))*(\s+-m\s+"[^"`$\\]*")?\s+(main|oracle\/night-[\w.-]+)\s*$/.test(c);
+    if (!nextMerge && /\bgit\b[^|;&]*\s(push|reset\s+--hard|clean|branch\s+-D|checkout\s+main|merge(?!-base)|rebase)\b/.test(c)) return 'pushing or rewriting git branches';
     if (/\bcurl\b[^|;]*(-X\s*(POST|PATCH|PUT|DELETE)|--data|-d\s)/i.test(c)) return 'write requests to live services';
     if (/\brm\s+-[a-z]*r/i.test(c)) return 'deleting folders';
   }

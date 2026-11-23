@@ -32,6 +32,35 @@ export const NIGHT_PUSH = path.join(DATA_DIR, 'night-push.json');
 export function nightPush(now = new Date()) {
   try { const p = JSON.parse(fs.readFileSync(NIGHT_PUSH, 'utf8')); return Date.parse(p.until) > now.getTime() ? p : null; } catch { return null; }
 }
+// Pace mode (11/23 per Horace, "7C ... use my usage as efficiently as possible"): with data/night-pace.json present
+// (and no push window), the shift runs day and night, spread over the week so it ends near PACE.target at the weekly
+// reset instead of burning it early or leaving it unused:
+//  - never more than PACE.ahead above the straight line from 0 at the last reset to PACE.target at the next one;
+//  - daytime (7 AM-10 PM Central) it waits once the 5-hour meter reaches PACE.dayCap, so Horace always keeps 40%
+//    of his window; overnight it may go to PACE.nightCap. In the last 24 h before the reset, with the week under
+//    PACE.useItUnder, the daytime cap is lifted (use it or lose it);
+//  - a hard stop at PACE.target.
+export const NIGHT_PACE = path.join(DATA_DIR, 'night-pace.json');
+export const PACE = { target: 0.95, ahead: 0.05, dayCap: 0.60, nightCap: 0.95, useItUnder: 0.80, dayStart: 7, dayEnd: 22 };
+export function nightPace() {
+  try { const p = JSON.parse(fs.readFileSync(NIGHT_PACE, 'utf8')); return p && p.on !== false ? { ...PACE, ...(p.pace || {}) } : null; } catch { return null; }
+}
+const ms = (t) => (t > 1e12 ? t : t * 1000);
+/** Pace mode's decision for this moment (pure). Needs the weekly window's resetsAt; returns null without it. */
+export function paceAllows(usage, now = new Date(), pace = PACE) {
+  const w = usage?.seven_day, f = usage?.five_hour;
+  if (!w || typeof w.utilization !== 'number' || !w.resetsAt) return null;
+  const end = ms(w.resetsAt), week = 7 * 86400000;
+  const frac = Math.min(1, Math.max(0, (now.getTime() - (end - week)) / week));
+  if (w.utilization >= pace.target) return false;
+  if (w.utilization > pace.target * frac + pace.ahead) return false; // ahead of pace: let the week catch up
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' }).format(now));
+  const day = hour >= pace.dayStart && hour < pace.dayEnd;
+  const lastDay = end - now.getTime() <= 86400000 && w.utilization < pace.useItUnder;
+  const cap = day && !lastDay ? pace.dayCap : pace.nightCap;
+  if (f && typeof f.utilization === 'number' && f.utilization >= cap && f.resetsAt && ms(f.resetsAt) > now.getTime()) return false;
+  return true;
+}
 /** The night a moment belongs to: the Central date 12 hours earlier (so 9 PM to 6:30 AM is one night). */
 export function nightKey(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(now.getTime() - 12 * 3600000));
@@ -72,8 +101,13 @@ export function noteHelpersCutOff(text, now = new Date(), dir = NIGHT_REPORTS) {
 export function usageAllowsNightShift(usage = state.get().usage || {}, now = new Date(), store = state, push = nightPush(now)) {
   const w = usage.seven_day, f = usage.five_hour;
   if (w && typeof w.utilization === 'number') {
-    if (w.utilization >= (push ? Math.min(0.99, Number(push.weekStop) || 0.98) : NIGHT_WEEK_STOP)) return false;
-    if (push) return !(f && typeof f.utilization === 'number' && f.utilization >= 0.95 && f.resetsAt && (f.resetsAt > 1e12 ? f.resetsAt : f.resetsAt * 1000) > Date.now());
+    if (push) {
+      if (w.utilization >= Math.min(0.99, Number(push.weekStop) || 0.98)) return false;
+      return !(f && typeof f.utilization === 'number' && f.utilization >= 0.95 && f.resetsAt && (f.resetsAt > 1e12 ? f.resetsAt : f.resetsAt * 1000) > Date.now());
+    }
+    const pace = nightPace();
+    if (pace) { const ok = paceAllows(usage, now, pace); if (ok !== null) return ok; } // 11/23 pace mode (its own stop)
+    if (w.utilization >= NIGHT_WEEK_STOP) return false;
     // Per-night budget: remember the week's level when this night started (a weekly reset mid-night starts over).
     const night = nightKey(now);
     let b = store.get().nightBudget;
@@ -148,7 +182,7 @@ export const ROUTINES = [
     agent: 'night',
     fresh: true,
     repeat: true,
-    forceUntil: nightNowUntil,
+    forceUntil: () => (nightPace() ? Date.now() + 3600000 : nightNowUntil()), // pace mode runs day and night (11/23)
     hour: 21, minute: 15, untilHour: 6, untilMinute: 30,
     // 10/31 per Horace: always have a task running overnight. With an empty queue it picks its own improvement.
     guard: () => usageAllowsNightShift(),
@@ -161,8 +195,14 @@ export const ROUTINES = [
       'Prefer fixing a known problem over something new. Skip anything already built on an unmerged night branch or already in a report, anything that needs an answer only Horace has, and anything that touches money data.',
       'Before starting, append it to the queue as "- [ ] (self-chosen) <what and why>" so the next run does not pick the same thing, then do it exactly like a queued task and mark it self-chosen in the report.',
       'NIGHT=$(date -d "+7 hours" +%F) is the date of the morning Horace wakes up; use it for the branch and the report.',
-      'Code changes: never touch the main working folders. For the Wolf Hall app, run',
-      '`git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT ~/night/wolf-hall-app main` (reuse it if it exists) and work there;',
+      'Code changes: never touch the main working folders.',
+      'Wolf Hall work stacks on ONE rolling release branch, oracle/next (11/23 per Horace), so shipping is one merge, never a pile of branches that each fork from main:',
+      'if it is missing, `git -C ~/projects/wolf-hall-app branch oracle/next main`; keep its worktree at ~/night/wolf-hall-next (`git -C ~/projects/wolf-hall-app worktree add ~/night/wolf-hall-next oracle/next` if missing),',
+      'and when main has commits it lacks (a deploy or a PROGRESS note), first run `git -C ~/night/wolf-hall-next merge --no-edit main`.',
+      'Then start each task on its own branch from it: `git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT-<short-name> ~/night/wolf-hall-<short-name> oracle/next`, and work there.',
+      'Version: one more than oracle/next\'s WORKER_VERSION, set in all three places (worker, sw.js cache, splash); never vNEXT.',
+      'When the tests and agent-smith pass, move oracle/next onto it: `git -C ~/night/wolf-hall-next merge --ff-only oracle/night-$NIGHT-<short-name>`. A task that fails stays off oracle/next and the report says why.',
+      'Report the branch as oracle/next (plus the task branch), so one red pill ships everything that passed.',
       `for the Oracle itself use \`git -C '${ROOT}' worktree add -B oracle/night-$NIGHT ~/night/watson main\` (reuse it if it exists).`,
       'Follow the repo rules: syntax checks, the tests in tests/, a new test for what you changed, and the agent-smith subagent for Wolf Hall changes. Commit on the night branch with a clear message.',
       HELPER_RULE,

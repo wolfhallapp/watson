@@ -122,3 +122,33 @@ test('the night agent passes its last words to the routine (11/23)', async () =>
   const src = fs.readFileSync(new URL('../server/agent.js', import.meta.url), 'utf8');
   assert.match(src, /after\(ok, [^\n]*typeof m\.result === 'string' \? m\.result : ''\)/);
 });
+
+test('pace mode spreads the week: on pace, daytime keeps 40% of the 5-hour window, last day use-it-or-lose-it (11/23)', async () => {
+  const { paceAllows, PACE } = await import('../server/routines.js');
+  const reset = Date.parse('2026-12-01T22:00:00Z'); // next weekly reset, Tue 4 PM Central
+  const u = (week, five, resetsAt = reset) => ({ seven_day: { utilization: week, resetsAt }, five_hour: { utilization: five, resetsAt: Date.parse('2026-12-02T00:00:00Z') } }); // the 5-hour window is still running at every test moment
+  const thuNight = new Date('2026-11-27T06:00:00Z'); // Thu 12 AM Central, 2.33 days in: pace line about 0.32
+  const thuDay = new Date('2026-11-26T20:00:00Z');   // Wed 2 PM Central, 1.92 days in: pace line about 0.26
+  assert.equal(paceAllows(u(0.20, 0.10), thuNight), true, 'behind pace at night: run');
+  assert.equal(paceAllows(u(0.40, 0.10), thuNight), false, 'more than 5 points ahead of pace: wait');
+  assert.equal(paceAllows(u(0.20, 0.59), thuDay), true, 'daytime under 60% of the 5-hour window: run');
+  assert.equal(paceAllows(u(0.20, 0.60), thuDay), false, 'daytime at 60%: leave Horace 40%');
+  assert.equal(paceAllows(u(0.20, 0.90), thuNight), true, 'overnight it may go to 95%');
+  assert.equal(paceAllows(u(0.20, 0.95), thuNight), false, 'overnight stop at 95% of the window');
+  const lastDay = new Date('2026-12-01T16:00:00Z'); // Tue 10 AM Central, 6 h before the reset
+  assert.equal(paceAllows(u(0.60, 0.80), lastDay), true, 'last day with the week under 80%: daytime cap lifted');
+  assert.equal(paceAllows(u(0.85, 0.80), lastDay), false, 'last day but already over 80%: daytime cap stays');
+  assert.equal(paceAllows(u(PACE.target, 0.10), lastDay), false, 'hard stop at the target');
+  assert.equal(paceAllows({ seven_day: { utilization: 0.2 } }, thuNight), null, 'no reset time: fall back to the old rules');
+  assert.equal(paceAllows(u(0.20, 0.10, reset / 1000), thuNight), true, 'reset times in seconds work too');
+});
+
+test('the one merge a night run may do: inside the oracle/next worktree (11/23 rolling release branch)', () => {
+  for (const c of ['git -C ~/night/wolf-hall-next merge --ff-only oracle/night-2026-11-24-landlook', 'git -C ~/night/wolf-hall-next merge --no-edit main',
+    'git -C ~/projects/wolf-hall-app merge-base --is-ancestor oracle/next oracle/night-2026-11-24-x'])
+    assert.equal(unattendedBlock('Bash', { command: c }), null, c);
+  for (const c of ['git -C ~/projects/wolf-hall-app merge oracle/next', 'git merge oracle/next', 'git -C ~/night/wolf-hall-next merge main; git push',
+    'git -C ~/night/wolf-hall-next merge main && git -C ~/projects/wolf-hall-app merge oracle/next', 'cd ~/projects/wolf-hall-app && git merge x',
+    'git -C ~/night/wolf-hall-next merge --ff-only oracle/next && git push origin main'])
+    assert.ok(unattendedBlock('Bash', { command: c }), c);
+});
