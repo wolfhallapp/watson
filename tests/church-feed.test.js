@@ -89,7 +89,7 @@ test('the whole file: upcoming dated events only (past and undated left out), pr
   assert.equal(f.prayers[0].id, 'joe-doe-2026-11-21');
   const all = JSON.stringify(f);
   assert.ok(!/@|\d{3}-\d{4}|845 4510|https?:/.test(all), 'no email, phone, meeting id or link');
-  assert.ok(!all.includes('Sat Dec 19'), 'announcements are not events');
+  assert.ok(!JSON.stringify(f.events).includes('Sat Dec 19'), 'announcements are not events (v368: they ride along as shared notes for Taylor\'s Trinity)');
 });
 
 test('a reworded line keeps its id, so a request is never pushed twice', () => {

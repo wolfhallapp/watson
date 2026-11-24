@@ -154,7 +154,56 @@ export function parseChurchNotes(text, now = new Date()) {
   }
   events.sort((a, b) => a.date.localeCompare(b.date));
   prayers.sort((a, b) => b.date.localeCompare(a.date));
-  return { notesUpdated: upd ? upd[1] : null, events: events.slice(0, 40), prayers: prayers.slice(0, 30) };
+  const { readings, shared } = sharedNotes(text, base);
+  return { notesUpdated: upd ? upd[1] : null, events: events.slice(0, 40), prayers: prayers.slice(0, 30), readings, shared };
+}
+
+// ── Taylor's Trinity (Wolf Hall v368, Night Shift #68; Horace rounds 3-4) ──
+// Taylor may see Horace's church notes except the ones Horace marks private. A line with "(private)", "[private]" or
+// 🔒 stays here, with everything nested under it; so does a whole section whose heading has the mark. Shared: the
+// church's Daily Bible Reading (each "**Nov 23**: Acts 27-28. ..." line), the rest of that section, Announcements,
+// and any section Horace starts with "Shared". Never shared: prayer requests (members' care stays as it is: the
+// v338 reminders), Members, and the Gmail ids. Emails, phone numbers and links are dropped (plain()).
+export const PRIVATE_MARK = /\(private\)|\[private\]|\u{1F512}/iu;
+const SHARED_HEADING = /^(announcements|daily readings|shared)/i;
+const NEVER_SHARED = /^(prayer|members|emails already noted)/i;
+const READING = new RegExp(`^\\*\\*(?:${DOW}\\s+)?${MON}\\s+(\\d{1,2})\\*\\*\\s*:?\\s*(.*)$`, 'i');
+const BOOK_REF = /^(?:[1-3]\s?)?[A-Z][a-z]+(?:\s(?:of\s)?[A-Z][a-z]+)?\s+\d+(?:[:-]\d+)*(?:\s*[-–,;]\s*(?:[1-3]\s?)?(?:[A-Z][a-z]+\s+)?\d+(?::\d+)?)*/;
+/** The notes -> { readings: [{date, passage, note}], shared: [{heading, items}] } with the private parts left out. */
+export function sharedNotes(text, base) {
+  const readings = [], shared = [], seen = new Set();
+  let cur = null, skipIndent = -1;
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const h = /^##\s+(.*)$/.exec(raw.trim());
+    if (h) {
+      const heading = h[1].trim();
+      cur = SHARED_HEADING.test(heading) && !NEVER_SHARED.test(heading) && !PRIVATE_MARK.test(heading)
+        ? { heading: plain(heading.replace(/^shared:?\s*/i, '') || heading, 60) || 'Shared', items: [], readings: /^daily readings/i.test(heading) } : null;
+      if (cur) shared.push(cur);
+      skipIndent = -1;
+      continue;
+    }
+    if (!cur) continue;
+    const b = /^(\s*)-\s+(.*)$/.exec(raw);
+    if (!b) { if (raw.trim() && !/^\s/.test(raw)) skipIndent = -1; continue; }
+    const indent = b[1].replace(/\t/g, '  ').length, line = b[2].trim();
+    if (skipIndent >= 0 && indent > skipIndent) continue;
+    skipIndent = -1;
+    if (PRIVATE_MARK.test(line)) { skipIndent = indent; continue; }
+    const r = cur.readings && indent === 0 ? READING.exec(line) : null;
+    if (r) {
+      const date = isoNear(r[1], r[2], base), m = BOOK_REF.exec(r[3].trim());
+      if (date && m && !seen.has(date)) {
+        seen.add(date);
+        readings.push({ date, passage: plain(m[0], 80), note: plain(r[3].trim().slice(m[0].length).replace(/^\s*[.;:,]\s*/, ''), 300) });
+        continue;
+      }
+    }
+    const t = plain(line, 400);
+    if (t && cur.items.length < 40) cur.items.push(t);
+  }
+  readings.sort((a, b) => b.date.localeCompare(a.date));
+  return { readings: readings.slice(0, 60), shared: shared.filter((s) => s.items.length).map(({ heading, items }) => ({ heading, items })).slice(0, 6) };
 }
 
 /**
