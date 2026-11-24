@@ -10,6 +10,7 @@ import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
 import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
+import { schoolDayToday, schoolPrompt } from './school-watch.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -178,6 +179,19 @@ export const ROUTINES = [
     times: [{ hour: 6, minute: 0 }, { hour: 18, minute: 30 }],
     untilHour: 23,
     run: () => uploadChurchFeed(),
+  },
+  {
+    // School attendance (Night Shift #110, 11/24, Horace round 14 8A): Jarrell's absent/tardy emails come at about
+    // 3:55 PM, so one read-only Gmail check at 4:10 PM on school days (the app's district calendar decides), in the
+    // routine's fresh session; the app pushes Horace. A failed run (the usage limit) retries every 15 min until 8 PM.
+    key: 'schoolAttendance',
+    agent: 'routine',
+    fresh: true,
+    retryOnFail: true,
+    times: [{ hour: 16, minute: 10 }],
+    untilHour: 20,
+    guard: () => schoolDayToday(),
+    prompt: schoolPrompt(),
   },
   {
     // Sign-in watch for deploys (night shift 11/23): 6 PM daily, code only. If wrangler or Netlify says it is
@@ -390,7 +404,7 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       if (r.retryOnFail && retryWaiting(r.key, day)) continue; // failed earlier in this slot: wait a bit
       const prev = done[r.key];
       state.set({ routinesDone: { ...done, [r.key]: day } });
-      if (r.guard && !r.guard()) { console.log(`  Routine ${r.key} skipped for ${day} (usage guard)`); continue; }
+      if (r.guard && !(await r.guard())) { console.log(`  Routine ${r.key} skipped for ${day} (guard)`); continue; } // a guard may be async (the school-day check)
       console.log(`  Routine ${r.key} for ${day}`);
       let prompt = r.prompt;
       if (r.prepare) {
