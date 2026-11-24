@@ -13,7 +13,7 @@ fs.mkdirSync(ref);
 fs.writeFileSync(path.join(ref, 'oracle.wav'), 'RIFF-fake');
 
 test('both picked voices are listed', () => {
-  assert.deepEqual(DESIGNED_VOICES.map((v) => v.id), ['oracle', 'workshop-oracle']);
+  assert.deepEqual(DESIGNED_VOICES.map((v) => v.id), ['oracle', 'workshop-oracle', 'trinity']);
   assert.equal(designedRef('oracle', ref), path.join(ref, 'oracle.wav'));
 });
 

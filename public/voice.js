@@ -303,7 +303,7 @@ export class Voice {
   serverVoice() {
     if (!this.cloud || !this.audio) return null;
     if (this.voiceName.startsWith('dv:') && !this.designedOff) return this.voiceName;
-    if (this.voiceName.startsWith('dv:')) return 'kk:af_sarah~0.86'; // the designed voice is off: her old Kokoro voice
+    if (this.voiceName.startsWith('dv:')) return this.voiceName === 'dv:trinity' ? 'kk:af_heart' : 'kk:af_sarah~0.86'; // the designed voice is off: the old Kokoro voice
     if (this.voiceName.startsWith('kk:') && !this.kokoroOff) return this.voiceName;
     return this.cloudVoice();
   }

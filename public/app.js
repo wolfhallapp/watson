@@ -107,6 +107,8 @@ if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
 if (AGENT === 'oracle' && settings.oracleKk !== 3) { settings.voice = 'kk:af_sarah~0.86'; settings.oracleKk = 3; saveSettings(); } // 10/28 final: Sarah, older and deeper (Nicole was too sultry) // 10/28: then 'a little more gravelly'
 // 11/23: Horace picked her designed voice ("B2 is perfect"): deep, smoky, mysterious. Falls back to Sarah if the PC voice is off.
 if (AGENT === 'oracle' && settings.oracleDv !== 1) { settings.voice = 'dv:oracle'; settings.oracleDv = 1; saveSettings(); }
+// 11/23: Trinity's designed voice (Horace picked 'B, soft and low'). Falls back to Kokoro if the PC voice is off.
+if (AGENT === 'trinity' && settings.trinityDv !== 1) { settings.voice = 'dv:trinity'; settings.trinityDv = 1; saveSettings(); }
 if (P.kokoroDefault && settings.kokoro1 !== true) { if (!settings.voice) settings.voice = P.kokoroDefault; settings.kokoro1 = true; saveSettings(); }
 if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens the Oracle with #listen=1: always listening for "Oracle".
