@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { DATA_DIR } from './config.js';
 import { WORKER_URL } from './knowledge.js';
 import { helperKey } from './workshop.js';
+import { designedRef, isDesignedVoice, DESIGNED_SAY } from './tts.js';
 
 export const VOICE_DIR = path.join(DATA_DIR, 'cookvoice');
 export const PYTHON = process.env.WATSON_TTS_PYTHON || path.join(os.homedir(), 'tts', '.venv', 'bin', 'python');
@@ -71,18 +72,29 @@ export async function voiceFile(voice, { fetcher = ttsFetch, dir = VOICE_DIR } =
   return f;
 }
 
+const isDv = (job) => String(job.voice || '').startsWith('dv:');
 /** One pass: make every pending clip. Returns how many were made / failed. */
-export async function processTts({ fetcher = ttsFetch, getReader = sharedReader, dir = VOICE_DIR, log = console } = {}) {
+export async function processTts({ fetcher = ttsFetch, getReader = sharedReader, dir = VOICE_DIR, refDir, log = console } = {}) {
   const r = await fetcher('GET', '/tts/pending');
   if (!r.ok) return { made: 0, failed: 0, skipped: r.status };
   const d = await r.json();
-  if (!d.jobs?.length || !d.voice) return { made: 0, failed: 0 };
-  const sample = await voiceFile(d.voice, { fetcher, dir });
+  // Wolf Hall v349: a job whose voice is "dv:<id>" (Jake's Workshop Oracle) is read with that designed voice's picked
+  // clip (data/voices/ref), not the cook sample, so it never waits on a cook recording. Cook lines still wait for one.
+  const jobs = (d.jobs || []).filter((job) => isDv(job) || d.voice);
+  if (!jobs.length) return { made: 0, failed: 0 };
+  const sample = d.voice && jobs.some((job) => !isDv(job)) ? await voiceFile(d.voice, { fetcher, dir }) : null;
+  fs.mkdirSync(dir, { recursive: true });
   const rd = await getReader();
   let made = 0, failed = 0;
-  for (const job of d.jobs) {
+  for (const job of jobs) {
     const out = path.join(dir, `line-${job.id}.wav`);
-    const res = await rd.say(job.text, sample, out);
+    let res;
+    if (isDv(job)) {
+      const id = String(job.voice).slice(3), ref = designedRef(id, refDir);
+      if (!isDesignedVoice(id)) res = { ok: false, error: 'unknown designed voice' };
+      else if (!fs.existsSync(ref)) res = { ok: false, error: `no reference clip for ${id}` };
+      else res = await rd.say(job.text, ref, out, DESIGNED_SAY);
+    } else res = await rd.say(job.text, sample, out);
     if (res.ok && fs.existsSync(out)) {
       const b64 = fs.readFileSync(out).toString('base64');
       const p = await fetcher('POST', `/tts/${job.id}/done`, { audioBase64: b64 });
