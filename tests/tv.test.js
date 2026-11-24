@@ -59,3 +59,10 @@ test('packing, what shipped and commercials stay public', async () => {
   fs.mkdirSync(path.join(d, 'empty'));
   assert.deepEqual(commercials(d), ['pappy-skillet']);
 });
+
+test('the TV page has no inline style or script (the Oracle\'s security policy blocks them)', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../public/tv.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /<style|<script>(?!<\/script>)|<script(?![^>]*\bsrc=)/);
+  assert.match(html, /href="tv\.css"/); assert.match(html, /src="tv-app\.js"/);
+});
