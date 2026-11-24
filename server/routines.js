@@ -10,6 +10,7 @@ import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
 import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
+import { walkPrompt, queueWalkFindings, APP_WALK_DIR } from './appwalk.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -187,6 +188,20 @@ export const ROUTINES = [
     run: () => checkSignins(),
   },
   {
+    // The weekly app walk (Night Shift #86, 11/24; Horace: "take a more hands-on approach in my Chrome to learn more
+    // about itself and evolve"). Sunday 1 AM, before the Night Shift's turn, in its own Chrome-enabled session held
+    // to appwalk.js's read-only allowlist. When it ends, code queues its best findings as self-found Night Shift tasks.
+    key: 'appWalk',
+    agent: 'appWalk',
+    fresh: true,
+    weekday: 'Sun',
+    hour: 1, minute: 0, untilHour: 5,
+    guard: () => usageAllowsNightShift(),
+    prompt: ({ today }) => walkPrompt(today),
+    prepare: (day) => ({ today: day }),
+    after: (day) => queueWalkFindings(day, { queue: NIGHT_QUEUE }),
+  },
+  {
     // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
     // 6:30 AM, whenever the usage meter allows, so the 5-hour window is spent overnight and fresh by morning.
     key: 'nightShift',
@@ -249,6 +264,7 @@ export const ROUTINES = [
       'On Fridays, also add a line starting "💻 Claude upgrade:" from the wolf_hall tool GET /upgrade-ready (read-only, never /forecast):',
       'if claudeUpgrade.ready, the date and the extra per month (claudeUpgrade.extra); if not ready, its reason in plain words;',
       'if claudeUpgrade is null or the call fails, say the Forecast screen needs one look to refresh it. If asOf is more than 7 days old, say how old.',
+      `On Sundays, if ${APP_WALK_DIR}/<today>.md exists, add its first line (it starts "🚶 App walk:") as is.`,
       `On Sundays, if ${TRENDS_DIR}/<today>.md exists, add its first line (it starts "📈 Week") as is; it is his week in review, so keep it warm and never add advice about weight.`,
       `If last night\'s Night Shift report exists (${NIGHT_REPORTS}/<today>.md), add a line starting "🌙 Night shift:" with what it did and anything waiting on Horace.`,
       'Write it as 5 to 10 short plain lines he can read on his phone: no markdown, no links, real numbers only.',
@@ -380,7 +396,7 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       console.log(`  Routine ${r.key} for ${day}`);
       try { await r.run(); } catch (e) { console.log(`  Routine ${r.key} failed: ${e.message}`); }
     }
-    if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy || agents.keymaster?.busy || agents.persephone?.busy || agents.persephoneRoutine?.busy) return;
+    if (main.busy || agents.night?.busy || agents.routine?.busy || agents.trinity?.busy || agents.morpheus?.busy || agents.keymaster?.busy || agents.persephone?.busy || agents.persephoneRoutine?.busy || agents.appWalk?.busy) return;
     const done = state.get().routinesDone || {};
     for (const r of ROUTINES) {
       if (r.run) continue;
@@ -395,7 +411,7 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       let prompt = r.prompt;
       if (r.prepare) {
         // Gathers facts in code first (the Ledger). A failure is logged and saved for the briefing; no retry today.
-        try { prompt = r.prompt(await r.prepare()); } catch (e) { console.log(`  Routine ${r.key} could not prepare: ${e.message}`); return; }
+        try { prompt = r.prompt(await r.prepare(day)); } catch (e) { console.log(`  Routine ${r.key} could not prepare: ${e.message}`); return; }
       }
       if (r.extra) {
         // Extra facts for the prompt (the briefing's Land/Ram/Accountant/red-pill lines). A failure just leaves them out.
@@ -403,7 +419,8 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       }
       const a = (r.agent && agents[r.agent]) || main;
       if (r.fresh) await a.reset(); // the Night Shift starts clean; Trinity keeps her conversation
-      if (r.retryOnFail || r.checkHelpers) a.onceDone = (ok, why, said) => {
+      if (r.retryOnFail || r.checkHelpers || r.after) a.onceDone = (ok, why, said) => {
+        if (r.after && ok) try { const added = r.after(day); if (added?.length) console.log(`  Routine ${r.key}: queued ${added.length} self-found task(s)`); } catch (e) { console.log(`  Routine ${r.key}: after-step failed (${e.message})`); }
         if (r.retryOnFail && !ok) console.log(`  Routine ${r.key}: ${noteRoutineFailure(r.key, day, prev, why)}`);
         if (r.checkHelpers) { const f = noteHelpersCutOff(said); if (f) console.log(`  Routine ${r.key} ended with helpers still working; noted in ${path.basename(f)}`); }
       };
