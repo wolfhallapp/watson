@@ -103,7 +103,12 @@ export async function processTts({ fetcher = ttsFetch, getReader = sharedReader,
     if (isDv(job)) {
       const id = String(job.voice).slice(3), ref = designedRef(id, refDir);
       if (!isDesignedVoice(id)) res = { ok: false, error: 'unknown designed voice' };
-      else if (!fs.existsSync(ref)) res = { ok: false, error: `no reference clip for ${id}` };
+      else if (fs.existsSync(ref.replace(/\.wav$/, '.qwen.wav')) && !refDir) {
+        // Wolf Hall v376: a voice with a Qwen clone clip (Trinity, take 1) reads through Qwen, same as on the PC, not Chatterbox.
+        const { synthesizeDesigned } = await import('./tts.js');
+        const d = await synthesizeDesigned(job.text, id);
+        if (d.ok) { fs.writeFileSync(out, d.audio); res = { ok: true }; } else res = { ok: false, error: d.error };
+      } else if (!fs.existsSync(ref)) res = { ok: false, error: `no reference clip for ${id}` };
       else res = await rd.say(job.text, ref, out, DESIGNED_SAY);
     } else res = await rd.say(job.text, sample, out);
     if (res.ok && fs.existsSync(out)) {
