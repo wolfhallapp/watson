@@ -10,6 +10,7 @@ import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
 import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
+import { eveningNote } from './evening-note.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -185,6 +186,14 @@ export const ROUTINES = [
     key: 'signinWatch',
     hour: 18, minute: 0, untilHour: 23,
     run: () => checkSignins(),
+  },
+  {
+    // The evening note (Night Shift #106, 11/23; 8 PM per Horace round 20): code only. One push to Horace with what
+    // the Night Shift finished, what's waiting for his "deploy" and the open Red Pill questions; the full release
+    // summary goes to data/release-summary.md for the day session.
+    key: 'eveningNote',
+    hour: 20, minute: 0, untilHour: 23,
+    run: () => eveningNote(),
   },
   {
     // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
