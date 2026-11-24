@@ -1,6 +1,10 @@
 // The house TV (Horace 11/23): this PC drives the TV over its second HDMI, and the TV is seen from across the house,
 // so it shows only what's fine for anyone who walks by: no money, no bills, no Pool, nothing private.
 // GET /tv/state gathers it in one call; each source is cached, and a source that fails just leaves its panel out.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DATA_DIR } from './config.js';
 import { workerGet } from './knowledge.js';
 import { houseWeather } from './weather.js';
 
@@ -13,7 +17,7 @@ async function cached(key, ms, fn) {
 }
 
 // Lines from the day-ahead that are fine on a shared screen. Money never shows on the TV.
-const PRIVATE_LINE = /\$|bill|pool|budget|spend|balance|pay(ment|day)?\b|debt|credit|loan|gambl|casino|botanical|health|med(s|ication)?\b|gift/i;
+const PRIVATE_LINE = /\$|bill|pool|budget|spend|balance|pay(ments?|days?|check)?\b|money|debt|credit|loan|gambl|casino|botanical|health|med(s|ication)?\b|gift/i;
 export function publicLines(lines = []) {
   return lines.filter((l) => l && typeof l.t === 'string' && !/^(bills|money|pool|budget|health|gifts?)$/i.test(l.k || '') && !PRIVATE_LINE.test(l.t))
     .map((l) => l.t).slice(0, 6);
@@ -79,7 +83,35 @@ export function tripPanel(a) {
   return { phase: a.phase, leave: a.leave, back: a.back, freezes: (a.freezes || []).map((f) => `${f.name}: low ${f.low}°F`).slice(0, 3) };
 }
 
-export async function tvState({ get = workerGet, weather = houseWeather, now = new Date() } = {}) {
+/** The trip's open checklist items (the shared house list), never addresses or money. */
+export function tripTodo(a, n = 6) {
+  if (!a?.ok || !a.on || a.expired || a.phase !== 'before') return [];
+  return (a.checklist || []).filter((c) => !c.done && c.item && !PRIVATE_LINE.test(c.item)).map((c) => c.item.replace(/\s*\(.*$/, '')).slice(0, n);
+}
+
+/** "What's new in Wolf Hall": the newest "vNNN deployed: a, b, c" heading in PROGRESS.md, private items dropped. */
+export function shippedFrom(progress) {
+  const m = String(progress || '').match(/^## \d{4}-\d{2}-\d{2}[^\n]*?\b(v\d+) deployed:\s*([^\n]+)/m);
+  if (!m) return null;
+  const items = m[2].split(/,\s*|\s+and\s+/).map((s) => s.trim()).filter((s) => s && !PRIVATE_LINE.test(s)).slice(0, 5);
+  return items.length ? { version: m[1], items } : null;
+}
+export const PROGRESS_FILE = path.join(os.homedir(), 'projects', 'wolf-hall-app', 'PROGRESS.md');
+
+// Commercials (Night Shift #122): data/commercials/<name>/<name>.mp4, played on the TV only (never posted).
+export const COMMERCIALS_DIR = path.join(DATA_DIR, 'commercials');
+export function commercials(dir = COMMERCIALS_DIR) {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && /^[a-z0-9-]+$/.test(d.name))
+      .filter((d) => fs.existsSync(path.join(dir, d.name, `${d.name}.mp4`))).map((d) => d.name);
+  } catch { return []; }
+}
+/** The mp4 for /tv/media/<name>.mp4, or null. Only names from commercials() are served. */
+export function commercialFile(name, dir = COMMERCIALS_DIR) {
+  return commercials(dir).includes(name) ? path.join(dir, name, `${name}.mp4`) : null;
+}
+
+export async function tvState({ get = workerGet, weather = houseWeather, now = new Date(), progress = () => fs.readFileSync(PROGRESS_FILE, 'utf8'), commercialsDir } = {}) {
   const [w, day, away] = await Promise.all([
     cached('weather', 20 * 60000, async () => (await weather()).short),
     cached('dayahead', 15 * 60000, async () => { const r = await get('/dayahead'); const d = JSON.parse(r.body); return d.ok ? d : null; }),
@@ -96,5 +128,8 @@ export async function tvState({ get = workerGet, weather = houseWeather, now = n
     countdowns: countdowns(now),
     church: churchNext(now),
     verse: verseOfDay(now),
+    packing: tripTodo(away),
+    shipped: (() => { try { return shippedFrom(progress()); } catch { return null; } })(),
+    commercials: commercials(commercialsDir),
   };
 }

@@ -53,6 +53,13 @@
   @keyframes blink { 50% { opacity: 0; } }
   .login { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; background: #000; cursor: auto; }
   .login[hidden] { display: none; }
+  video.ad { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: 1.6vw; }
+  .card:has(video.ad) { padding: 0; }
+  #hint { position: fixed; right: 3vw; bottom: 6vh; font-size: 1.2vw; color: var(--g2); opacity: .7; letter-spacing: .1em; }
+  body.night #cards, body.night .wx, body.night #hint, body.night footer { display: none; }
+  body.night #rain { opacity: .06; }
+  body.night .tv { opacity: .35; place-content: center; }
+  body.night header { justify-content: center; text-align: center; }
   .login form { font-size: 1.4vw; color: var(--g); display: grid; gap: 1.5vh; width: 40vw; }
   .login input, .login button { font: inherit; padding: 1vh 1vw; background: #001a0c; color: #fff; border: 1px solid var(--g2); border-radius: .5vw; }
 </style>
@@ -68,6 +75,7 @@
   <main id="cards"></main>
   <footer><span>Wolf Hall</span><span class="dots" id="dots"></span></footer>
 </div>
+<div id="hint">Click once for the Oracle's voice · double-click for full screen</div>
 <div class="login" id="login" hidden><form id="lf"><b>Wolf Hall TV</b><span>Paste the Oracle's access token once (WATSON_TOKEN). It stays on this PC.</span><input id="tok" type="password" autocomplete="off"><button>Connect</button></form></div>
 <script>
 (function () {
@@ -101,10 +109,20 @@
 
   // Cards rotate every 20 seconds.
   let cards = [], idx = 0, timer = null;
+  let playing = false;
   function show(n) {
     const els = $('cards').children; if (!els.length) return;
     idx = (n + els.length) % els.length;
     [...els].forEach((c, i) => c.classList.toggle('on', i === idx));
+    // A commercial holds the screen until it ends (muted until sound is on).
+    [...els].forEach((c, i) => { const v = c.querySelector('video'); if (v && i !== idx) { v.pause(); } });
+    const v = els[idx].querySelector('video');
+    playing = false;
+    if (v) {
+      v.muted = !soundOn; v.currentTime = 0; playing = true;
+      v.onended = v.onerror = () => { playing = false; show(idx + 1); };
+      v.play().catch(() => { playing = false; });
+    }
     $('dots').innerHTML = [...els].map((_, i) => '<i class="' + (i === idx ? 'on' : '') + '"></i>').join('');
   }
   function daysLabel(n) { return n === 0 ? 'TODAY' : n === 1 ? 'DAY' : 'DAYS'; }
@@ -121,6 +139,9 @@
     }
     if (s.countdowns && s.countdowns.length) cards.push('<h2>Coming up</h2><div class="cd">' + s.countdowns.slice(0, 4).map((c) => '<div><div class="n">' + (c.days === 0 ? '🎉' : c.days) + '</div><div class="u">' + daysLabel(c.days) + '</div><div class="w">' + esc(c.icon + ' ' + c.name) + '</div></div>').join('') + '</div>');
     if (s.church && s.church.length) cards.push('<h2>Church this week</h2><ul class="lines">' + s.church.map((c) => '<li><b>' + esc(c.when) + ' · ' + esc(c.time) + '</b>' + esc(c.what) + '</li>').join('') + '</ul>');
+    if (s.packing && s.packing.length) cards.push('<h2>Before we leave</h2><ul class="lines">' + s.packing.map((t) => '<li>☐ ' + esc(t) + '</li>').join('') + '</ul>');
+    if (s.shipped) cards.push('<h2>New in Wolf Hall · ' + esc(s.shipped.version) + '</h2><ul class="lines">' + s.shipped.items.map((t) => '<li>✦ ' + esc(t.charAt(0).toUpperCase() + t.slice(1)) + '</li>').join('') + '</ul>');
+    (s.commercials || []).forEach((name) => cards.push('<video class="ad" src="tv/media/' + encodeURIComponent(name) + '.mp4?t=' + encodeURIComponent(token) + '" playsinline preload="metadata"></video>'));
     if (s.verse) cards.push('<h2>Verse of the day</h2><div class="verse">“' + esc(s.verse.text) + '”<cite>' + esc(s.verse.ref) + ' (ESV)</cite></div>');
     $('cards').innerHTML = cards.map((c) => '<section class="card">' + c + '</section>').join('');
     show(idx);
@@ -135,7 +156,50 @@
   }
   load();
   setInterval(load, 5 * 60000);
-  if (!timer) timer = setInterval(() => show(idx + 1), 20000);
+  if (!timer) timer = setInterval(() => { if (!playing && !night) show(idx + 1); }, 20000);
+
+  // ── The Oracle's voice on the TV (her designed voice, through the PC). Chrome needs one click before sound. ──
+  let soundOn = false, talking = Promise.resolve();
+  function say(text) {
+    if (!soundOn || night) return talking;
+    talking = talking.then(async () => {
+      try {
+        const r = await fetch('tts', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice: 'dv:oracle' }) });
+        if (!r.ok) return;
+        const a = new Audio(URL.createObjectURL(await r.blob()));
+        document.querySelectorAll('video').forEach((v) => { v.volume = 0.25; });
+        await a.play(); await new Promise((res) => { a.onended = a.onerror = res; });
+        document.querySelectorAll('video').forEach((v) => { v.volume = 1; });
+      } catch (e) { /* the PC voice is busy or off */ }
+    });
+    return talking;
+  }
+  function partOfDay(h) { return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'; }
+  function enableSound() {
+    if (soundOn) return;
+    soundOn = true; $('hint').hidden = true;
+    say('Good ' + partOfDay(new Date().getHours()) + ', Wolf Hall. The screen is awake, and so am I.');
+  }
+  document.addEventListener('click', enableSound);
+  // On the hour, 7 AM to 10 PM: the time and the weather.
+  let lastHour = -1;
+  setInterval(() => {
+    const d = new Date(), h = d.getHours();
+    if (d.getMinutes() !== 0 || h === lastHour || h < 7 || h > 22) return;
+    lastHour = h;
+    const w = $('wx').textContent ? ' ' + $('wx').textContent.replace(/(\d+)°/, '$1 degrees') + '.' : '';
+    say("It's " + (h % 12 || 12) + " o'clock." + w);
+  }, 15000);
+
+  // ── Night mode, 11 PM to 6 AM: just a dim clock, so it doesn't light up the house. ──
+  let night = false;
+  function nightCheck() {
+    const h = new Date().getHours(); const n = h >= 23 || h < 6;
+    if (n === night) return; night = n;
+    document.body.classList.toggle('night', night);
+    if (night) document.querySelectorAll('video').forEach((v) => v.pause());
+  }
+  nightCheck(); setInterval(nightCheck, 60000);
   setTimeout(() => location.reload(), 6 * 3600000); // a fresh start every 6 hours
   document.addEventListener('dblclick', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); else document.exitFullscreen?.(); });
 })();

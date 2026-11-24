@@ -25,7 +25,7 @@ import { readUsageReport } from './usage.js';
 import { startWorkshopHelper } from './workshop.js';
 import { startNightBoard } from './nightboard.js';
 import { startCookVoice } from './cookvoice.js';
-import { tvState } from './tv.js';
+import { tvState, commercialFile } from './tv.js';
 import { startUptimeWatch } from './uptime.js';
 import { startNotionBackup } from './notion-backup.js';
 
@@ -148,6 +148,24 @@ const server = http.createServer((req, res) => {
     const ip = clientIp(req);
     if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'tv request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
     tvState().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message }));
+    return;
+  }
+  // The TV's commercials: /tv/media/<name>.mp4?t=<token> (a <video> can't send a header, so the token rides the URL).
+  const tvm = url.pathname.match(/^\/tv\/media\/([a-z0-9-]+)\.mp4$/);
+  if (tvm) {
+    const ip = clientIp(req);
+    if (lockedOut(ip) || !tokenOk(url.searchParams.get('t') || '')) { noteFailure(ip, 'tv media with a bad token'); res.writeHead(401, SECURITY_HEADERS).end('bad token'); return; }
+    const f = commercialFile(tvm[1]);
+    if (!f) { res.writeHead(404, SECURITY_HEADERS).end('Not found'); return; }
+    const size = fs.statSync(f).size, range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (range) {
+      const start = range[1] ? Number(range[1]) : 0, end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      res.writeHead(206, { ...SECURITY_HEADERS, 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1 });
+      fs.createReadStream(f, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': size });
+      fs.createReadStream(f).pipe(res);
+    }
     return;
   }
   if (url.pathname.startsWith('/hub/')) { handleHub(req, res, url).catch((e) => json(res, 500, { error: e.message })); return; }

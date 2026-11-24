@@ -66,6 +66,7 @@ export const DESIGNED_VOICES = [
   ['oracle', 'The Oracle (deep, smoky, mysterious)'],
   ['workshop-oracle', 'The Workshop Oracle (Jake\'s, a man\'s voice)'],
   ['trinity', 'Trinity (soft, low, gentle)'],
+  ['pappy', 'Pappy Skillet (old, gravelly 1800s Southern drawl)'],
 ].map(([id, name]) => ({ id, name }));
 const DESIGNED_IDS = new Set(DESIGNED_VOICES.map((v) => v.id));
 export const isDesignedVoice = (id) => DESIGNED_IDS.has(id);
