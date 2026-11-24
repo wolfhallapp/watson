@@ -10,6 +10,8 @@ import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
 import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
+import { prepareSermons, sermonPrompt } from './sermons.js';
+import { CLASS_PREP } from './trinity.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -131,6 +133,7 @@ export const ROUTINES = [
     prompt: [
       '[Trinity routine, not from Horace. Work quietly: no show_on_screen; final reply one line.]',
       'Update the church notes file (Church notes.md in your study folder). Search Horace\'s Gmail for email from Central Church of Christ (Pflugerville):',
+      'At church Horace goes by Levi (Levi Hall; he signs his emails to the men "Levi"), and Taylor appears as Taylor Wolf or David Taylor Wolf. When the weekly "Privileged to serve" lineup or the monthly table list names either of them, add an Upcoming events line for that Sunday, like "- **Sun Nov 29**: **Levi: closing prayer** (Tom\'s lineup, Nov 27)." or "**Taylor: bread at the Lord\'s table**", so the reminders reach them the evening before and that morning.',
       'from:centralchurchofchrist.cc OR list:lists.centralchurchofchrist.cc OR to:all@centralchurchofchrist.cc, plus the members listed in the notes.',
       'If the file does not exist yet, look back 90 days; otherwise cover the last 3 days and skip emails already noted (keep their Gmail ids in the file).',
       'Keep the file organized under these headings: Upcoming events (dates, times, places); Prayer requests and care (who, what, date, and update or remove old ones);',
@@ -178,6 +181,33 @@ export const ROUTINES = [
     times: [{ hour: 6, minute: 0 }, { hour: 18, minute: 30 }],
     untilHour: 23,
     run: () => uploadChurchFeed(),
+  },
+  {
+    // Sermon notes (Night Shift #74, 11/24): every evening, code lists Central's YouTube channel and saves the
+    // captions of any new English sermon (the edited video, or the live stream until it's posted). Trinity is
+    // asked only when there's something new; she writes the notes into her study folder, for her only.
+    key: 'sermonNotes',
+    agent: 'trinity',
+    hour: 20, minute: 0, untilHour: 23,
+    prepare: () => prepareSermons(),
+    prompt: (ready) => sermonPrompt(ready),
+  },
+  {
+    // Monday class prep (Night Shift #74, Horace round 14): a short study note for the Monday class (Jay's
+    // Ephesians class until it ends), from what Trinity already reads. Saved in her study folder.
+    key: 'classPrep',
+    agent: 'trinity',
+    weekday: 'Mon',
+    hour: 8, minute: 0, untilHour: 17,
+    prompt: [
+      '[Trinity routine, not from Horace. Work quietly: no show_on_screen; final reply one line.]',
+      'Prepare Horace\'s study note for tonight\'s Monday class. Check your church notes and Sermon notes, and his church email (read only) from the last 10 days, for the Monday class: right now Jay\'s Ephesians class, which is wrapping up.',
+      'If there is no Monday class this week, or it has ended and no new one is named, write nothing and reply with one line saying so.',
+      `Otherwise save "${CLASS_PREP}/<YYYY-MM-DD> <class>.md" (make the folder if needed) with: the passage for this week (ESV reference; Horace reads the ESV; quote only a verse or two and name the translation),`,
+      'the context (where it sits in the letter, who and why), 3 to 5 key words with the Greek word and its plain meaning, cross-references, and 2 or 3 discussion questions Horace could bring to class.',
+      'If you can\'t find which passage the class is on this week, use the next section after the last one you know of, and put a first line asking Horace which passage it is.',
+      'Keep it to one page. Private to Horace: never send or share it. Then reply with one line: the class, the passage and the file name.',
+    ].join(' '),
   },
   {
     // Sign-in watch for deploys (night shift 11/23): 6 PM daily, code only. If wrangler or Netlify says it is
@@ -389,13 +419,14 @@ export function startRoutines(agents, { every = 60000 } = {}) {
       if (r.repeat && r.guard && !r.guard()) continue; // overnight: just wait for the meter or new tasks
       if (r.retryOnFail && retryWaiting(r.key, day)) continue; // failed earlier in this slot: wait a bit
       const prev = done[r.key];
-      state.set({ routinesDone: { ...done, [r.key]: day } });
+      state.set({ routinesDone: { ...(state.get().routinesDone || {}), [r.key]: day } }); // fresh: an earlier one may have been marked this tick
       if (r.guard && !r.guard()) { console.log(`  Routine ${r.key} skipped for ${day} (usage guard)`); continue; }
       console.log(`  Routine ${r.key} for ${day}`);
       let prompt = r.prompt;
       if (r.prepare) {
         // Gathers facts in code first (the Ledger). A failure is logged and saved for the briefing; no retry today.
         try { prompt = r.prompt(await r.prepare()); } catch (e) { console.log(`  Routine ${r.key} could not prepare: ${e.message}`); return; }
+        if (!prompt) { console.log(`  Routine ${r.key}: nothing new for ${day}`); continue; } // e.g. no new sermon tonight
       }
       if (r.extra) {
         // Extra facts for the prompt (the briefing's Land/Ram/Accountant/red-pill lines). A failure just leaves them out.
