@@ -27,6 +27,7 @@ import { startNightBoard } from './nightboard.js';
 import { startCookVoice } from './cookvoice.js';
 import { tvState, commercialFile } from './tv.js';
 import { startUptimeWatch } from './uptime.js';
+import { startHeartbeat } from './heartbeat.js';
 import { startNotionBackup } from './notion-backup.js';
 
 const PUBLIC = path.join(ROOT, 'public');
@@ -491,6 +492,7 @@ const routineAgent = new WatsonAgent((event) => { if (event.type === 'usage') re
 const persephoneRoutine = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'casino_changed') broadcastTo(channels.persephone, event); if (event.type === 'error') console.warn('  Persephone routine:', event.message); }, PERSEPHONE_ROUTINE);
 startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster, persephone, persephoneRoutine });
 startUptimeWatch(); // 11/23: worker + site every 15 min, no AI; pushes Horace after 2 misses and when it's back
+const heartbeat = startHeartbeat(); // 11/24 (#114): a beat to the worker every 5 min; it pushes Horace if the PC goes quiet 20 min (Wolf Hall v362)
 startNotionBackup(); // 11/23: private nightly copy of every Wolf Hall database after 3 AM, 14 days (needs Wolf Hall v300)
 startWorkshopHelper(); // Wolf Hall v248: answers House Projects questions from the app (its own locked-down session)
 startNightBoard(); // Wolf Hall v310: night branches + questions to the Red Pill board, Horace's taps back to night-answers.md (every 15 min, no AI)
@@ -518,6 +520,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     nightAgent.shutdown();
     routineAgent.shutdown();
     server.close();
-    setTimeout(() => process.exit(0), 500).unref();
+    // Tell the worker this is a clean stop (not a power or internet outage) before exiting; at most 3 s.
+    heartbeat.stop().finally(() => setTimeout(() => process.exit(0), 500).unref());
   });
 }
