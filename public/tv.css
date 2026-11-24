@@ -31,6 +31,25 @@
   .verse { font-size: 3.4vw; line-height: 1.35; color: #fff; font-style: italic; max-width: 80vw; }
   .verse cite { display: block; font-size: 1.8vw; color: var(--gold); font-style: normal; margin-top: 2.5vh; letter-spacing: .1em; }
   .trip .n { font-size: 9vw; color: #fff; font-weight: 200; }
+  /* 11/24: forecast, sky, facts, space picture */
+  .fc { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5vw; }
+  .fc > div { background: rgba(51,255,136,.06); border-radius: 1.2vw; padding: 2vh 1.4vw; display: grid; gap: .6vh; }
+  .fc > div.n { background: rgba(80,120,255,.08); }
+  .fc b { font-size: 1.6vw; color: var(--g); font-weight: 600; }
+  .fc .t { font-size: 4.4vw; color: #fff; font-weight: 200; line-height: 1; }
+  .fc span { font-size: 1.5vw; }
+  .fc .r { color: #8fd3ff; }
+  .sky { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2vw; text-align: center; }
+  .sky > div { background: rgba(51,255,136,.06); border-radius: 1.2vw; padding: 3vh 1vw; display: grid; gap: 1vh; }
+  .sky .n { font-size: 5vw; line-height: 1; }
+  .sky b { font-size: 2.6vw; color: #fff; font-weight: 300; }
+  .sky span { font-size: 1.4vw; color: var(--g2); letter-spacing: .1em; }
+  .fact { font-size: 3.6vw; line-height: 1.35; color: #fff; max-width: 82vw; }
+  .space { display: grid; grid-template-columns: 1.2fr 1fr; gap: 2.5vw; height: calc(100% - 6vh); }
+  .space img { width: 100%; height: 100%; object-fit: cover; border-radius: 1.2vw; }
+  .space b { font-size: 2.6vw; color: #fff; display: block; margin-bottom: 2vh; }
+  .space p { font-size: 1.8vw; line-height: 1.4; margin: 0; }
+  .space small { display: block; margin-top: 2vh; color: var(--g2); font-size: 1.2vw; letter-spacing: .2em; }
   .warn { color: #ffb36b; }
   footer { display: flex; justify-content: space-between; font-size: 1.2vw; color: var(--dim); letter-spacing: .3em; text-transform: uppercase; }
   .dots i { display: inline-block; width: .7vw; height: .7vw; border-radius: 50%; background: var(--dim); margin-left: .6vw; }

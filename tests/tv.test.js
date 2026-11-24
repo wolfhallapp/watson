@@ -66,3 +66,27 @@ test('the TV page has no inline style or script (the Oracle\'s security policy b
   assert.doesNotMatch(html, /<style|<script>(?!<\/script>)|<script(?![^>]*\bsrc=)/);
   assert.match(html, /href="tv\.css"/); assert.match(html, /src="tv-app\.js"/);
 });
+
+// 11/24 (Horace: "more verses, more informative data")
+import { versesOfDay, factsOfDay, sunTimes, moonPhase, forecastCard, schoolCard, VERSES, FACTS } from '../server/tv.js';
+test('three different verses and three facts a day, and tomorrow is different', () => {
+  const a = versesOfDay(new Date(2026, 10, 24)), b = versesOfDay(new Date(2026, 10, 25));
+  assert.equal(new Set(a.map((v) => v.ref)).size, 3);
+  assert.notDeepEqual(a.map((v) => v.ref), b.map((v) => v.ref));
+  assert.ok(VERSES.length >= 40 && FACTS.length >= 25);
+  assert.equal(new Set(factsOfDay(new Date(2026, 10, 24))).size, 3);
+  for (const f of FACTS) assert.doesNotMatch(f, /\$|bill|pool|budget|money|casino|health|gift/i);
+});
+test('sunrise and sunset for central Texas on Nov 24 are about 7:03 AM and 5:32 PM', () => {
+  const s = sunTimes(new Date(2026, 10, 24, 12));
+  assert.match(s.sunrise, /^7:0\d AM$/); assert.match(s.sunset, /^5:3\d PM$/);
+});
+test('the moon: Nov 24, 2026 is a full moon', () => { assert.equal(moonPhase(new Date(Date.UTC(2026, 10, 24, 18))).name, 'Full moon'); });
+test('forecast and school cards carry only weather and the school calendar, never attendance', () => {
+  assert.equal(forecastCard([{ name: 'Today', temperature: 53, shortForecast: 'Showers', isDaytime: true, probabilityOfPrecipitation: { value: 22 } }]).periods[0].rain, 22);
+  assert.equal(forecastCard([]), null);
+  const c = schoolCard({ ok: true, day: { school: false, why: 'Thanksgiving Break' }, back: '2026-11-30', upcoming: [{ when: 'Mon Dec 21 - Fri Jan 1', title: 'Christmas Break' }], alerts: [{ student: 'Katana', kind: 'absent' }] });
+  assert.equal(c.today, 'No school today (Thanksgiving Break)');
+  assert.ok(!JSON.stringify(c).includes('absent') && !JSON.stringify(c).includes('Katana'));
+  assert.equal(schoolCard({ ok: true, yearOver: true }), null);
+});

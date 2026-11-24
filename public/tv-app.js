@@ -58,12 +58,28 @@
       cards.push('<h2>' + (t.phase === 'before' ? 'Road trip to Hugo' : 'Back home') + '</h2><div class="trip"><span class="n">' + days + '</span> <span class="big">' + (days === 1 ? 'day' : 'days') + (t.phase === 'before' ? ' until we leave' : ' until we\'re home') + '</span></div>'
         + (t.freezes && t.freezes.length ? '<ul class="lines">' + t.freezes.map((f) => '<li class="warn">❄️ ' + esc(f) + '</li>').join('') + '</ul>' : ''));
     }
+    // 11/24 (Horace: "more verses, more informative data"): the forecast, the sky, school, facts, a space picture,
+    // and three verses spread through the deck.
+    const verses = (s.verses && s.verses.length ? s.verses : s.verse ? [s.verse] : []);
+    const verseCard = (v) => '<h2>A word for today</h2><div class="verse">“' + esc(v.text) + '”<cite>' + esc(v.ref) + ' (ESV)</cite></div>';
+    if (verses[0]) cards.push(verseCard(verses[0]));
+    if (s.forecast) cards.push('<h2>The forecast</h2><div class="fc">' + s.forecast.periods.map((p) => '<div class="' + (p.day ? 'd' : 'n') + '"><b>' + esc(p.name) + '</b><span class="t">' + esc(p.temp) + '°</span><span>' + esc(p.text) + '</span>'
+      + (p.rain >= 20 ? '<span class="r">💧 ' + esc(p.rain) + '%</span>' : '') + '</div>').join('') + '</div>'
+      + (s.forecast.alerts.length ? '<ul class="lines">' + s.forecast.alerts.map((a) => '<li class="warn">⚠️ ' + esc(a) + '</li>').join('') + '</ul>' : ''));
+    if (s.sky) cards.push('<h2>The sky today</h2><div class="sky"><div><div class="n">🌅</div><b>' + esc(s.sky.sunrise) + '</b><span>Sunrise</span></div><div><div class="n">🌇</div><b>' + esc(s.sky.sunset) + '</b><span>Sunset</span></div>'
+      + '<div><div class="n">☀️</div><b>' + esc(s.sky.daylight) + '</b><span>Daylight</span></div><div><div class="n">' + esc(s.sky.moon.icon) + '</div><b>' + esc(s.sky.moon.name) + '</b><span>Full moon: ' + esc(s.sky.moon.toFull) + '</span></div></div>');
+    if (s.school) cards.push('<h2>School · Jarrell ISD</h2><ul class="lines"><li><b>' + esc(s.school.today) + '</b>' + esc(s.school.back || '') + '</li>' + s.school.upcoming.map((u) => '<li>📅 ' + esc(u) + '</li>').join('') + '</ul>');
+    if (s.facts && s.facts[0]) cards.push('<h2>Did you know?</h2><div class="fact">' + esc(s.facts[0]) + '</div>');
+    if (verses[1]) cards.push(verseCard(verses[1]));
+    if (s.space) cards.push('<h2>Space picture of the day</h2><div class="space"><img src="tv/space.img?t=' + encodeURIComponent(token) + '" alt=""><div><b>' + esc(s.space.title) + '</b><p>' + esc(s.space.text) + '</p><small>NASA</small></div></div>');
+    if (s.facts && s.facts[1]) cards.push('<h2>Did you know?</h2><div class="fact">' + esc(s.facts[1]) + '</div>');
     if (s.countdowns && s.countdowns.length) cards.push('<h2>Coming up</h2><div class="cd">' + s.countdowns.slice(0, 4).map((c) => '<div><div class="n">' + (c.days === 0 ? '🎉' : c.days) + '</div><div class="u">' + daysLabel(c.days) + '</div><div class="w">' + esc(c.icon + ' ' + c.name) + '</div></div>').join('') + '</div>');
     if (s.church && s.church.length) cards.push('<h2>Church this week</h2><ul class="lines">' + s.church.map((c) => '<li><b>' + esc(c.when) + ' · ' + esc(c.time) + '</b>' + esc(c.what) + '</li>').join('') + '</ul>');
     if (s.packing && s.packing.length) cards.push('<h2>Before we leave</h2><ul class="lines">' + s.packing.map((t) => '<li>☐ ' + esc(t) + '</li>').join('') + '</ul>');
     if (s.shipped) cards.push('<h2>New in Wolf Hall · ' + esc(s.shipped.version) + '</h2><ul class="lines">' + s.shipped.items.map((t) => '<li>✦ ' + esc(t.charAt(0).toUpperCase() + t.slice(1)) + '</li>').join('') + '</ul>');
     (s.commercials || []).forEach((name) => cards.push('<video class="ad" src="tv/media/' + encodeURIComponent(name) + '.mp4?t=' + encodeURIComponent(token) + '" playsinline preload="metadata"></video>'));
-    if (s.verse) cards.push('<h2>Verse of the day</h2><div class="verse">“' + esc(s.verse.text) + '”<cite>' + esc(s.verse.ref) + ' (ESV)</cite></div>');
+    if (s.facts && s.facts[2]) cards.push('<h2>Did you know?</h2><div class="fact">' + esc(s.facts[2]) + '</div>');
+    if (verses[2]) cards.push(verseCard(verses[2]));
     $('cards').innerHTML = cards.map((c) => '<section class="card">' + c + '</section>').join('');
     show(idx);
   }

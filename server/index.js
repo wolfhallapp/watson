@@ -26,7 +26,7 @@ import { startWorkshopHelper } from './workshop.js';
 import { startLine } from './line.js';
 import { startNightBoard } from './nightboard.js';
 import { startCookVoice } from './cookvoice.js';
-import { tvState, commercialFile } from './tv.js';
+import { tvState, commercialFile, spaceImage } from './tv.js';
 import { startUptimeWatch } from './uptime.js';
 import { startNotionBackup } from './notion-backup.js';
 
@@ -149,6 +149,14 @@ const server = http.createServer((req, res) => {
     const ip = clientIp(req);
     if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'tv request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
     tvState().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message }));
+    return;
+  }
+  // The TV's space picture (NASA's picture of the day, fetched by this PC): /tv/space.img?t=<token>.
+  if (url.pathname === '/tv/space.img') {
+    const ip = clientIp(req);
+    if (lockedOut(ip) || !tokenOk(url.searchParams.get('t') || '')) { noteFailure(ip, 'tv image with a bad token'); res.writeHead(401, SECURITY_HEADERS).end('bad token'); return; }
+    spaceImage().then((im) => { if (!im) { res.writeHead(404, SECURITY_HEADERS).end('Not found'); return; } res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': im.type, 'Cache-Control': 'private, max-age=3600' }).end(im.buf); },
+      () => res.writeHead(502, SECURITY_HEADERS).end('unavailable'));
     return;
   }
   // The TV's commercials: /tv/media/<name>.mp4?t=<token> (a <video> can't send a header, so the token rides the URL).

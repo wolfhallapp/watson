@@ -67,7 +67,7 @@ export async function houseWeather({ get = workerGet, now = new Date() } = {}) {
   if (!d.ok || !d.weather?.ok) throw new Error(d.weather?.error || d.error || 'no forecast');
   const line = weatherLine(d.weather.periods, d.weather.alerts, now);
   if (!line) throw new Error('no forecast periods');
-  return { line, short: weatherShort(d.weather.periods) };
+  return { line, short: weatherShort(d.weather.periods), periods: d.weather.periods || [], alerts: d.weather.alerts || [] };
 }
 
 /** Said instead when NWS (or the worker) didn't answer, so the briefing never fills the gap with a web guess. */
