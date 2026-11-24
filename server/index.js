@@ -17,6 +17,7 @@ import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
 import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
 import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
+import * as journalPrompt from './journal-prompt.js';
 import { KEYMASTER } from './keymaster.js';
 import { PERSEPHONE, PERSEPHONE_ROUTINE, screenAction as casinoAction, screenState as casinoState, noteScreenEdit as noteCasinoEdit } from './persephone.js';
 import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
@@ -283,6 +284,7 @@ channels.architect.agent = architect;
 // Approvals are shared: whichever screen is open can answer them.
 onApprovalEvent((event) => { for (const ch of Object.values(channels)) broadcastTo(ch, event); });
 construct.onChange((summary) => broadcastTo(channels.architect, { type: 'construct', construct: summary }));
+journalPrompt.onPromptChange((prompt) => broadcastTo(channels.morpheus, { type: 'journal_prompt', prompt }));
 // What Horace may change on the tree from the Architect's screen (the Architect is told on his next turn).
 const SCREEN_ACTIONS = new Set(['update', 'step', 'note', 'payout', 'undo_payout', 'add']);
 // What the Oracle's Morning tab may send to the app's Morning Log (the worker checks every value).
@@ -420,7 +422,15 @@ wss.on('connection', (ws, req) => {
     }
 
     switch (msg.type) {
-      case 'ask': ch.agent.ask(String(msg.text || '').slice(0, 20000), ws.clientId); break;
+      case 'ask': {
+        let t = String(msg.text || '').slice(0, 20000);
+        if (ch.key === 'morpheus') t = journalPrompt.frameAnswer(t); // his answer to tonight's journaling prompt
+        ch.agent.ask(t, ws.clientId);
+        break;
+      }
+      case 'journal_prompt_get': if (ch.key === 'morpheus') ws.send(JSON.stringify({ type: 'journal_prompt', prompt: journalPrompt.current() })); break;
+      case 'journal_prompt_answer': if (ch.key === 'morpheus') journalPrompt.startAnswer(); break;
+      case 'journal_prompt_skip': if (ch.key === 'morpheus') journalPrompt.skipTonight(); break;
       case 'interrupt': await ch.agent.interrupt(); break;
       case 'reset': await ch.agent.reset(); break;
       case 'morning_get': if (ch.key === 'oracle') morningGet(ws); break;

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="style.css">
   <script type="module" src="app.js"></script>
   <script src="rain.js" defer></script>
+  <script src="journal-prompt.js" defer></script>
 </head>
 <body data-agent="morpheus" class="morpheus">
   <canvas id="rain" aria-hidden="true"></canvas>
@@ -22,7 +23,7 @@
     <div class="top-actions">
       <a class="navlink" href="/" title="Go to the Oracle">Oracle</a>
       <a class="navlink" href="architect.html" title="Go to the Architect">Architect</a>
-      <a class="navlink" href="trinity.html" title="Go to Morpheus">Morpheus</a>
+      <a class="navlink" href="trinity.html" title="Go to Trinity">Trinity</a>
       <a class="navlink" href="keymaster.html" title="Go to the Keymaster, your market research">Keymaster</a>
       <a class="navlink" href="persephone.html" title="Go to Persephone, keeper of your casino">Persephone</a>
       <span id="conn" class="pill pill-off">Connecting…</span>
@@ -44,6 +45,15 @@
           <button id="btn-stop" class="danger" disabled>Stop</button>
         </div>
         <p id="hint" class="hint"></p>
+        <div id="jp-card" class="jp-card" hidden>
+          <div class="jp-kicker">Tonight's journal prompt</div>
+          <p id="jp-text" class="jp-text"></p>
+          <p id="jp-go" class="hint" hidden>Go ahead: speak or type your answer, and Morpheus will keep it in your journal.</p>
+          <div class="jp-actions">
+            <button id="jp-answer" class="primary">Answer</button>
+            <button id="jp-skip" class="ghost">Not tonight</button>
+          </div>
+        </div>
         <form id="type-form" class="type-form" autocomplete="off">
           <input id="type-input" type="text" placeholder="Or type to Morpheus…" aria-label="Message Morpheus">
           <button type="submit" class="ghost">Send</button>
