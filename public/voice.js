@@ -302,6 +302,8 @@ export class Voice {
   /** The voice to ask the server for: "kk:<voice>" (Kokoro, free, local) or an ElevenLabs id. */
   serverVoice() {
     if (!this.cloud || !this.audio) return null;
+    if (this.voiceName.startsWith('dv:') && !this.designedOff) return this.voiceName;
+    if (this.voiceName.startsWith('dv:')) return 'kk:af_sarah~0.86'; // the designed voice is off: her old Kokoro voice
     if (this.voiceName.startsWith('kk:') && !this.kokoroOff) return this.voiceName;
     return this.cloudVoice();
   }
@@ -367,6 +369,8 @@ export class Voice {
     setTimeout(() => { if (gen === this.gen) fn(); else cancelled?.(); }, wait);
   }
   #cloudFailed(err, vid) {
+    // The designed voice failing (the PC's GPU voice is busy or off): her Kokoro voice for the rest of this session.
+    if (String(vid || '').startsWith('dv:')) { this.designedOff = true; this.h.onCloudOff?.('The designed voice had a problem, so I\'m using the Kokoro voice.'); return; }
     // Kokoro failing (rare): use the browser voice for the rest of this session.
     if (String(vid || '').startsWith('kk:')) { this.kokoroOff = true; this.h.onCloudOff?.('The Kokoro voice had a problem, so I\'m using the browser voice.'); return; }
     // Quota used up, bad key or no key: stop asking ElevenLabs for the rest of this session.

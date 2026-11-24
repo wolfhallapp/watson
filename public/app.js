@@ -105,6 +105,8 @@ if (settings.endPause === 1.8) { settings.endPause = 3; saveSettings(); }
 // Kokoro defaults (2026-10-28): Trinity gets the warm Heart voice, the Architect a deep British man; the Oracle keeps hers.
 // Horace (10/28) picked 'Nicole, older and deeper' for the Oracle: an older, warm, wise woman.
 if (AGENT === 'oracle' && settings.oracleKk !== 3) { settings.voice = 'kk:af_sarah~0.86'; settings.oracleKk = 3; saveSettings(); } // 10/28 final: Sarah, older and deeper (Nicole was too sultry) // 10/28: then 'a little more gravelly'
+// 11/23: Horace picked her designed voice ("B2 is perfect"): deep, smoky, mysterious. Falls back to Sarah if the PC voice is off.
+if (AGENT === 'oracle' && settings.oracleDv !== 1) { settings.voice = 'dv:oracle'; settings.oracleDv = 1; saveSettings(); }
 if (P.kokoroDefault && settings.kokoro1 !== true) { if (!settings.voice) settings.voice = P.kokoroDefault; settings.kokoro1 = true; saveSettings(); }
 if (settings.oracleVoice !== 2) { if (/^el:/.test(settings.voice || '')) settings.voice = ''; settings.oracleVoice = 2; saveSettings(); } // the Oracle (2026-10-25): ElevenLabs ran out, so everyone moves to the free browser voice once // 1.8 s cut Horace off mid-thought; move the old default up
 // The PC launcher opens the Oracle with #listen=1: always listening for "Oracle".
@@ -309,7 +311,7 @@ voice.endPauseMs = settings.endPause * 1000;
 if (P.voicePrefs) { voice.voicePrefs = P.voicePrefs; voice.browserPitch = P.pitch; voice.browserRateFactor = P.rateFactor; }
 
 // ElevenLabs voices, spoken through the Oracle's server (which holds the API key).
-let cloudVoices = [], kokoroVoices = [];
+let cloudVoices = [], kokoroVoices = [], designedVoices = [];
 async function loadCloudVoices() {
   try {
     const auth = { Authorization: 'Bearer ' + token };
@@ -318,6 +320,7 @@ async function loadCloudVoices() {
     if (!info.enabled) { voice.cloud = null; cloudVoices = []; kokoroVoices = []; return; }
     cloudVoices = info.voices || [];
     kokoroVoices = info.kokoro || [];
+    designedVoices = info.designed || [];
     voice.cloud = {
       defaultVoice: info.defaultVoice,
       async fetch(text, voiceId, speed) {
@@ -688,6 +691,7 @@ function fillVoices() {
   const voices = voice.voices();
   const opts = (list) => list.map((v) => `<option value="${esc(v.value)}">${esc(v.label)}</option>`).join('');
   sel.innerHTML = `<option value="">${P.automatic}</option>`
+    + (designedVoices.length ? `<optgroup label="Designed voices (free, runs on this PC)">${opts(designedVoices.map((v) => ({ value: 'dv:' + v.id, label: v.name })))}</optgroup>` : '')
     + (kokoroVoices.length ? `<optgroup label="Kokoro (free, natural, runs on this PC)">${opts(kokoroVoices.map((v) => ({ value: 'kk:' + v.id, label: v.name })))}</optgroup>` : '')
     + (cloudVoices.length ? `<optgroup label="ElevenLabs">${opts(cloudVoices.map((v) => ({ value: 'el:' + v.id, label: v.name })))}</optgroup>` : '')
     + (voices.length ? `<optgroup label="Browser">${opts(voices.map((v) => ({ value: v.name, label: v.name })))}</optgroup>` : '');

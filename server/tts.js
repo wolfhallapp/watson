@@ -2,7 +2,8 @@
 // machine: the browser asks the Oracle's server for audio, never ElevenLabs directly.
 // If there's no key, or ElevenLabs fails, the browser falls back to its own voice.
 import fs from 'node:fs';
-import { config } from './config.js';
+import path from 'node:path';
+import { config, DATA_DIR } from './config.js';
 
 const API = 'https://api.elevenlabs.io/v1';
 
@@ -55,6 +56,34 @@ export async function synthesize(text, voiceId, speed) {
   try { const j = await res.json(); detail = j.detail?.status || j.detail?.message || ''; } catch {}
   const quota = /quota|credits|limit/i.test(detail) || res.status === 402;
   return { ok: false, status: quota ? 402 : 502, error: `ElevenLabs ${res.status}${detail ? ': ' + detail : ''}` };
+}
+
+// ── Designed voices (2026-11-23): free, unlimited, on this PC ──
+// Horace picked each voice from Qwen3-TTS VoiceDesign samples (Apache-2.0; described in words, never a copy of a real
+// person). The picked clip lives in data/voices/ref/<id>.wav, and Chatterbox (MIT, the same loaded model as Cook mode)
+// speaks every line in that voice. Voice ids are sent as "dv:<id>".
+export const DESIGNED_VOICES = [
+  ['oracle', 'The Oracle (deep, smoky, mysterious)'],
+  ['workshop-oracle', 'The Workshop Oracle (Jake\'s, a man\'s voice)'],
+].map(([id, name]) => ({ id, name }));
+const DESIGNED_IDS = new Set(DESIGNED_VOICES.map((v) => v.id));
+export const designedRef = (id, dir = path.join(DATA_DIR, 'voices', 'ref')) => path.join(dir, `${id}.wav`);
+let designedN = 0;
+/** { ok: true, audio: Buffer (wav), type } or { ok: false, status, error }. getReader is swappable for tests. */
+export async function synthesizeDesigned(text, id, speed, { getReader, dir } = {}) {
+  if (!DESIGNED_IDS.has(id)) return { ok: false, status: 400, error: 'unknown designed voice' };
+  const ref = designedRef(id, dir);
+  if (!fs.existsSync(ref)) return { ok: false, status: 503, error: `no reference clip for ${id}` };
+  try {
+    const rd = await (getReader || (await import('./cookvoice.js')).sharedReader)();
+    const out = path.join(path.dirname(ref), `..`, `out-${process.pid}-${++designedN}.wav`);
+    const sp = Math.min(1.3, Math.max(0.7, Number(speed) || 1));
+    const r = await rd.say(String(text).slice(0, 1000), ref, out, { exaggeration: 0.5, cfg: 0.4, speed: sp });
+    if (!r.ok || !fs.existsSync(out)) return { ok: false, status: 502, error: `Designed voice: ${r.error || 'no audio'}` };
+    const audio = fs.readFileSync(out);
+    try { fs.unlinkSync(out); } catch { /* */ }
+    return { ok: true, audio, type: 'audio/wav' };
+  } catch (e) { return { ok: false, status: 503, error: `Designed voice: ${e.message}` }; }
 }
 
 // ── Kokoro (2026-10-28): free, open-source, natural voices that run on this PC (no key, no limits) ──

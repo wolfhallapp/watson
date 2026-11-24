@@ -10,7 +10,7 @@ import { WatsonAgent, NIGHT, ROUTINE } from './agent.js';
 import { answerApproval, onApprovalEvent, pendingApprovals } from './approvals.js';
 import { startReminderLoop } from './tools.js';
 import { history, reminders, state, screens, SCREEN_LIMIT } from './store.js';
-import { listVoices, synthesize, ttsEnabled, KOKORO_VOICES, synthesizeKokoro, warmKokoro } from './tts.js';
+import { listVoices, synthesize, ttsEnabled, KOKORO_VOICES, synthesizeKokoro, warmKokoro, DESIGNED_VOICES, synthesizeDesigned } from './tts.js';
 import { windowsNotify } from './notify.js';
 import { startRoutines } from './routines.js';
 import { ARCHITECT, construct, noteScreenEdit } from './architect.js';
@@ -49,9 +49,9 @@ async function handleTts(req, res, url) {
   if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'speech request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
   if (req.method === 'GET' && url.pathname === '/tts/voices') {
     // Kokoro voices are always on (they run on this PC); ElevenLabs voices only with a key.
-    if (!ttsEnabled()) { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: [], kokoro: KOKORO_VOICES }); return; }
-    try { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: await listVoices(), kokoro: KOKORO_VOICES }); }
-    catch (e) { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: [], kokoro: KOKORO_VOICES, error: e.message }); }
+    if (!ttsEnabled()) { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: [], kokoro: KOKORO_VOICES, designed: DESIGNED_VOICES }); return; }
+    try { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: await listVoices(), kokoro: KOKORO_VOICES, designed: DESIGNED_VOICES }); }
+    catch (e) { json(res, 200, { enabled: true, defaultVoice: config.tts.voiceId, voices: [], kokoro: KOKORO_VOICES, designed: DESIGNED_VOICES, error: e.message }); }
     return;
   }
   if (req.method !== 'POST' || url.pathname !== '/tts') { json(res, 404, { error: 'not found' }); return; }
@@ -63,7 +63,8 @@ async function handleTts(req, res, url) {
   if (!text) { json(res, 400, { error: 'no text' }); return; }
   try {
     const v = String(msg.voice || '');
-    const r = v.startsWith('kk:') ? await synthesizeKokoro(text, v.slice(3), msg.speed) : await synthesize(text, v.replace(/^el:/, ''), msg.speed);
+    const r = v.startsWith('dv:') ? await synthesizeDesigned(text, v.slice(3), msg.speed)
+      : v.startsWith('kk:') ? await synthesizeKokoro(text, v.slice(3), msg.speed) : await synthesize(text, v.replace(/^el:/, ''), msg.speed);
     if (!r.ok) { console.warn('  TTS:', r.error); json(res, r.status, { error: r.error }); return; }
     res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': r.type || 'audio/mpeg', 'Cache-Control': 'no-store' }).end(r.audio);
   } catch (e) {

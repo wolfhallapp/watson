@@ -46,11 +46,18 @@ export function startReader({ spawnImpl = spawn } = {}) {
   child.on('exit', (code) => { readyFail(new Error('reader exited ' + code)); while (waiting.length) waiting.shift()({ ok: false, error: 'reader stopped' }); reader = null; });
   return {
     ready: readyP,
-    say(text, voice, out) { return new Promise((res) => { waiting.push(res); child.stdin.write(JSON.stringify({ text, voice, out }) + '\n'); }); },
+    say(text, voice, out, opts = {}) { return new Promise((res) => { waiting.push(res); child.stdin.write(JSON.stringify({ ...opts, text, voice, out }) + '\n'); }); },
     stop() { try { child.kill(); } catch { /* */ } },
   };
 }
 let reader = null;
+/** The one shared Chatterbox reader (Cook mode and the Oracle's designed voices use the same loaded model). */
+export async function sharedReader() {
+  if (!reader) reader = startReader();
+  const r = reader;
+  await r.ready;
+  return r;
+}
 
 const EXT = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/aac': 'm4a', 'audio/wav': 'wav' };
 /** The voice sample, downloaded once per recording (a new recording has a new file id). */
@@ -65,7 +72,7 @@ export async function voiceFile(voice, { fetcher = ttsFetch, dir = VOICE_DIR } =
 }
 
 /** One pass: make every pending clip. Returns how many were made / failed. */
-export async function processTts({ fetcher = ttsFetch, getReader = async () => { if (!reader) reader = startReader(); await reader.ready; return reader; }, dir = VOICE_DIR, log = console } = {}) {
+export async function processTts({ fetcher = ttsFetch, getReader = sharedReader, dir = VOICE_DIR, log = console } = {}) {
   const r = await fetcher('GET', '/tts/pending');
   if (!r.ok) return { made: 0, failed: 0, skipped: r.status };
   const d = await r.json();
