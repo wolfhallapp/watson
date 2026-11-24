@@ -25,6 +25,7 @@ import { readUsageReport } from './usage.js';
 import { startWorkshopHelper } from './workshop.js';
 import { startNightBoard } from './nightboard.js';
 import { startCookVoice } from './cookvoice.js';
+import { tvState } from './tv.js';
 import { startUptimeWatch } from './uptime.js';
 import { startNotionBackup } from './notion-backup.js';
 
@@ -142,6 +143,13 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname.startsWith('/sandbox/')) { handleSandbox(req, res, url).catch((e) => json(res, e.status || 500, { error: e.message })); return; }
   if (url.pathname === '/usage/report') { handleUsage(req, res, url); return; }
+  if (url.pathname === '/tv/state') {
+    const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const ip = clientIp(req);
+    if (lockedOut(ip) || !tokenOk(auth)) { noteFailure(ip, 'tv request with a bad token'); json(res, 401, { error: 'bad token' }); return; }
+    tvState().then((s) => json(res, 200, s), (e) => json(res, 500, { error: e.message }));
+    return;
+  }
   if (url.pathname.startsWith('/hub/')) { handleHub(req, res, url).catch((e) => json(res, 500, { error: e.message })); return; }
   if (url.pathname === '/tts' || url.pathname.startsWith('/tts/')) { handleTts(req, res, url).catch(() => res.destroy()); return; }
   let rel = decodeURIComponent(url.pathname);
