@@ -272,7 +272,7 @@ channels.trinity.agent = trinity;
 // Morpheus (2026-10-29): Horace's guru and journal; his own page, no peer banners.
 const morpheus = new WatsonAgent((event) => broadcastTo(channels.morpheus, event), MORPHEUS);
 channels.morpheus.agent = morpheus;
-// The Keymaster (2026-11-04): market research; his own page, no peer banners.
+// The Keymaster (2026-11-04; Horace's accountant since 2026-11-24): his own page, no peer banners.
 const keymaster = new WatsonAgent((event) => broadcastTo(channels.keymaster, event), KEYMASTER);
 channels.keymaster.agent = keymaster;
 // Persephone (2026-11-06): keeper of the casino; her own page (a 3D chateau), no peer banners.

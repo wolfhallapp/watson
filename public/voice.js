@@ -21,7 +21,7 @@ export const ARCHITECT_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(architect|a
 // Trinity (2026-10-28): Horace's spiritual advisor, on her own page.
 // Morpheus (2026-10-29): Horace's guru and running journal, on his own page.
 export const MORPHEUS_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(morpheus|morphius|morpheous|morphious|more fierce|morph us)\b[\s,.!?:-]*/i;
-// The Keymaster (2026-11-04): market research, on his own page.
+// The Keymaster (2026-11-04): market research, on his own page; Horace's accountant since 2026-11-24.
 export const KEYMASTER_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(?:the\s+)?(key\s?masters?|keymastor|key\s?mister|qi\s?master|kee\s?master)\b[\s,.!?:-]*/i;
 // Persephone (2026-11-06): keeper of the casino, in her chateau page. Speech-to-text often splits or mishears her name.
 export const PERSEPHONE_WAKE = /\b(?:hey\s+|ok(?:ay)?\s+)?(persephone|persephany|persefone|percephone|perse\s?phone|percy\s?phone|purse\s?a\s?phone|per\s?sephone|persa\s?phone)\b[\s,.!?:-]*/i;

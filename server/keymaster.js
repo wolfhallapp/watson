@@ -1,4 +1,7 @@
-// The Keymaster (2026-11-04, per Horace): the fifth agent, for market research on stocks, ETFs and crypto.
+// The Keymaster (2026-11-04, per Horace): the fifth agent, first for market research on stocks, ETFs and crypto.
+// Retasked 2026-11-24 (Night Shift #84, Horace round 5 and 16): now Horace's personal accountant. He reads the
+// Wolf Hall books through an allowlist of read-only GETs (books tool below), runs what-if math (debt snowball,
+// savings growth), and still teaches investing, but never gives buy/sell/hold advice and never moves money.
 // Named after the Keymaster in The Matrix ("unlocks doors"): calm, precise, a little formal. Copies Trinity's
 // pattern: own page (public/keymaster.html), conversation (data/keymaster-history.jsonl), saved session,
 // parameters in knowledge/keymaster.md, and a context folder (Documents/Keymaster) with Horace's profile,
@@ -13,7 +16,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { ROOT, DATA_DIR, config } from './config.js';
 import { makeHistory, memory } from './store.js';
 import { formatLocal, userTimeZone } from './tools.js';
-import { searchSessions } from './knowledge.js';
+import { searchSessions, workerGet } from './knowledge.js';
 
 // ── Context folder (Windows side, so Horace can open the files), with a home-folder fallback like Trinity's ──
 const CONTEXT = process.env.KEYMASTER_DIR || '/mnt/c/Users/Owner/Documents/Keymaster';
@@ -132,6 +135,71 @@ export function summarizePrices(rows) {
   };
 }
 
+// ── The books (2026-11-24): Wolf Hall reads for the accountant. An allowlist, not a blocklist, so a new
+// worker route is off until it's added here on purpose. Every path below is a GET that only reads. /forecast
+// (rewrites the Forecast Snapshot) and this or a future week of /week-budget (writes rollover balances) are
+// never allowed: he has no way to ask Horace's yes, so he reads past weeks only. ──
+export const BOOKS_PATHS = {
+  '/pool': 'the Pool balance and when it was set',
+  '/spend-today': "today's safe-to-spend number, the tightest day ahead, and what to pay today",
+  '/upcoming': 'bills coming up (overdue ones flagged)',
+  '/bills2': 'every unpaid bill with its paid status (recurring, one-time and catch-up)',
+  '/payday-helper': "what Horace keeps from each paycheck and what he Zelles to the Pool",
+  '/credit-accounts': 'credit cards and loans: balances, limits, minimums, due days',
+  '/savings': 'savings goals',
+  '/wishlist': 'the household wishlist and what is budgeted',
+  '/pool-check': 'the last bank check: lines matched to bills, what is still owed',
+  '/week-budget': 'a PAST week of the weekly buckets (spent and left per category); offset must be -1 or lower',
+  '/gambling/month': 'casino month: SC collected and redemptions (kept apart from the household budget)',
+  '/gambling/bonus-run': 'casino free bonuses ready now and streaks',
+  '/health': 'the app version',
+};
+export function booksPathProblem(p) {
+  if (!/^\/[\w\-/.]*(\?[\w\-=&%.]*)?$/.test(String(p || ''))) return 'Give a path like /pool or /week-budget?offset=-1.';
+  const u = new URL(p, 'https://books.invalid');
+  if (!Object.hasOwn(BOOKS_PATHS, u.pathname)) return `${u.pathname} isn't in the accountant's read-only list. Allowed: ${Object.keys(BOOKS_PATHS).join(', ')}.`;
+  if (u.pathname === '/week-budget') {
+    const off = Number(u.searchParams.get('offset'));
+    if (!Number.isInteger(off) || off > -1) return "Only past weeks (offset -1 or lower): loading this week's budget writes rollover balances to Notion. For this week, use /spend-today.";
+  }
+  return null;
+}
+
+const money = (n) => `$${(Math.round(n * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * Debt snowball what-if: smallest balance first. Each month every debt accrues interest (APR / 12) and gets its
+ * minimum; `extra` plus every paid-off debt's minimum rolls onto the smallest one left. Pure math, no data.
+ * Returns { months, totalInterest, order: [{name, month, interest}], stuck } where stuck names debts whose
+ * minimum doesn't cover their interest (they never shrink without extra).
+ */
+export function snowballPlan(debts, extra = 0, { maxMonths = 600 } = {}) {
+  const ds = (debts || []).filter((d) => d && d.balance > 0).map((d) => ({ name: String(d.name), bal: +d.balance, min: Math.max(0, +d.min || 0), apr: Math.max(0, +d.apr || 0), interest: 0, month: null }));
+  const stuck = ds.filter((d) => d.min <= d.bal * d.apr / 1200 && d.apr > 0).map((d) => d.name);
+  let month = 0;
+  while (ds.some((d) => d.month === null) && month < maxMonths) {
+    month += 1;
+    const open = ds.filter((d) => d.month === null).sort((a, b) => a.bal - b.bal);
+    let pool = Math.max(0, +extra || 0) + ds.filter((d) => d.month !== null).reduce((s, d) => s + d.min, 0);
+    for (const d of open) { const i = d.bal * d.apr / 1200; d.bal += i; d.interest += i; }
+    for (const d of open) { const pay = Math.min(d.min, d.bal); d.bal -= pay; pool += d.min - pay; }
+    for (const d of open) { if (pool <= 0) break; const pay = Math.min(pool, d.bal); d.bal -= pay; pool -= pay; }
+    for (const d of open) if (d.bal <= 0.005) { d.bal = 0; d.month = month; }
+  }
+  const order = [...ds].sort((a, b) => (a.month ?? Infinity) - (b.month ?? Infinity)).map((d) => ({ name: d.name, month: d.month, interest: Math.round(d.interest * 100) / 100 }));
+  const done = ds.every((d) => d.month !== null);
+  return { months: done ? Math.max(0, ...ds.map((d) => d.month)) : null, totalInterest: Math.round(ds.reduce((s, d) => s + d.interest, 0) * 100) / 100, order, stuck };
+}
+
+/** Savings or investing what-if: start amount plus a monthly deposit at an assumed yearly rate, compounded monthly. */
+export function growthWhatIf({ start = 0, monthly = 0, ratePct = 0, years = 1 }) {
+  const n = Math.round(years * 12), r = ratePct / 1200;
+  let bal = +start || 0;
+  for (let i = 0; i < n; i++) bal = bal * (1 + r) + (+monthly || 0);
+  const put = (+start || 0) + (+monthly || 0) * n;
+  return { months: n, end: Math.round(bal * 100) / 100, contributed: Math.round(put * 100) / 100, growth: Math.round((bal - put) * 100) / 100 };
+}
+
 function fmpTool(name, desc, schema, run) {
   return tool(name, desc, schema, async (args) => {
     try { return await run(args); } catch (e) { return { ...text(`Tool error: ${e.message}`), isError: true }; }
@@ -143,7 +211,7 @@ export function createKeymasterTools(send, currentSessionId) {
   return createSdkMcpServer({
     name: 'keymaster',
     version: '0.1.0',
-    instructions: "The Keymaster's research tools: Financial Modeling Prep market data (read only), his screen, Horace's context files, the time and past conversations. There are no trading tools.",
+    instructions: "The Keymaster's tools: Horace's Wolf Hall books (read only), what-if math, Financial Modeling Prep market data (read only), his screen, Horace's context files, the time and past conversations. There are no trading, paying or money-moving tools.",
     tools: [
       fmpTool('quote', 'Current quote for one or more tickers (stocks, ETFs, crypto like BTCUSD): price, change, day range, 52-week range, volume, market cap, P/E.',
         { symbols: z.array(sym).min(1).max(5) },
@@ -237,6 +305,38 @@ export function createKeymasterTools(send, currentSessionId) {
           else fs.writeFileSync(f, content.replace(/\s*$/, '\n'));
           return text(`${file} updated (${mode}).`);
         }),
+      tool('books', `Read Horace's household books from the Wolf Hall app (read-only GETs; this can never pay, log or change anything). Paths:\n${Object.entries(BOOKS_PATHS).map(([p, d]) => `${p}: ${d}`).join('\n')}`,
+        { path: z.string().describe('Path with optional query string, e.g. /spend-today or /week-budget?offset=-1') },
+        async ({ path: p }) => {
+          const why = booksPathProblem(p);
+          if (why) return { ...text(why), isError: true };
+          try {
+            const { status, body } = await workerGet(p);
+            const shown = body.length > 30000 ? body.slice(0, 30000) + '\n…(cut off)' : body;
+            return { ...text(`Source: Wolf Hall ${p}, read ${formatLocal(new Date())}. HTTP ${status}\n${shown}`), ...(status >= 400 ? { isError: true } : {}) };
+          } catch (e) {
+            return { ...text(`Could not reach Wolf Hall: ${e.message}. Say so plainly; don't guess.`), isError: true };
+          }
+        }),
+      tool('what_if', "What-if math, no data read or written. snowball: debts (name, balance, min payment, APR %) paid smallest balance first with an extra amount per month; returns the payoff order, months and interest. growth: a start amount plus a monthly deposit at an assumed yearly rate for some years. Results are estimates, never promises.",
+        {
+          kind: z.enum(['snowball', 'growth']),
+          debts: z.array(z.object({ name: z.string(), balance: z.number().nonnegative(), min: z.number().nonnegative(), apr: z.number().min(0).max(100) })).max(30).optional(),
+          extra: z.number().nonnegative().optional().describe('snowball: extra dollars a month on top of the minimums'),
+          start: z.number().nonnegative().optional(), monthly: z.number().nonnegative().optional(),
+          ratePct: z.number().min(-50).max(50).optional().describe('growth: assumed yearly rate, e.g. 4 for a high-yield savings account'),
+          years: z.number().min(0.1).max(60).optional(),
+        },
+        async ({ kind, debts = [], extra = 0, start = 0, monthly = 0, ratePct = 0, years = 1 }) => {
+          if (kind === 'snowball') {
+            if (!debts.length) return { ...text('Give the debts (name, balance, min, apr).'), isError: true };
+            const s = snowballPlan(debts, extra);
+            const lines = s.order.map((d, i) => `${i + 1}. ${d.name}: paid off ${d.month ? `in month ${d.month}` : 'not within 50 years'}, interest ${money(d.interest)}`);
+            return text(`Snowball with ${money(extra)} extra a month:\n${lines.join('\n')}\n${s.months ? `Debt-free in ${s.months} months.` : 'Not debt-free within 50 years at these payments.'} Total interest ${money(s.totalInterest)}.${s.stuck.length ? `\nMinimum doesn't cover the interest on: ${s.stuck.join(', ')}.` : ''}\nAn estimate from the numbers given; real statements decide.`);
+          }
+          const g = growthWhatIf({ start, monthly, ratePct, years });
+          return text(`${money(start)} to start plus ${money(monthly)} a month at an assumed ${ratePct}% a year for ${years} years (${g.months} months): about ${money(g.end)}. You'd put in ${money(g.contributed)}; growth ${money(g.growth)}.\nAn assumed rate, not a promise: savings rates change and investments can lose money.`);
+        }),
       tool('show_on_screen', "Show something on the Keymaster's screen instead of reading it aloud: tables, comparisons, numbers, bull and bear cases, lessons.",
         { title: z.string(), content: z.string().describe('Markdown'), format: z.enum(['markdown', 'text']).optional() },
         async ({ title, content, format = 'markdown' }) => { send({ type: 'screen', title, content, format, at: new Date().toISOString() }); return text('Shown on screen.'); }),
@@ -254,11 +354,16 @@ export function createKeymasterTools(send, currentSessionId) {
 // ── The no-trading guard: any brokerage or trading tool, or a command that reaches a broker, is refused. ──
 const BROKER = /robinhood|broker|alpaca|schwab|fidelity|webull|e-?trade|ibkr|interactive.?brokers|tastytrade|tradier|vanguard|merrill|sofi|public\.com|coinbase|kraken|binance|gemini|crypto\.com|place.?order|submit.?order|cancel.?order|(?<![a-z])(orders?|trades?)(?![a-z])|trading|buy.?(stock|share|crypto)|sell.?(stock|share|crypto)|transfer|withdraw|deposit/i;
 const BROKER_CMD = /robinhood|alpaca\.markets|schwab|webull|tastytrade|tradier|coinbase|kraken|binance|api\.gemini|ibkr|interactivebrokers/i;
+// The accountant reads the books only through his books tool (an allowlist of read-only GETs), never by hand,
+// so a curl or a fetch can't pay, log or change anything in Wolf Hall (2026-11-24).
+const WOLF_HALL = /workers\.dev|wolf-hall|wolfhall|netlify\.app|api\.notion\.com/i;
 export function blockTool(name, input = {}) {
   const n = String(name || '');
   if (n.startsWith('mcp__keymaster__')) return null;
   if (n.startsWith('mcp__') && BROKER.test(n)) return 'The Keymaster never places trades and has no brokerage tools (Horace\'s rule).';
   if (n === 'Bash' && BROKER_CMD.test(String(input.command || ''))) return 'The Keymaster never touches a brokerage account (Horace\'s rule).';
+  if ((n === 'Bash' || n === 'WebFetch') && WOLF_HALL.test(String(input.command || input.url || ''))) return 'The accountant reads Wolf Hall only through his books tool, which is read-only. He never moves or logs money.';
+  if (n.startsWith('mcp__') && /notion|wolf_?hall|bank|pay(ment)?s?(?![a-z])|zelle|venmo|paypal/i.test(n)) return 'The accountant has no tools that change money or Notion; suggestions only (Horace\'s rule).';
   return null;
 }
 
@@ -272,21 +377,28 @@ export function keymasterPrompt() {
   const dir = contextDir();
   return `
 # You are the Keymaster
-You are the Keymaster, Horace's market research agent: the fifth of his assistants on this PC, beside the Oracle, the Architect, Trinity and Morpheus. The name comes from The Matrix: you unlock doors. Calm, precise, a little formal. Horace wakes you by saying "Keymaster". He talks to you out loud through speech-to-text, so expect missing punctuation and misheard words (and misheard tickers: confirm a ticker if it's unclear).
+You are the Keymaster, Horace's personal accountant: the fifth of his assistants on this PC, beside the Oracle, the Architect, Trinity and Morpheus. (You began as his market research agent; on 2026-11-23 Horace retasked you to keep his books, the way Jake has his Accountant. You still teach investing.) The name comes from The Matrix: you unlock doors. Calm, precise, a little formal. Horace wakes you by saying "Keymaster". He talks to you out loud through speech-to-text, so expect missing punctuation and misheard words (and misheard tickers or bill names: confirm if it's unclear).
 
 ## Hard rules (never break these)
-- You never place trades. You have no brokerage, Robinhood login or trading tools, and you never try to get one or act on an account. If Horace asks you to buy or sell, say plainly that you can't, and that he places any trade himself.
-- You don't tell Horace what to buy or sell. You lay out the facts, the bull case and the bear case, and how an idea fits his own Strategy.md rules. Horace decides.
-- When it matters (a specific buy or sell question, money he'll need soon, anything risky), remind him you aren't a licensed financial advisor.
-- Every answer says where its data came from (FMP or the web, with the site) and how fresh it is. If FMP fails, isn't connected or its free daily limit runs out, say so plainly instead of quietly guessing. Never invent a number.
-- Money is tight for Horace (a small weekly budget, a Pool that must never drop below $100, debts being paid off). Keep the tone realistic and never hype. Never promise returns.
+- You are read-only on money. You never pay, log, move, Zelle, transfer or change anything: not the Pool, not a bill, not a bucket, not Notion. Your books tool only reads. You suggest; Horace decides and does it himself in the Wolf Hall app (or asks the Oracle to).
+- Debt Consolidation 1/2 and 2/2 ($1,945 each, the 1st and the 15th) are Taylor's Chapter 13 trustee payments through April 2030. They never move, under any cash crunch, and they are not snowball targets. Taylor's Family Cruise payment never moves either. Find other levers.
+- The Pool must never drop below its $100 cushion. "Can I afford it" is answered from the live books (/spend-today first), never from memory.
+- Never guess a due date or an amount. If the books don't say, say so and ask.
+- You never place trades. You have no brokerage, Robinhood login or trading tools, and you never try to get one. If Horace asks you to buy or sell, say plainly that you can't, and that he places any trade himself.
+- Investing: you teach (how index funds, single stocks, retirement accounts and fees work, and where investing fits after debt and the emergency fund, which Horace chose as his priorities) and run what-if math. You don't tell Horace what to buy or sell: no personalized buy, sell or hold advice, and no stock picks. Lay out the facts and how an idea fits his own Strategy.md; Horace decides. Say plainly that you aren't a licensed financial advisor whenever a question leans that way.
+- Every answer says where its data came from (the Wolf Hall books, FMP or the web, with the site) and how fresh they are. If a source fails, say so plainly. Never invent a number.
+- Money is tight: a small weekly budget and debts being paid down. Realistic tone, never hype, never promised returns.
 
 ## Your parameters (from Horace; follow them)
 ${params}
 
 ## How you help
-- Research stocks, ETFs and crypto: explain earnings, compare funds (fees, past performance, holdings), and check ideas against Strategy.md. When a setup matches one of Horace's written rules, flag it and name the rule; when it breaks one, say that too.
-- Use your FMP tools first (quote, company_profile, financials, earnings, stock_news, price_history, etf_holdings; fmp_status costs nothing). The free plan allows 250 calls a day, so be thrifty. For anything FMP doesn't cover, use web search and cite the sites.
+- "What's due?": the books, /upcoming and /bills2 (overdue ones first), with what he keeps from his paycheck from /payday-helper.
+- "Can I afford X?": /spend-today (today's number and the tightest day ahead), then the bills before his next paycheck. Answer yes, not yet (and when), or no, with the one number that decides it. Wishlist items: /wishlist.
+- "Where did the money go?": past weeks of the buckets (/week-budget?offset=-1, -2 ...; never this week, it writes) and the last bank check (/pool-check).
+- Debts: /credit-accounts. The debt snowball (smallest balance first) starts Jan 1, 2027; use what_if snowball to show the order and months, leaving out Taylor's Chapter 13. The emergency fund goal is one month of bills, a slow build from mid-2027, after the snowball gets going. Extra money goes to debt first.
+- Casino money stays separate: SC collected and redemptions (/gambling/month) are their own ledger, never counted as household income or budget. Never encourage buying coins.
+- Stocks, ETFs and crypto: teach with your FMP tools (quote, company_profile, financials, earnings, stock_news, price_history, etf_holdings; fmp_status costs nothing; 250 free calls a day, so be thrifty) and web search with the sites named. what_if growth shows what a deposit could become at an assumed rate.
 - Teach as you go. Horace is a beginner and wants to understand: explain terms simply, one idea at a time.
 - Horace's files are in ${dir}: ${CONTEXT_FILES.join(', ')}. They're included below (trimmed if long). Update them with update_context_file only when he asks, and write a rule into Strategy.md only after he agrees to it.
 
@@ -299,8 +411,8 @@ Everything you write as reply text is read aloud.
 ## Horace's Keymaster files
 ${contextBlock(dir)}
 
-## His household budget (the Oracle's current summary; read-only facts)
-${readTrimmed(BUDGET, 7000) ?? '(No budget summary yet. Ask the Oracle for one before doing budget math.)'}
+## An older budget summary from the Oracle (background only; the live books win wherever they differ)
+${readTrimmed(BUDGET, 7000) ?? '(No summary file. Use the books tool.)'}
 
 ## What the Oracle knows about Horace
 ${facts.length ? facts.map((f) => `- ${f}`).join('\n') : '(nothing yet)'}

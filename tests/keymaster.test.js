@@ -121,3 +121,80 @@ test('the Keymaster page wakes on "Keymaster"', async () => {
     assert.deepEqual(extractWake('key master compare VOO and VTI'), { command: 'compare VOO and VTI' });
   } finally { setWakeWord(ORACLE_WAKE); }
 });
+
+// ── The accountant (2026-11-24): read-only books allowlist, what-if math, the no-money guard, his prompt ──
+test('the books allow only read-only Wolf Hall paths, and never /forecast or this week of /week-budget', () => {
+  for (const p of ['/pool', '/spend-today', '/upcoming', '/bills2', '/payday-helper', '/credit-accounts', '/savings', '/wishlist', '/pool-check', '/gambling/month', '/week-budget?offset=-1', '/week-budget?offset=-12'])
+    assert.equal(K.booksPathProblem(p), null, p);
+  assert.match(K.booksPathProblem('/forecast'), /isn't in the accountant's read-only list/);
+  for (const p of ['/week-budget', '/week-budget?offset=0', '/week-budget?offset=1', '/week-budget?offset=abc', '/week-budget?offset=-0.5'])
+    assert.match(K.booksPathProblem(p), /Only past weeks/, p);
+  for (const p of ['/bills2/pay', '/pool/add', '/expense', '/gambling/claim', '/credit-accounts/payment', '/pool-check/owed', '/savings/plan'])
+    assert.ok(K.booksPathProblem(p), p);
+  assert.ok(K.booksPathProblem('https://evil.example/pool'));
+  assert.ok(K.booksPathProblem('/pool;rm'));
+});
+
+test('snowball what-if pays the smallest balance first and rolls the freed minimum down', () => {
+  const s = K.snowballPlan([
+    { name: 'Big', balance: 1000, min: 50, apr: 0 },
+    { name: 'Small', balance: 100, min: 25, apr: 0 },
+  ], 25);
+  // Month 1: Small gets 25 + 25 extra = 50 (50 left), Big 50. Month 2: Small paid (50), Big 50.
+  assert.equal(s.order[0].name, 'Small');
+  assert.equal(s.order[0].month, 2);
+  // Big: 100 paid by month 2, then 100 a month (50 + 25 + 25): 900 / 100 = 9 more months.
+  assert.equal(s.order[1].month, 11);
+  assert.equal(s.months, 11);
+  assert.equal(s.totalInterest, 0);
+  assert.deepEqual(s.stuck, []);
+});
+
+test('snowball what-if counts interest and flags a minimum that never covers it', () => {
+  const s = K.snowballPlan([{ name: 'Card', balance: 1200, min: 100, apr: 12 }], 0);
+  assert.ok(s.totalInterest > 0 && s.totalInterest < 100, String(s.totalInterest));
+  assert.equal(s.months, 13);
+  const stuck = K.snowballPlan([{ name: 'Trap', balance: 5000, min: 10, apr: 24 }], 0, { maxMonths: 24 });
+  assert.deepEqual(stuck.stuck, ['Trap']);
+  assert.equal(stuck.months, null);
+  assert.equal(K.snowballPlan([{ name: 'Paid', balance: 0, min: 10, apr: 5 }]).months, 0);
+});
+
+test('growth what-if compounds monthly and splits what you put in from growth', () => {
+  assert.deepEqual(K.growthWhatIf({ start: 100, monthly: 50, ratePct: 0, years: 1 }), { months: 12, end: 700, contributed: 700, growth: 0 });
+  const g = K.growthWhatIf({ start: 0, monthly: 100, ratePct: 12, years: 1 });
+  assert.equal(g.contributed, 1200);
+  assert.equal(g.end, 1268.25); // 100 * ((1.01^12 - 1) / 0.01)
+});
+
+test('the accountant can never move money or touch Wolf Hall except through his read-only books', () => {
+  const host = ['wolf-hall', 'hall-horace', 'workers', 'dev'];
+  const live = `https://${host[0]}.${host[1]}.${host[2]}.${host[3]}`;
+  assert.ok(K.blockTool('Bash', { command: `curl ${live}/bills2/pay` }));
+  assert.ok(K.blockTool('Bash', { command: 'curl https://api.notion.com/v1/pages' }));
+  assert.ok(K.blockTool('WebFetch', { url: `${live}/pool` }));
+  for (const n of ['mcp__claude_ai_Notion__notion-update-page', 'mcp__watson__wolf_hall', 'mcp__bank__pay', 'mcp__x__zelle_send', 'mcp__paypal__send'])
+    assert.ok(K.blockTool(n), n);
+  assert.equal(K.blockTool('mcp__keymaster__books', { path: '/pool' }), null);
+  assert.equal(K.blockTool('mcp__keymaster__what_if', { kind: 'snowball' }), null);
+});
+
+test('his prompt makes him Horace\'s read-only accountant who teaches but never advises trades', () => {
+  const p = K.keymasterPrompt();
+  assert.match(p, /Horace's personal accountant/);
+  assert.match(p, /read-only on money/);
+  assert.match(p, /Chapter 13 trustee payments through April 2030\. They never move/);
+  assert.match(p, /not snowball targets/);
+  assert.match(p, /\$100 cushion/);
+  assert.match(p, /Can I afford X\?/);
+  assert.match(p, /What's due\?/);
+  assert.match(p, /Where did the money go\?/);
+  assert.match(p, /Casino money stays separate/);
+  assert.match(p, /emergency fund/);
+  assert.match(p, /no stock picks/);
+  assert.match(p, /aren't a licensed financial advisor/);
+  assert.match(p, /never this week, it writes/);
+  const server = K.createKeymasterTools(() => {}, () => null);
+  const names = Object.keys(server.instance?._registeredTools || {});
+  if (names.length) for (const n of ['books', 'what_if']) assert.ok(names.includes(n), n);
+});
