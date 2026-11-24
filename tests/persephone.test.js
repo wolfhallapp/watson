@@ -103,3 +103,37 @@ test('her deals list may be posted to the app, other worker routes stay closed (
     await workerPostGambling('/gambling/deals', { deals: [] }).catch((e) => assert.doesNotMatch(e.message, /Only the \/gambling\/ write routes/));
   } finally { global.fetch = realFetch; }
 });
+
+// Wolf Hall v378 (queue #85): her books go to the app's Gambling screen.
+test('books snapshot: her patterns plus the newest 40 emails, only the fields the screen draws', () => {
+  const emails = Array.from({ length: 45 }, (_, i) => ({ emailId: `e${i}`, threadId: `t${i}`, from: 'x@site.com', terms: 'long terms', claimLink: 'https://x',
+    receivedAt: new Date(Date.UTC(2026, 10, 1, i)).toISOString(), recordedAt: `2026-11-2${i % 3}T10:00:00Z`, site: 'Chumba Casino', subject: `S${i}`, category: 'free_sc', freeSc: 1, summary: 'one SC' }));
+  emails.push({ emailId: 'bad', receivedAt: 'not a date', site: 'X', subject: 'x', category: 'other', summary: '' });
+  const snap = P.booksSnapshot({ items: [], emails, balances: [], syncedAt: '2026-11-24T10:00:00Z' });
+  assert.equal(snap.emails.length, P.BOOKS_EMAILS);
+  assert.equal(snap.emails[0].emailId, 'e44'); // newest first
+  assert.ok(snap.emails.every((e) => !('from' in e) && !('terms' in e) && !('claimLink' in e) && !('threadId' in e)));
+  assert.equal(snap.syncedAt, '2026-11-24T10:00:00Z');
+  assert.equal(snap.checkedAt, '2026-11-22T10:00:00Z');
+  assert.equal(snap.patterns.emails.total, 46);
+  assert.ok(Array.isArray(snap.patterns.sites));
+});
+
+test('publishBooks posts to /gambling/persephone and reports a refusal', async () => {
+  let sent = null;
+  const ok = await P.publishBooks({ snapshot: () => ({ patterns: { sites: [] }, emails: [] }), postImpl: async (p, b) => { sent = [p, b]; return { status: 200, json: { ok: true, sites: 0, emails: 0 } }; } });
+  assert.equal(sent[0], '/gambling/persephone');
+  assert.equal(ok.ok, true);
+  await assert.rejects(P.publishBooks({ snapshot: () => ({}), postImpl: async () => ({ status: 404, json: { error: 'Not found' } }) }), /Not found/);
+});
+
+test('the gambling write allowlist lets her books through, and nothing new besides', async () => {
+  const src = fs.readFileSync(new URL('../server/knowledge.js', import.meta.url), 'utf8');
+  assert.match(src, /\(claim\|site\|sites\\\/add\|play-run\|offers\|offer\|deals\|persephone\)\$/);
+  const ps = fs.readFileSync(new URL('../server/persephone.js', import.meta.url), 'utf8');
+  assert.match(ps, /const r = await syncActivity\(\); changed\(\);\s*\/\/ v378[^\n]*\n\s*let books; try \{ const b = await publishBooks\(\)/);
+  assert.match(P.persephonePrompt(), /YOUR BOOKS/);
+  assert.match(P.persephonePrompt(), /twice a day \(7 AM and 8 PM/);
+  const idx = fs.readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
+  assert.match(idx, /^startPersephoneBooks\(\);/m);
+});

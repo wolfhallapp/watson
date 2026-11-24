@@ -4,29 +4,31 @@ import assert from 'node:assert/strict';
 import { ROUTINES, routineDue } from '../server/routines.js';
 
 const scanReal = ROUTINES.find((r) => r.key === 'casinoOfferScan');
-const scan = { ...scanReal, off: false }; // the slot timing, for when it is turned back on
+const scan = scanReal;
 
-test('gambling scheduling is off (Horace, 11/19): no casino check, no casino lines in the briefing', () => {
-  assert.equal(scanReal.off, true);
-  for (const t of ['2026-11-20T13:00:00Z', '2026-11-20T18:00:00Z', '2026-11-20T22:00:00Z', '2026-11-21T02:00:00Z']) assert.equal(routineDue(scanReal, new Date(t), null), null);
+test('the casino email check is back on (Horace, 11/23 round 7: twice a day); the briefing still leaves casinos out (11/19)', () => {
+  assert.notEqual(scanReal.off, true);
+  assert.deepEqual(scanReal.times, [{ hour: 7, minute: 0 }, { hour: 20, minute: 0 }]);
   const brief = ROUTINES.find((r) => r.key === 'morningBriefing').prompt;
   assert.doesNotMatch(brief, /Casino deals:/);
   assert.doesNotMatch(brief, /the casino Bonus Run,/);
   assert.match(brief, /Leave out anything about casinos or gambling/);
 });
 
-test('casino email check runs at 7 AM, noon, 4 PM and 8 PM Central, once per slot (11/7)', () => {
+test('casino email check runs at 7 AM and 8 PM Central, once per slot (11/23)', () => {
   assert.equal(routineDue(scan, new Date('2026-10-26T11:59:00Z'), null), null);                       // 6:59 AM CDT
   assert.equal(routineDue(scan, new Date('2026-10-26T12:00:00Z'), null), '2026-10-26@07:00');         // 7 AM CDT
   assert.equal(routineDue(scan, new Date('2026-10-26T15:00:00Z'), '2026-10-26@07:00'), null);         // already ran this slot
-  assert.equal(routineDue(scan, new Date('2026-10-26T17:00:00Z'), '2026-10-26@07:00'), '2026-10-26@12:00'); // noon
-  assert.equal(routineDue(scan, new Date('2026-10-26T21:10:00Z'), '2026-10-26@12:00'), '2026-10-26@16:00'); // 4:10 PM
-  assert.equal(routineDue(scan, new Date('2026-10-27T01:05:00Z'), '2026-10-26@16:00'), '2026-10-26@20:00'); // 8:05 PM
+  assert.equal(routineDue(scan, new Date('2026-10-26T17:00:00Z'), '2026-10-26@07:00'), null);         // noon: no check any more
+  assert.equal(routineDue(scan, new Date('2026-10-26T21:10:00Z'), '2026-10-26@07:00'), null);         // 4:10 PM: no check any more
+  assert.equal(routineDue(scan, new Date('2026-10-27T01:05:00Z'), '2026-10-26@07:00'), '2026-10-26@20:00'); // 8:05 PM
   assert.equal(routineDue(scan, new Date('2026-10-27T01:30:00Z'), '2026-10-26@20:00'), null);         // already ran this slot
   assert.equal(routineDue(scan, new Date('2026-10-27T04:00:00Z'), '2026-10-26@20:00'), null);         // 11 PM: too late
   assert.equal(routineDue(scan, new Date('2026-12-10T13:00:00Z'), '2026-12-09@20:00'), '2026-12-10@07:00'); // 7 AM CST
   assert.equal(routineDue(scan, new Date('2026-12-10T12:30:00Z'), null), null);                       // 6:30 AM CST
   assert.equal(routineDue(scan, new Date('2026-10-27T08:30:00Z'), null), '2026-10-27@03:30');         // Tuesday 3:30 AM
+  assert.match(scan.prompt, /it runs at 7 AM and 8 PM/);
+  assert.match(scan.prompt, /Finish with history_sync[^.]*Gambling screen/);
 });
 
 test('the routine prompt keeps purchase offers out', () => {

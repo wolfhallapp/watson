@@ -18,7 +18,7 @@ import { workerGet, workerPostMorning } from './knowledge.js';
 import { TRINITY } from './trinity.js';
 import { MORPHEUS, startPhotoWatcher } from './morpheus.js';
 import { KEYMASTER } from './keymaster.js';
-import { PERSEPHONE, PERSEPHONE_ROUTINE, screenAction as casinoAction, screenState as casinoState, noteScreenEdit as noteCasinoEdit } from './persephone.js';
+import { PERSEPHONE, PERSEPHONE_ROUTINE, startPersephoneBooks, screenAction as casinoAction, screenState as casinoState, noteScreenEdit as noteCasinoEdit } from './persephone.js';
 import { hubState, logMessage, tickerExtras, funMoneyOver } from './hub.js';
 import * as sandbox from './sandbox.js';
 import { readUsageReport } from './usage.js';
@@ -494,6 +494,7 @@ startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, 
 startUptimeWatch(); // 11/23: worker + site every 15 min, no AI; pushes Horace after 2 misses and when it's back
 startNotionBackup(); // 11/23: private nightly copy of every Wolf Hall database after 3 AM, 14 days (needs Wolf Hall v300)
 startWorkshopHelper(); // Wolf Hall v248: answers House Projects questions from the app (its own locked-down session)
+startPersephoneBooks(); // Wolf Hall v378: Persephone's books on the Gambling screen, every 6 hours (code only, no AI)
 startLine({ agents: { oracle: agent, trinity } }); // Wolf Hall v376: the Oracle & Trinity deck (Horace: the real ones; Taylor: walled off)
 startNightBoard(); // Wolf Hall v310: night branches + questions to the Red Pill board, Horace's taps back to night-answers.md (every 15 min, no AI)
 startCookVoice(); // Wolf Hall v274: Cook mode lines in the Southern cook's voice (Chatterbox on the GPU)

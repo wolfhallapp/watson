@@ -261,18 +261,17 @@ export const ROUTINES = [
     // (for his information only; they never go on the free Bonus Run list).
     key: 'casinoOfferScan',
     // 11/19 per Horace: OFF, with all gambling scheduling, to save Claude usage (it ran 4x a day).
-    // Delete this line to turn it back on; the prompt below is kept as it was.
-    off: true,
+    // 11/23 (round 7, queue #85): back on, TWICE a day, so Persephone's books on the Gambling screen stay current.
     // 11/6: Persephone's now, in her own throwaway session (opening every casino email is what overfilled the Oracle's, 10/30).
     agent: 'persephoneRoutine',
     retryOnFail: true, // 11/12: a run that fails (e.g. the usage limit) is tried again in the same slot
     fresh: true,
-    times: [{ hour: 7, minute: 0 }, { hour: 12, minute: 0 }, { hour: 16, minute: 0 }, { hour: 20, minute: 0 }], // four a day from 11/7 per Horace (twice 11/4-11/6); first at 7:00 from 11/8 (was 7:30)
+    times: [{ hour: 7, minute: 0 }, { hour: 20, minute: 0 }], // twice a day from 11/23 (round 7); 8 PM catches the 4-8 PM rush (most casino email lands then); was four a day 11/7-11/19
     untilHour: 23,
     tuesday: { hour: 3, minute: 30 }, // the first check moves earlier on Tuesdays
     prompt: [
       '[Persephone routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
-      'Casino email check (it runs at 7 AM, noon, 4 PM and 8 PM). Search Gmail for casino promotion emails from the last day',
+      'Casino email check (it runs at 7 AM and 8 PM). Search Gmail for casino promotion emails from the last day',
       '(category:promotions newer_than:1d, plus anything from the senders in the Casino Sites list).',
       'Page through ALL results (follow nextPageToken) and open every casino email: judge each by its content, never by its subject line.',
       '(Lesson 2026-10-27: a Stake.us "your post-monthly is here!" bonus sent at 3 AM was skipped because of its subject.)',
@@ -299,7 +298,7 @@ export const ROUTINES = [
       '(e.g. "Chumba: 50% off first package, $9.99 for 30 SC, ends Sun 11:59 PM"). One line each: site, the deal with its real price and what you get, and when it ends.',
       'Keep deals from the existing file that have not expired and drop expired ones. Put a "Updated <date time>" line at the top. Plain facts only: no recommendation to buy, no hype.',
       'Then send the same whole list to the app with update_deals (Horace, 11/12): one entry per deal with site, what, price, what you get, code, endsAt (ISO with offset) or endText, and inCasinoSites.',
-      'Finish with history_sync so your claim history stays current.',
+      'Finish with history_sync so your claim history stays current and your books (patterns and the newest emails) reach the app\'s Gambling screen.',
       'Then reply with one line: emails recorded, free bonuses added, any the worker rejected, the sites you skipped because they are not in Casino Sites or are paused or dropped (by name), and how many deals are on the list.',
     ].join(' '),
   },
