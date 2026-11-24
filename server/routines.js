@@ -221,7 +221,7 @@ export const ROUTINES = [
       'and when main has commits it lacks (a deploy or a PROGRESS note), first run `git -C ~/night/wolf-hall-next merge --no-edit main`.',
       'Then start each task on its own branch from it: `git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT-<short-name> ~/night/wolf-hall-<short-name> oracle/next`, and work there.',
       'Version: one more than oracle/next\'s WORKER_VERSION, set in all three places (worker, sw.js cache, splash); never vNEXT.',
-      'When the tests and agent-smith pass, move oracle/next onto it: `git -C ~/night/wolf-hall-next merge --ff-only oracle/night-$NIGHT-<short-name>`. A task that fails stays off oracle/next and the report says why.',
+      'When the tests and agent-smith pass, move oracle/next onto it: `git -C ~/night/wolf-hall-next merge --ff-only oracle/night-$NIGHT-<short-name>`. A task that fails stays off oracle/next and the report says why. Run that command exactly as written and on its own (no cd, no full path, no 2>&1, no && or ; after it): the night guard allows only that exact form.',
       'Report the branch as oracle/next (plus the task branch), so one red pill ships everything that passed.',
       `for the Oracle itself use \`git -C '${ROOT}' worktree add -B oracle/night-$NIGHT ~/night/watson main\` (reuse it if it exists).`,
       'Follow the repo rules: syntax checks, the tests in tests/, a new test for what you changed, and the agent-smith subagent for Wolf Hall changes. Commit on the night branch with a clear message.',

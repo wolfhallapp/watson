@@ -141,3 +141,8 @@ test('the routine is code only and due from 8 PM Central', () => {
   assert.equal(routineDue(r, new Date('2026-11-25T02:00:00Z'), null), '2026-11-24'); // 8:00 PM
   assert.equal(routineDue(r, new Date('2026-11-25T03:00:00Z'), '2026-11-24'), null); // once a day
 });
+
+test('the Night Shift prompt says to run the oracle/next fast-forward bare (the guard allows only that form)', () => {
+  const r = ROUTINES.find((x) => x.key === 'nightShift');
+  assert.match(r.prompt, /exactly as written and on its own \(no cd, no full path, no 2>&1, no && or ; after it\)/);
+});
