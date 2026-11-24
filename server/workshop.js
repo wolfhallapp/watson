@@ -542,19 +542,21 @@ export async function maybeRunRadar({ now = new Date(), last = readRadarDate(), 
 }
 
 let started = false;
-export function startWorkshopHelper({ every = 15000 } = {}) {
+export function startWorkshopHelper({ every = 30000 } = {}) { // 11/24: 15 s -> 30 s (Notion rate limit)
   if (started || process.env.WATSON_WORKSHOP === 'off') return false;
   if (!helperKey()) { console.log('  Workshop Helper: no .helper-key in the app repo yet, so it is off.'); return false; }
   started = true;
-  let busy = false;
+  let busy = false, pauseUntil = 0;
+  // 11/24: when Notion rate-limits (429), every helper backs off 2 minutes, so Wolf Hall's sign-in can get through.
+  const limited = (e) => { if (/429|rate.?limit/i.test(e?.message || '')) { pauseUntil = Date.now() + 120000; console.warn('[workshop] Notion is rate-limiting: pausing the helpers 2 minutes'); return true; } return false; };
   const tick = async () => {
-    if (busy) return;
+    if (busy || Date.now() < pauseUntil) return;
     busy = true;
-    try { await processPending(); } catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[workshop]', e.message); }
+    try { await processPending(); } catch (e) { if (limited(e)) { busy = false; return; } if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[workshop]', e.message); }
     try { await maybeRunRadar(); } catch (e) { console.warn('[workshop] radar:', e.message); }
     try { await maybeRunPlan(); } catch (e) { console.warn('[workshop] plan:', e.message); }
     // 11/22: the Accountant (Jake's own agent) answers on the same tick; loaded here to avoid a circular import.
-    try { const { processAccountant } = await import('./accountant.js'); await processAccountant(); } catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[accountant]', e.message); }
+    try { const { processAccountant } = await import('./accountant.js'); await processAccountant(); } catch (e) { if (!limited(e) && !/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[accountant]', e.message); }
     finally { busy = false; }
   };
   setTimeout(tick, 5000);

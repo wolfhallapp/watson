@@ -175,9 +175,10 @@ export async function processLine({ agents, fetcher = lineFetch, taylor = runTay
 // Polls fast in the early morning (Taylor's on the road by 5) and for 15 minutes after any question; slower otherwise.
 export function lineDelay(now, lastActivityMs) {
   const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' }).format(now));
-  if (now.getTime() - lastActivityMs < 15 * 60000) return 4000;
-  if (h >= 4 && h < 9) return 6000;
-  return 20000;
+  // 11/24: slower than first shipped; Notion rate-limited the whole app (sign-in included) when every helper polled fast.
+  if (now.getTime() - lastActivityMs < 15 * 60000) return 8000;
+  if (h >= 4 && h < 9) return 12000;
+  return 45000;
 }
 let started = false;
 export function startLine({ agents } = {}) {
@@ -185,9 +186,13 @@ export function startLine({ agents } = {}) {
   started = true;
   let last = 0;
   const tick = async () => {
+    let wait = null;
     try { if (await processLine({ agents })) last = Date.now(); } // an answer just went out: stay quick for the next question
-    catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[line]', e.message); }
-    setTimeout(tick, lineDelay(new Date(), last));
+    catch (e) {
+      if (/429|rate.?limit/i.test(e.message)) { wait = 120000; console.warn('[line] Notion is rate-limiting: waiting 2 minutes'); }
+      else if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[line]', e.message);
+    }
+    setTimeout(tick, wait || lineDelay(new Date(), last));
   };
   setTimeout(tick, 4000);
   console.log(`  The Line (Oracle & Trinity deck): on (Taylor's side on ${MODEL}).`);

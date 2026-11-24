@@ -69,7 +69,7 @@ test('askLiveAgent waits its turn and returns the reply text', async () => {
 
 test('polls fast in the early morning and right after a question, slower otherwise', () => {
   const at = (h) => new Date(`2026-11-24T${String(h + 6).padStart(2, '0')}:00:00Z`); // Central = UTC-6
-  assert.equal(lineDelay(at(5), 0), 6000);
-  assert.equal(lineDelay(at(14), 0), 20000);
-  assert.equal(lineDelay(at(14), at(14).getTime() - 60000), 4000);
+  assert.equal(lineDelay(at(5), 0), 12000);
+  assert.equal(lineDelay(at(14), 0), 45000);
+  assert.equal(lineDelay(at(14), at(14).getTime() - 60000), 8000);
 });
