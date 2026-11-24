@@ -119,3 +119,33 @@ test('the briefing routine adds the extras through its extra hook', () => {
   assert.match(extrasPrompt(['🔴 Red pill: 1 night branch']), /word for word[\s\S]*\n🔴 Red pill/);
   assert.equal(centralDay(new Date('2026-11-24T05:30:00Z')), '2026-11-23'); // 11:30 PM Central is still the 23rd
 });
+
+// Night Shift #124 (11/24): the briefing signs off with a Matrix quote and the ESV verse of the day.
+test('sign-off: a Matrix quote and the same ESV verse the kitchen TV shows', async () => {
+  const { signOffLines, signOffPrompt, MATRIX_QUOTES, matrixQuoteOfDay } = await import('../server/briefing-extras.js');
+  const { verseOfDay } = await import('../server/tv.js');
+  const day = new Date(2026, 10, 24, 6, 40);
+  const [q, v] = signOffLines(day);
+  assert.match(q, /^🕶️ ".+" \(.+, The Matrix( Reloaded| Revolutions)?\)$/);
+  assert.equal(v, `📖 ${verseOfDay(day).ref} (ESV): ${verseOfDay(day).text}`);
+  assert.ok(MATRIX_QUOTES.every(([t]) => t.length <= 90), 'quotes stay short');
+  assert.deepEqual(signOffLines(new Date(2026, 10, 24, 23, 59)), signOffLines(day), 'same pair all day');
+  const days = Array.from({ length: 12 }, (_, i) => matrixQuoteOfDay(new Date(2026, 10, 24 + i)).text);
+  assert.equal(new Set(days).size, 12, 'a different quote each day for 12 days');
+  const p = signOffPrompt(day);
+  assert.match(p, /last two lines/);
+  assert.ok(p.endsWith(q + '\n' + v));
+  assert.ok(!/\$|pool|bill/i.test(q + v), 'nothing about money');
+});
+
+test('sign-off: the morning briefing adds it after the extras, even when there are none', async () => {
+  const brief = ROUTINES.find((r) => r.key === 'morningBriefing');
+  assert.match(brief.extra.toString(), /extrasPrompt\(await prepareBriefingExtras\(\)\), signOffPrompt\(\)\]\.filter\(Boolean\)/);
+  const { signOffPrompt } = await import('../server/briefing-extras.js');
+  assert.equal([extrasPrompt([]), signOffPrompt()].filter(Boolean).join('\n\n'), signOffPrompt());
+});
+
+test('the Oracle calls Horace Neo', async () => {
+  const src = fs.readFileSync(new URL('../server/agent.js', import.meta.url), 'utf8');
+  assert.match(src, /His handle is Neo[^\n]*call him Neo/);
+});

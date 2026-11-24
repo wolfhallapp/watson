@@ -7,7 +7,7 @@ import { state } from './store.js';
 import { DATA_DIR, ROOT } from './config.js';
 import { prepareWeeklyLedger, LEDGER_DIR } from './ledger.js';
 import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
-import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
+import { prepareBriefingExtras, extrasPrompt, signOffPrompt } from './briefing-extras.js';
 import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
 
@@ -233,7 +233,8 @@ export const ROUTINES = [
     tuesday: { hour: 3, minute: 15 }, // Horace leaves for work at 4 AM on Tuesdays
     // 11/23 (Night Shift #53): The Land, Taylor's Ram, Jake's Accountant and the red-pill count, worked out in code
     // (read-only) and added only when there's something to say. It never throws, so it can't hold up the briefing.
-    extra: async () => extrasPrompt(await prepareBriefingExtras()),
+    // 11/24 (Night Shift #124): then the sign-off, a Matrix quote and the ESV verse of the day (worked out in code).
+    extra: async () => [extrasPrompt(await prepareBriefingExtras()), signOffPrompt()].filter(Boolean).join('\n\n'),
     prompt: [
       '[Oracle routine, not from Horace. Work quietly: do not use show_on_screen and keep your reply to one short line.]',
       'Prepare today\'s morning briefing for Horace. Gather what your Morning section lists for the briefing:',
