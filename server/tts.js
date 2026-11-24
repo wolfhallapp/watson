@@ -77,13 +77,18 @@ let designedN = 0;
 /** { ok: true, audio: Buffer (wav), type } or { ok: false, status, error }. getReader is swappable for tests. */
 export async function synthesizeDesigned(text, id, speed, { getReader, dir } = {}) {
   if (!isDesignedVoice(id)) return { ok: false, status: 400, error: 'unknown designed voice' };
-  const ref = designedRef(id, dir);
+  let ref = designedRef(id, dir);
+  // A <id>.qwen.wav (+ .qwen.txt, what it says) means Qwen's clone model reads this voice (Trinity, 11/23).
+  const qref = ref.replace(/.wav$/, '.qwen.wav'), useQwen = fs.existsSync(qref);
+  if (useQwen) ref = qref;
   if (!fs.existsSync(ref)) return { ok: false, status: 503, error: `no reference clip for ${id}` };
   try {
-    const rd = await (getReader || (await import('./cookvoice.js')).sharedReader)();
+    const cv = getReader ? null : await import('./cookvoice.js');
+    const rd = await (getReader || (useQwen ? cv.sharedQwenReader : cv.sharedReader))();
+    let refText = ''; if (useQwen) { try { refText = fs.readFileSync(ref.replace(/.wav$/, '.txt'), 'utf8').trim(); } catch { /* x-vector only */ } }
     const out = path.join(path.dirname(ref), `..`, `out-${process.pid}-${++designedN}.wav`);
     const sp = Math.min(1.3, Math.max(0.7, Number(speed) || 1));
-    const r = await rd.say(String(text).slice(0, 1000), ref, out, { ...DESIGNED_SAY, speed: sp });
+    const r = await rd.say(String(text).slice(0, 1000), ref, out, useQwen ? { ref_text: refText } : { ...DESIGNED_SAY, speed: sp });
     if (!r.ok || !fs.existsSync(out)) return { ok: false, status: 502, error: `Designed voice: ${r.error || 'no audio'}` };
     const audio = fs.readFileSync(out);
     try { fs.unlinkSync(out); } catch { /* */ }

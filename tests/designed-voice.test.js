@@ -39,3 +39,14 @@ test('unknown voice, missing clip and a failed reader all fail cleanly (the brow
   const down = await synthesizeDesigned('x', 'oracle', 1, { getReader: async () => { throw new Error('reader exited 1'); }, dir: ref });
   assert.equal(down.status, 503);
 });
+
+test('a .qwen.wav reference (Trinity) goes to the Qwen clone reader with its transcript', async () => {
+  fs.writeFileSync(path.join(ref, 'trinity.qwen.wav'), 'RIFF-fake');
+  fs.writeFileSync(path.join(ref, 'trinity.qwen.txt'), 'Hey, Neo. It is me.');
+  const calls = [];
+  const reader = { async say(text, voice, out, opts) { calls.push({ voice, opts }); fs.writeFileSync(out, 'W'); return { ok: true }; } };
+  const r = await synthesizeDesigned('Grace and peace.', 'trinity', 1, { getReader: async () => reader, dir: ref });
+  assert.equal(r.ok, true);
+  assert.equal(calls[0].voice, path.join(ref, 'trinity.qwen.wav'));
+  assert.deepEqual(calls[0].opts, { ref_text: 'Hey, Neo. It is me.' });
+});

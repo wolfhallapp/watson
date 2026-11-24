@@ -32,8 +32,8 @@ export async function ttsFetch(method, p, body, { fetchImpl = fetch, key = helpe
 }
 
 /** The one long-lived Chatterbox process (the model loads once, ~30 s). */
-export function startReader({ spawnImpl = spawn } = {}) {
-  const child = spawnImpl(PYTHON, [SERVE], { stdio: ['pipe', 'pipe', 'pipe'] });
+export function startReader({ spawnImpl = spawn, python = PYTHON, script = SERVE, onExit = () => { reader = null; } } = {}) {
+  const child = spawnImpl(python, [script], { stdio: ['pipe', 'pipe', 'pipe'] });
   const waiting = [];
   let ready, readyFail;
   const readyP = new Promise((res, rej) => { ready = res; readyFail = rej; });
@@ -44,7 +44,7 @@ export function startReader({ spawnImpl = spawn } = {}) {
     const w = waiting.shift(); if (w) w(m);
   });
   child.stderr.on('data', () => {}); // model download progress etc.
-  child.on('exit', (code) => { readyFail(new Error('reader exited ' + code)); while (waiting.length) waiting.shift()({ ok: false, error: 'reader stopped' }); reader = null; });
+  child.on('exit', (code) => { readyFail(new Error('reader exited ' + code)); while (waiting.length) waiting.shift()({ ok: false, error: 'reader stopped' }); onExit(); });
   return {
     ready: readyP,
     say(text, voice, out, opts = {}) { return new Promise((res) => { waiting.push(res); child.stdin.write(JSON.stringify({ ...opts, text, voice, out }) + '\n'); }); },
@@ -56,6 +56,17 @@ let reader = null;
 export async function sharedReader() {
   if (!reader) reader = startReader();
   const r = reader;
+  await r.ready;
+  return r;
+}
+
+// Qwen3-TTS's clone model (Apache-2.0) for voices Chatterbox can't hold (Trinity, 11/23). Loaded on first use (~6 GB GPU).
+export const QWEN_PYTHON = process.env.WATSON_QWEN_PYTHON || path.join(os.homedir(), 'qwentts', '.venv', 'bin', 'python');
+const QWEN_SERVE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'qwenclone_serve.py');
+let qwenReader = null;
+export async function sharedQwenReader() {
+  if (!qwenReader) qwenReader = startReader({ python: QWEN_PYTHON, script: QWEN_SERVE, onExit: () => { qwenReader = null; } });
+  const r = qwenReader;
   await r.ready;
   return r;
 }
