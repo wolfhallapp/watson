@@ -12,6 +12,7 @@ import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
 import { prepareSermons, sermonPrompt } from './sermons.js';
 import { CLASS_PREP } from './trinity.js';
+import { prepareReadingPlan, readingPlanPrompt, uploadReadingPlan } from './reading-plan.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -191,6 +192,24 @@ export const ROUTINES = [
     hour: 20, minute: 0, untilHour: 23,
     prepare: () => prepareSermons(),
     prompt: (ready) => sermonPrompt(ready),
+  },
+  {
+    // The reading plan Horace and Taylor share (Night Shift #75): 9 PM, after the sermon notes. Trinity writes the
+    // week that follows the sermon (Sunday: next week; any other night, a missing week is caught up). Nothing to do
+    // once the week's file exists.
+    key: 'readingPlan',
+    agent: 'trinity',
+    hour: 21, minute: 0, untilHour: 24,
+    prepare: () => prepareReadingPlan(),
+    prompt: (p) => readingPlanPrompt(p),
+  },
+  {
+    // Code only: uploads the plan to Wolf Hall when it changed. 4 AM is before the first morning day ahead (Taylor's
+    // 4:30); 10:30 PM catches Sunday's new week the same night.
+    key: 'readingPlanUpload',
+    times: [{ hour: 4, minute: 0 }, { hour: 22, minute: 30 }],
+    untilHour: 24,
+    run: () => uploadReadingPlan(),
   },
   {
     // Monday class prep (Night Shift #74, Horace round 14): a short study note for the Monday class (Jay's
