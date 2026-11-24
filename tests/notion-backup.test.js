@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runBackup, prune, central, doneToday, README } from '../server/notion-backup.js';
+import { runBackup, prune, central, doneToday, README, keepMonthly } from '../server/notion-backup.js';
 
 const KEY = 'k'.repeat(32);
 const NOW = new Date('2026-11-23T09:30:00Z'); // 3:30 AM Central, Mon 11/23
@@ -94,4 +94,60 @@ test('a strange database name from the worker is never used as a file name', asy
 test('the day is Central time', () => {
   assert.deepEqual(central(new Date('2026-11-23T05:30:00Z')), { day: '2026-11-22', hour: 23 });
   assert.deepEqual(central(new Date('2026-11-23T09:00:00Z')), { day: '2026-11-23', hour: 3 });
+});
+
+test('monthly copy (#120): the first complete backup of a month goes to monthly/YYYY-MM, once', async () => {
+  const dir = tmp();
+  const w = fakeWorker({ 'wishlist': 7 });
+  const r1 = await runBackup({ fetchFn: w.fetchFn, workerUrl: 'https://w.test', key: KEY, dir, now: new Date('2026-12-01T09:30:00Z') });
+  assert.deepEqual(r1.monthly, { copied: '2026-12', pruned: [] });
+  const f = JSON.parse(fs.readFileSync(path.join(dir, 'monthly', '2026-12', 'wishlist.json'), 'utf8'));
+  assert.equal(f.count, 7);
+  assert.ok(fs.existsSync(path.join(dir, 'monthly', '2026-12', '_summary.json')));
+  const r2 = await runBackup({ fetchFn: w.fetchFn, workerUrl: 'https://w.test', key: KEY, dir, now: new Date('2026-12-02T09:30:00Z') });
+  assert.equal(r2.monthly.copied, null, 'the 2nd does not replace the 1st');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'monthly', '2026-12', '_summary.json'), 'utf8')).day, '2026-12-01');
+  assert.deepEqual(fs.readdirSync(path.join(dir, 'monthly')), ['2026-12']);
+});
+
+test('monthly copy: a failed 1st is skipped and the next complete day of the month is used', async () => {
+  const dir = tmp();
+  const bad = fakeWorker({ 'wishlist': 2, 'snake-scores': 1 }, { fail: { 'snake-scores': 'boom' } });
+  const r1 = await runBackup({ fetchFn: bad.fetchFn, workerUrl: 'https://w.test', key: KEY, dir, now: new Date('2027-01-01T09:30:00Z') });
+  assert.equal(r1.monthly, null);
+  assert.ok(!fs.existsSync(path.join(dir, 'monthly', '2027-01')));
+  const good = fakeWorker({ 'wishlist': 2, 'snake-scores': 1 });
+  const r2 = await runBackup({ fetchFn: good.fetchFn, workerUrl: 'https://w.test', key: KEY, dir, now: new Date('2027-01-02T09:30:00Z') });
+  assert.equal(r2.monthly.copied, '2027-01');
+  assert.ok(!fs.readdirSync(path.join(dir, 'monthly')).some(n => n.endsWith('.part')));
+});
+
+test('monthly copy keeps 12 months; the 14-day prune never touches the monthly folder', () => {
+  const dir = tmp();
+  fs.mkdirSync(path.join(dir, '2027-03-01'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '2027-03-01', '_summary.json'), '{}');
+  for (const m of ['2026-02', '2026-03', '2026-04', '2027-02']) fs.mkdirSync(path.join(dir, 'monthly', m), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'monthly', 'notes.txt'), 'keep');
+  const r = keepMonthly(dir, '2027-03-01', 12);
+  assert.equal(r.copied, '2027-03');
+  assert.deepEqual(r.pruned.sort(), ['2026-02', '2026-03']);
+  assert.deepEqual(fs.readdirSync(path.join(dir, 'monthly')).sort(), ['2026-04', '2027-02', '2027-03', 'notes.txt']);
+  assert.deepEqual(prune(dir, '2027-04-30', 14), ['2027-03-01']);
+  assert.ok(fs.existsSync(path.join(dir, 'monthly', '2027-03', '_summary.json')));
+});
+
+test('the README tells Horace only the monthly folder is meant for Drive', () => {
+  assert.match(README, /monthly\\YYYY-MM/);
+  assert.match(README, /Google Drive for desktop/);
+});
+
+test('a monthly copy error is reported but never loses the night\'s backup', async () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, 'monthly'), 'a file where the folder should be');
+  const w = fakeWorker({ 'wishlist': 1 });
+  const r = await runBackup({ fetchFn: w.fetchFn, workerUrl: 'https://w.test', key: KEY, dir, now: NOW });
+  assert.equal(r.ok, true);
+  assert.equal(r.monthly.copied, null);
+  assert.ok(r.monthly.error);
+  assert.equal(doneToday(dir, NOW), true);
 });

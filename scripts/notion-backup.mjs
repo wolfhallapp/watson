@@ -6,5 +6,5 @@ const r = await runBackup();
 if (r.waiting) { console.log(`/system/backup is not live yet (HTTP ${r.status}). Deploy Wolf Hall v300 first.`); process.exit(2); }
 for (const [name, n] of Object.entries(r.counts)) console.log(`${name.padEnd(22)} ${n}`);
 for (const [name, e] of Object.entries(r.errors)) console.log(`${name.padEnd(22)} FAILED: ${e}`);
-console.log(`\n${Object.keys(r.counts).length} tables, ${Object.values(r.counts).reduce((a, b) => a + b, 0)} rows -> ${BACKUP_DIR}/${r.day}${r.pruned.length ? `; removed ${r.pruned.join(', ')}` : ''}`);
+console.log(`\n${Object.keys(r.counts).length} tables, ${Object.values(r.counts).reduce((a, b) => a + b, 0)} rows -> ${BACKUP_DIR}/${r.day}${r.pruned.length ? `; removed ${r.pruned.join(', ')}` : ''}${r.monthly?.copied ? `; monthly copy -> monthly/${r.monthly.copied}` : ''}`);
 process.exit(r.ok ? 0 : 1);
