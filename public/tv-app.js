@@ -28,7 +28,7 @@
     step();
   })();
 
-  // Cards rotate every 20 seconds.
+  // Cards rotate every 10 seconds (commercials hold the screen until they end).
   let cards = [], idx = 0, timer = null;
   let playing = false;
   function show(n) {
@@ -105,6 +105,7 @@
   }
   async function load() {
     if (!token) { $('login').hidden = false; return; }
+    if (playing) return; // never cut a commercial off mid-play; the next refresh picks it up
     try {
       const r = await fetch('tv/state', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
       if (r.status === 401) { $('login').hidden = false; return; }
@@ -112,8 +113,8 @@
     } catch (e) { /* the PC's server is restarting; keep the last screen */ }
   }
   load();
-  setInterval(load, 5 * 60000);
-  if (!timer) timer = setInterval(() => { if (!playing && !night) show(idx + 1); }, 20000);
+  setInterval(load, 2 * 60000); // picks up the next set of slides and photos soon after it changes
+  if (!timer) timer = setInterval(() => { if (!playing && !night) show(idx + 1); }, 10000); // 11/24 Horace: every 10 seconds
 
   // ── The Oracle's voice on the TV (her designed voice, through the PC). Chrome needs one click before sound. ──
   let soundOn = false, talking = Promise.resolve();

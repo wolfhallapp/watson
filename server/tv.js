@@ -248,9 +248,9 @@ export function approvedSlides(dir = SLIDES_DIR, list = path.join(COMMERCIALS_DI
     return (Array.isArray(names) ? names : []).filter((n) => typeof n === 'string' && /^[a-z0-9-]+$/.test(n) && fs.existsSync(path.join(dir, `${n}.png`)));
   } catch { return []; }
 }
-export function slidesNow(names, now = new Date(), n = 4) {
+export function slidesNow(names, now = new Date(), n = 4, minutes = 20) {
   if (!names.length) return [];
-  const start = (Math.floor(now.getTime() / (20 * 60000)) * n) % names.length; // a new set every 20 minutes
+  const start = (Math.floor(now.getTime() / (minutes * 60000)) * n) % names.length; // a new set every few minutes
   return Array.from({ length: Math.min(n, names.length) }, (_, i) => names[(start + i) % names.length]);
 }
 /** The png for /tv/slide/<name>.png, or null. Only approved names are served. */
@@ -309,8 +309,9 @@ export async function tvState({ get = workerGet, weather = houseWeather, now = n
     space: space || null,
     packing: tripTodo(away),
     shipped: (() => { try { return shippedFrom(progress()); } catch { return null; } })(),
-    commercials: commercials(commercialsDir),
-    slides: slidesNow(approvedSlides(slidesDir, slidesList), now),
-    photos: slidesNow(tvPhotos(photosDir), now, 3),
+    commercials: slidesNow(commercials(commercialsDir), now, 3, 10), // three a pass, so all 30 take turns
+    // 11/24 (Horace: "show more slides per pass"): eight slides and four photos a pass, a new set every 10 minutes.
+    slides: slidesNow(approvedSlides(slidesDir, slidesList), now, 8, 10),
+    photos: slidesNow(tvPhotos(photosDir), now, 4, 10),
   };
 }
