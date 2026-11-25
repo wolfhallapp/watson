@@ -77,6 +77,8 @@
     if (s.church && s.church.length) cards.push('<h2>Church this week</h2><ul class="lines">' + s.church.map((c) => '<li><b>' + esc(c.when) + ' · ' + esc(c.time) + '</b>' + esc(c.what) + '</li>').join('') + '</ul>');
     if (s.packing && s.packing.length) cards.push('<h2>Before we leave</h2><ul class="lines">' + s.packing.map((t) => '<li>☐ ' + esc(t) + '</li>').join('') + '</ul>');
     if (s.shipped) cards.push('<h2>New in Wolf Hall · ' + esc(s.shipped.version) + '</h2><ul class="lines">' + s.shipped.items.map((t) => '<li>✦ ' + esc(t.charAt(0).toUpperCase() + t.slice(1)) + '</li>').join('') + '</ul>');
+    // The family slides (reviewed ones only), spread through the deck.
+    (s.slides || []).forEach((name, i) => cards.splice(Math.min(cards.length, 2 + i * 3), 0, '<div class="slide"><img src="tv/slide/' + encodeURIComponent(name) + '.png?t=' + encodeURIComponent(token) + '" alt=""></div>'));
     (s.commercials || []).forEach((name) => cards.push('<video class="ad" src="tv/media/' + encodeURIComponent(name) + '.mp4?t=' + encodeURIComponent(token) + '" playsinline preload="metadata"></video>'));
     if (s.facts && s.facts[2]) cards.push('<h2>Did you know?</h2><div class="fact">' + esc(s.facts[2]) + '</div>');
     if (verses[2]) cards.push(verseCard(verses[2]));

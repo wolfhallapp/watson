@@ -90,3 +90,18 @@ test('forecast and school cards carry only weather and the school calendar, neve
   assert.ok(!JSON.stringify(c).includes('absent') && !JSON.stringify(c).includes('Katana'));
   assert.equal(schoolCard({ ok: true, yearOver: true }), null);
 });
+
+test('only reviewed slides reach the TV, four at a time', async () => {
+  const { approvedSlides, slidesNow, slideFile } = await import('../server/tv.js');
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'slides-'));
+  for (const n of ['a-01', 'b-02', 'c-03', 'unreviewed']) fs.writeFileSync(path.join(dir, n + '.png'), 'x');
+  const list = path.join(dir, 'tv-slides.json');
+  assert.deepEqual(approvedSlides(dir, list), []); // no list yet: nothing shows
+  fs.writeFileSync(list, JSON.stringify(['a-01', 'b-02', 'c-03', 'missing', '../etc']));
+  assert.deepEqual(approvedSlides(dir, list), ['a-01', 'b-02', 'c-03']);
+  assert.equal(slideFile('unreviewed', dir, list), null);
+  assert.ok(slideFile('b-02', dir, list).endsWith('b-02.png'));
+  assert.equal(slidesNow(['a', 'b', 'c', 'd', 'e', 'f'], new Date(0)).length, 4);
+  assert.notDeepEqual(slidesNow(['a', 'b', 'c', 'd', 'e', 'f'], new Date(0)), slidesNow(['a', 'b', 'c', 'd', 'e', 'f'], new Date(20 * 60000)));
+});

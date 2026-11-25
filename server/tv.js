@@ -239,6 +239,25 @@ export function commercialFile(name, dir = COMMERCIALS_DIR) {
   return commercials(dir).includes(name) ? path.join(dir, name, `${name}.mp4`) : null;
 }
 
+// The family slides (11/24): only the ones reviewed and listed in data/commercials/tv-slides.json go on the TV
+// (Horace: "after review"). Four a load, a different four as the day goes on, so the deck doesn't fill with them.
+export const SLIDES_DIR = path.join(COMMERCIALS_DIR, 'slides');
+export function approvedSlides(dir = SLIDES_DIR, list = path.join(COMMERCIALS_DIR, 'tv-slides.json')) {
+  try {
+    const names = JSON.parse(fs.readFileSync(list, 'utf8'));
+    return (Array.isArray(names) ? names : []).filter((n) => typeof n === 'string' && /^[a-z0-9-]+$/.test(n) && fs.existsSync(path.join(dir, `${n}.png`)));
+  } catch { return []; }
+}
+export function slidesNow(names, now = new Date(), n = 4) {
+  if (!names.length) return [];
+  const start = (Math.floor(now.getTime() / (20 * 60000)) * n) % names.length; // a new set every 20 minutes
+  return Array.from({ length: Math.min(n, names.length) }, (_, i) => names[(start + i) % names.length]);
+}
+/** The png for /tv/slide/<name>.png, or null. Only approved names are served. */
+export function slideFile(name, dir = SLIDES_DIR, list) {
+  return approvedSlides(dir, list).includes(name) ? path.join(dir, `${name}.png`) : null;
+}
+
 /** The space picture's bytes, fetched by this PC (the TV page only loads its own images). */
 export async function spaceImage({ fetchImpl = fetch } = {}) {
   return cached('space-img', 6 * 3600000, async () => {
@@ -252,7 +271,7 @@ export async function spaceImage({ fetchImpl = fetch } = {}) {
   });
 }
 
-export async function tvState({ get = workerGet, weather = houseWeather, now = new Date(), progress = () => fs.readFileSync(PROGRESS_FILE, 'utf8'), commercialsDir } = {}) {
+export async function tvState({ get = workerGet, weather = houseWeather, now = new Date(), progress = () => fs.readFileSync(PROGRESS_FILE, 'utf8'), commercialsDir, slidesDir, slidesList } = {}) {
   const [wx, day, away, school, space] = await Promise.all([
     cached('weather', 20 * 60000, async () => await weather()),
     cached('dayahead', 15 * 60000, async () => { const r = await get('/dayahead'); const d = JSON.parse(r.body); return d.ok ? d : null; }),
@@ -281,5 +300,6 @@ export async function tvState({ get = workerGet, weather = houseWeather, now = n
     packing: tripTodo(away),
     shipped: (() => { try { return shippedFrom(progress()); } catch { return null; } })(),
     commercials: commercials(commercialsDir),
+    slides: slidesNow(approvedSlides(slidesDir, slidesList), now),
   };
 }

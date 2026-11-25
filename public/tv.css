@@ -64,6 +64,9 @@
   .login[hidden] { display: none; }
   video.ad { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: 1.6vw; }
   .card:has(video.ad) { padding: 0; }
+  .slide { position: absolute; inset: 0; background: #000; border-radius: 1.6vw; overflow: hidden; }
+  .slide img { width: 100%; height: 100%; object-fit: contain; }
+  .card:has(.slide) { padding: 0; }
   #hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: 3vh; font-size: 1.2vw; color: var(--g2); opacity: .7; letter-spacing: .1em; }
   body.night #cards, body.night .wx, body.night #hint, body.night footer { display: none; }
   body.night #rain { opacity: .06; }

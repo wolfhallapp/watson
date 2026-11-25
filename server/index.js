@@ -26,7 +26,7 @@ import { startWorkshopHelper } from './workshop.js';
 import { startLine } from './line.js';
 import { startNightBoard } from './nightboard.js';
 import { startCookVoice } from './cookvoice.js';
-import { tvState, commercialFile, spaceImage } from './tv.js';
+import { tvState, commercialFile, spaceImage, slideFile } from './tv.js';
 import { startUptimeWatch } from './uptime.js';
 import { startNotionBackup } from './notion-backup.js';
 
@@ -157,6 +157,17 @@ const server = http.createServer((req, res) => {
     if (lockedOut(ip) || !tokenOk(url.searchParams.get('t') || '')) { noteFailure(ip, 'tv image with a bad token'); res.writeHead(401, SECURITY_HEADERS).end('bad token'); return; }
     spaceImage().then((im) => { if (!im) { res.writeHead(404, SECURITY_HEADERS).end('Not found'); return; } res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': im.type, 'Cache-Control': 'private, max-age=3600' }).end(im.buf); },
       () => res.writeHead(502, SECURITY_HEADERS).end('unavailable'));
+    return;
+  }
+  // The family slides on the TV: /tv/slide/<name>.png?t=<token>, approved ones only (data/commercials/tv-slides.json).
+  const tvs = url.pathname.match(/^\/tv\/slide\/([a-z0-9-]+)\.png$/);
+  if (tvs) {
+    const ip = clientIp(req);
+    if (lockedOut(ip) || !tokenOk(url.searchParams.get('t') || '')) { noteFailure(ip, 'tv slide with a bad token'); res.writeHead(401, SECURITY_HEADERS).end('bad token'); return; }
+    const f = slideFile(tvs[1]);
+    if (!f) { res.writeHead(404, SECURITY_HEADERS).end('Not found'); return; }
+    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=3600' });
+    fs.createReadStream(f).pipe(res);
     return;
   }
   // The TV's commercials: /tv/media/<name>.mp4?t=<token> (a <video> can't send a header, so the token rides the URL).
