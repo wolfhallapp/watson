@@ -42,6 +42,34 @@ export function weeklyFor(live, tw, date) {
 }
 const sumObj = (o) => Object.values(o).reduce((t, v) => t + v, 0);
 
+// Horace's paydays, the same rule as Wolf Hall's horacePayDate() (v343): the 14th and the 29th (the last day of
+// the month when there's no 29th), moved to the business day before on a weekend or Federal Reserve bank holiday.
+const isoOf = (y, m, d) => new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
+const nthDow = (y, m, wd, n) => 1 + ((wd - new Date(Date.UTC(y, m, 1)).getUTCDay() + 7) % 7) + (n - 1) * 7;
+const lastDow = (y, m, wd) => { const l = new Date(Date.UTC(y, m + 1, 0)); return l.getUTCDate() - ((l.getUTCDay() - wd + 7) % 7); };
+export function isBankHoliday(iso) {
+  const y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1, d = +iso.slice(8, 10);
+  for (const [fm, fd] of [[0, 1], [5, 19], [6, 4], [10, 11], [11, 25]]) {
+    const sunday = new Date(Date.UTC(y, fm, fd)).getUTCDay() === 0; // a Sunday holiday is off on Monday
+    if (isoOf(y, fm, sunday ? fd + 1 : fd) === iso) return true;
+  }
+  const floating = [[0, nthDow(y, 0, 1, 3)], [1, nthDow(y, 1, 1, 3)], [4, lastDow(y, 4, 1)], [8, nthDow(y, 8, 1, 1)], [9, nthDow(y, 9, 1, 2)], [10, nthDow(y, 10, 4, 4)]];
+  return floating.some(([fm, fd]) => fm === m && fd === d);
+}
+const landsOn = (y, m, d) => {
+  for (let t = new Date(Date.UTC(y, m, d)); ; t.setUTCDate(t.getUTCDate() - 1)) {
+    const iso = t.toISOString().slice(0, 10);
+    if (t.getUTCDay() !== 0 && t.getUTCDay() !== 6 && !isBankHoliday(iso)) return iso;
+  }
+};
+/** 'H15' if Horace's 14th check lands on iso, 'H1' for his 29th check (next month's "1st check"), else null. */
+export function horacePayday(iso) {
+  const y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1;
+  if (iso === landsOn(y, m, 14)) return 'H15';
+  if (iso === landsOn(y, m, Math.min(29, new Date(Date.UTC(y, m + 1, 0)).getUTCDate()))) return 'H1';
+  return null;
+}
+
 /** Last real date the live data covers (bills run ~4 months out; income only to the live horizon). */
 export const dataEnd = (live) => (live.events || []).reduce((m, e) => (e.date > m ? e.date : m), live.horizon || live.today);
 
@@ -55,8 +83,9 @@ export function buildEvents(live, tw, end) {
     if (e.type === 'income') {
       if (/Taylor/.test(e.label)) { lastIncome.Taylor = e.amount; if (tw.taylorPay != null) e.amount = +tw.taylorPay; }
       if (/Horace/.test(e.label)) {
+        // The check landing late in the month (the 29th, or earlier when moved) is next month's "1st check".
         const day = +e.date.slice(8, 10);
-        lastIncome[day <= 7 || day >= 28 ? 'H1' : 'H15'] = e.amount;
+        lastIncome[day <= 7 || day >= 20 ? 'H1' : 'H15'] = e.amount;
         e.amount = r2(e.amount + (+tw.horaceAdj || 0));
       }
     } else if (!LOCKED.test(e.label)) {
@@ -73,14 +102,13 @@ export function buildEvents(live, tw, end) {
     out.push(e);
   }
   // Past the live horizon the worker sends no income: estimate it the worker's way (Taylor every Friday,
-  // Horace's zelle on the 1st and 15th at the last amount seen for that half of the month).
+  // Horace's zelle on his real paydays, the 14th and the 29th, at the last amount seen for that half of the month).
   const from = addDays(live.horizon || today, 1);
   for (let d = from; d <= end; d = addDays(d, 1)) {
     const est = (label, amount) => { const e = { date: d, amount, base: amount, label, type: 'income', est: true, key: `${d}|${label}` }; if (tw.off?.[e.key]) e.off = true; out.push(e); };
     if (dow(d) === 5) est("Taylor's paycheck", tw.taylorPay != null ? +tw.taylorPay : lastIncome.Taylor);
-    const dom = +d.slice(8, 10);
-    if (dom === 1 && lastIncome.H1 != null) est("Horace's zelle", r2(lastIncome.H1 + (+tw.horaceAdj || 0)));
-    if (dom === 15 && lastIncome.H15 != null) est("Horace's zelle", r2(lastIncome.H15 + (+tw.horaceAdj || 0)));
+    const half = horacePayday(d);
+    if (half && lastIncome[half] != null) est("Horace's zelle", r2(lastIncome[half] + (+tw.horaceAdj || 0)));
   }
   for (const x of tw.extras || []) {
     if (!x.date || !+x.amount) continue;

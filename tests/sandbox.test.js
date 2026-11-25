@@ -88,7 +88,7 @@ test('past the live horizon, paychecks are estimated', () => {
   const s = simulate(live, { horizon: '2026-12-15' });
   const est = s.events.filter((e) => e.est);
   assert.deepEqual(est.filter((e) => /Taylor/.test(e.label)).map((e) => e.date), ['2026-11-27', '2026-12-04', '2026-12-11']);
-  assert.deepEqual(est.filter((e) => /Horace/.test(e.label)).map((e) => [e.date, e.amount]), [['2026-12-15', 1581]]);
+  assert.deepEqual(est.filter((e) => /Horace/.test(e.label)).map((e) => [e.date, e.amount]), [['2026-12-14', 1581]]);
 });
 
 test('solvers find the edge of the cushion', () => {
