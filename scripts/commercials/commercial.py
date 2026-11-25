@@ -88,7 +88,7 @@ def main():
     for ci, c in enumerate(clips):
         for k, fr in enumerate(av.open(c).decode(video=0)):
             im = fr.to_image().convert('RGB'); last_clean = im.copy()
-            if ci == 0 and k >= 6: caption(im, spec['title'], 'top', 52)
+            if ci == 0 and k >= 6: caption(im, spec['title'], 'bottom', 52)  # 11/24: at the top it sat on the face
             if ci == len(clips) - 1 and k >= FRAMES // 3: caption(im, spec['punch'], 'bottom', 40)
             frames.append(im)
     end = last_clean.filter(ImageFilter.GaussianBlur(6))  # the end card starts from a frame with no words on it
