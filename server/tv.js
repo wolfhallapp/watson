@@ -258,6 +258,16 @@ export function slideFile(name, dir = SLIDES_DIR, list) {
   return approvedSlides(dir, list).includes(name) ? path.join(dir, `${name}.png`) : null;
 }
 
+// Family photos (11/24): scripts/commercials/tv-photos.py puts checked copies in data/commercials/tv-photos.
+export const PHOTOS_DIR = path.join(COMMERCIALS_DIR, 'tv-photos');
+export function tvPhotos(dir = PHOTOS_DIR) {
+  try { return fs.readdirSync(dir).filter((f) => /^[a-z0-9-]+\.jpg$/.test(f)).map((f) => f.slice(0, -4)).sort(); } catch { return []; }
+}
+/** The jpg for /tv/photo/<name>.jpg, or null. Only files in tv-photos are served. */
+export function photoFile(name, dir = PHOTOS_DIR) {
+  return tvPhotos(dir).includes(name) ? path.join(dir, `${name}.jpg`) : null;
+}
+
 /** The space picture's bytes, fetched by this PC (the TV page only loads its own images). */
 export async function spaceImage({ fetchImpl = fetch } = {}) {
   return cached('space-img', 6 * 3600000, async () => {
@@ -271,7 +281,7 @@ export async function spaceImage({ fetchImpl = fetch } = {}) {
   });
 }
 
-export async function tvState({ get = workerGet, weather = houseWeather, now = new Date(), progress = () => fs.readFileSync(PROGRESS_FILE, 'utf8'), commercialsDir, slidesDir, slidesList } = {}) {
+export async function tvState({ get = workerGet, weather = houseWeather, now = new Date(), progress = () => fs.readFileSync(PROGRESS_FILE, 'utf8'), commercialsDir, slidesDir, slidesList, photosDir } = {}) {
   const [wx, day, away, school, space] = await Promise.all([
     cached('weather', 20 * 60000, async () => await weather()),
     cached('dayahead', 15 * 60000, async () => { const r = await get('/dayahead'); const d = JSON.parse(r.body); return d.ok ? d : null; }),
@@ -301,5 +311,6 @@ export async function tvState({ get = workerGet, weather = houseWeather, now = n
     shipped: (() => { try { return shippedFrom(progress()); } catch { return null; } })(),
     commercials: commercials(commercialsDir),
     slides: slidesNow(approvedSlides(slidesDir, slidesList), now),
+    photos: slidesNow(tvPhotos(photosDir), now, 3),
   };
 }

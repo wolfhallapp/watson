@@ -46,6 +46,16 @@
     }
     $('dots').innerHTML = [...els].map((_, i) => '<i class="' + (i === idx ? 'on' : '') + '"></i>').join('');
   }
+  // One picture or commercial after every few information cards, spread evenly; never two back to back
+  // (extras wait for a later load).
+  function mixIn(info, media) {
+    const m = media.slice(0, Math.max(0, info.length - 1)); if (!m.length) return info;
+    // The k-th one goes after information card floor((k+1)·L/(M+1)): those are all different and below L, since M < L.
+    const L = info.length, M = m.length, out = []; let k = 0;
+    info.forEach((c, i) => { out.push(c); if (k < M && Math.floor((k + 1) * L / (M + 1)) === i + 1) out.push(m[k++]); });
+    return out;
+  }
+  window.__tvMixIn = mixIn;
   function daysLabel(n) { return n === 0 ? 'TODAY' : n === 1 ? 'DAY' : 'DAYS'; }
   function render(s) {
     $('wx').textContent = s.weather || '';
@@ -77,11 +87,19 @@
     if (s.church && s.church.length) cards.push('<h2>Church this week</h2><ul class="lines">' + s.church.map((c) => '<li><b>' + esc(c.when) + ' · ' + esc(c.time) + '</b>' + esc(c.what) + '</li>').join('') + '</ul>');
     if (s.packing && s.packing.length) cards.push('<h2>Before we leave</h2><ul class="lines">' + s.packing.map((t) => '<li>☐ ' + esc(t) + '</li>').join('') + '</ul>');
     if (s.shipped) cards.push('<h2>New in Wolf Hall · ' + esc(s.shipped.version) + '</h2><ul class="lines">' + s.shipped.items.map((t) => '<li>✦ ' + esc(t.charAt(0).toUpperCase() + t.slice(1)) + '</li>').join('') + '</ul>');
-    // The family slides (reviewed ones only), spread through the deck.
-    (s.slides || []).forEach((name, i) => cards.splice(Math.min(cards.length, 2 + i * 3), 0, '<div class="slide"><img src="tv/slide/' + encodeURIComponent(name) + '.png?t=' + encodeURIComponent(token) + '" alt=""></div>'));
-    (s.commercials || []).forEach((name) => cards.push('<video class="ad" src="tv/media/' + encodeURIComponent(name) + '.mp4?t=' + encodeURIComponent(token) + '" playsinline preload="metadata"></video>'));
     if (s.facts && s.facts[2]) cards.push('<h2>Did you know?</h2><div class="fact">' + esc(s.facts[2]) + '</div>');
     if (verses[2]) cards.push(verseCard(verses[2]));
+    // 11/24 (Horace: "intermix the commercials and slides so they are not in a row"): slides, photos and commercials
+    // take turns, and each lands between information cards, never two in a row.
+    const t = encodeURIComponent(token);
+    const lists = [
+      (s.slides || []).map((n) => '<div class="slide"><img src="tv/slide/' + encodeURIComponent(n) + '.png?t=' + t + '" alt=""></div>'),
+      (s.photos || []).map((n) => '<div class="slide photo"><img src="tv/photo/' + encodeURIComponent(n) + '.jpg?t=' + t + '" alt=""></div>'),
+      (s.commercials || []).map((n) => '<video class="ad" src="tv/media/' + encodeURIComponent(n) + '.mp4?t=' + t + '" playsinline preload="metadata"></video>'),
+    ];
+    const media = [];
+    for (let i = 0; lists.some((l) => i < l.length); i++) lists.forEach((l) => { if (i < l.length) media.push(l[i]); });
+    cards = mixIn(cards, media);
     $('cards').innerHTML = cards.map((c) => '<section class="card">' + c + '</section>').join('');
     show(idx);
   }

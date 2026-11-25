@@ -105,3 +105,26 @@ test('only reviewed slides reach the TV, four at a time', async () => {
   assert.equal(slidesNow(['a', 'b', 'c', 'd', 'e', 'f'], new Date(0)).length, 4);
   assert.notDeepEqual(slidesNow(['a', 'b', 'c', 'd', 'e', 'f'], new Date(0)), slidesNow(['a', 'b', 'c', 'd', 'e', 'f'], new Date(20 * 60000)));
 });
+
+test('photos: only files in tv-photos are listed and served', async () => {
+  const { tvPhotos, photoFile } = await import('../server/tv.js');
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'photos-'));
+  for (const n of ['taylor-1.jpg', 'tati-2.jpg', 'Bad Name.jpg', 'notes.txt']) fs.writeFileSync(path.join(dir, n), 'x');
+  assert.deepEqual(tvPhotos(dir), ['taylor-1', 'tati-2'].sort());
+  assert.equal(photoFile('notes', dir), null);
+  assert.ok(photoFile('tati-2', dir).endsWith('tati-2.jpg'));
+});
+
+test('slides, photos and commercials never land two in a row on the TV', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../public/tv-app.js', import.meta.url), 'utf8');
+  const body = src.match(/function mixIn\(info, media\) \{[\s\S]*?\n  \}/)[0];
+  const mixIn = new Function(body + '; return mixIn;')();
+  for (const L of [3, 8, 14, 17]) for (const M of [0, 1, 2, 5, 10, 20]) {
+    const out = mixIn(Array.from({ length: L }, (_, i) => 'i' + i), Array.from({ length: M }, (_, i) => 'm' + i));
+    assert.equal(out.filter((c) => c[0] === 'i').length, L);
+    assert.equal(out.filter((c) => c[0] === 'm').length, Math.min(M, L - 1));
+    for (let j = 0; j < out.length; j++) assert.ok(!(out[j][0] === 'm' && out[(j + 1) % out.length][0] === 'm'), `L=${L} M=${M} at ${j}`);
+  }
+});

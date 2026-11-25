@@ -26,7 +26,7 @@ import { startWorkshopHelper } from './workshop.js';
 import { startLine } from './line.js';
 import { startNightBoard } from './nightboard.js';
 import { startCookVoice } from './cookvoice.js';
-import { tvState, commercialFile, spaceImage, slideFile } from './tv.js';
+import { tvState, commercialFile, spaceImage, slideFile, photoFile } from './tv.js';
 import { startUptimeWatch } from './uptime.js';
 import { startNotionBackup } from './notion-backup.js';
 
@@ -160,13 +160,15 @@ const server = http.createServer((req, res) => {
     return;
   }
   // The family slides on the TV: /tv/slide/<name>.png?t=<token>, approved ones only (data/commercials/tv-slides.json).
-  const tvs = url.pathname.match(/^\/tv\/slide\/([a-z0-9-]+)\.png$/);
+  // Family photos the same way: /tv/photo/<name>.jpg?t=<token>, only files in data/commercials/tv-photos.
+  const tvs = url.pathname.match(/^\/tv\/(slide|photo)\/([a-z0-9-]+)\.(png|jpg)$/);
   if (tvs) {
     const ip = clientIp(req);
-    if (lockedOut(ip) || !tokenOk(url.searchParams.get('t') || '')) { noteFailure(ip, 'tv slide with a bad token'); res.writeHead(401, SECURITY_HEADERS).end('bad token'); return; }
-    const f = slideFile(tvs[1]);
+    if (lockedOut(ip) || !tokenOk(url.searchParams.get('t') || '')) { noteFailure(ip, 'tv image with a bad token'); res.writeHead(401, SECURITY_HEADERS).end('bad token'); return; }
+    const isSlide = tvs[1] === 'slide';
+    const f = isSlide ? (tvs[3] === 'png' ? slideFile(tvs[2]) : null) : (tvs[3] === 'jpg' ? photoFile(tvs[2]) : null);
     if (!f) { res.writeHead(404, SECURITY_HEADERS).end('Not found'); return; }
-    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=3600' });
+    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': isSlide ? 'image/png' : 'image/jpeg', 'Cache-Control': 'private, max-age=3600' });
     fs.createReadStream(f).pipe(res);
     return;
   }
