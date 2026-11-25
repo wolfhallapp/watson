@@ -18,15 +18,11 @@ def run(*cmd, **kw):
     if r.returncode: raise SystemExit(f'{cmd[1] if len(cmd) > 1 else cmd[0]} failed: {(r.stderr or r.stdout)[-600:]}')
     return r.stdout
 
-def wide(photo, dst):
-    """The photo centered on a blurred copy of itself at 16:9, so the edit model paints a wide scene."""
+def upright(photo, dst):
+    """The photo the right way up, as it is. 11/24: padding it to 16:9 with a blurred copy of itself put the person
+    in the scene twice; now slide.py paints a fresh 16:9 canvas (--size) from the photo instead."""
     im = ImageOps.exif_transpose(Image.open(photo)).convert('RGB')
-    cw = int(im.height * 16 / 9) if im.width / im.height < 16 / 9 else im.width
-    ch = int(cw * 9 / 16)
-    bg = im.resize((cw, ch)).filter(ImageFilter.GaussianBlur(40))
-    fg = im.copy(); fg.thumbnail((cw, ch))
-    bg.paste(fg, ((cw - fg.width) // 2, (ch - fg.height) // 2))
-    bg.save(dst, quality=92)
+    im.thumbnail((1600, 1600)); im.save(dst, quality=92)
 
 def font(size):
     for f in ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf']:
@@ -71,14 +67,16 @@ def main():
     # 1. Wide, text-free scene stills from the person's own photos.
     srcs = []
     for i, p in enumerate(spec['photos'][:1]):  # 11/24 tests: a second photo of the same person adds a second person
-        d = os.path.join(work, f'src{i}.jpg'); wide(os.path.join(ROOT, p), d); srcs.append(d)
+        d = os.path.join(work, f'src{i}.jpg'); upright(os.path.join(ROOT, p), d); srcs.append(d)
     clips = []
     for i, sc in enumerate(spec['scenes']):
         still = os.path.join(OUT, 'slides', f'{name}-scene{i + 1}.png')
         if not os.path.exists(still):
-            prompt = (f"{sc['prompt']} {spec['keep']} Wide 16:9 TV commercial shot, the person large and clearly visible. "
+            prompt = (f"{sc['prompt']} {spec['keep']} Wide 16:9 TV commercial shot. Exactly ONE {spec.get('kind', 'person')} in the picture, "
+                      'large and clearly visible, the whole face showing with nothing in front of it. '
                       'Absolutely no text, no letters, no words, no signs anywhere in the image.')
-            run(PY, os.path.join(ROOT, 'scripts/commercials/slide.py'), '--out', f'{name}-scene{i + 1}', '--prompt', prompt, *srcs[::1 if i % 2 == 0 else -1])
+            run(PY, os.path.join(ROOT, 'scripts/commercials/slide.py'), '--out', f'{name}-scene{i + 1}', '--prompt', prompt,
+                '--fast', '--size', '1344x768', '--seed', str(spec.get('seed', 1000) + i), *srcs)
         clip = os.path.join(OUT, 'clips', f'{name}-scene{i + 1}.mp4')
         if not os.path.exists(clip):
             run(PY, os.path.join(ROOT, 'scripts/commercials/video.py'), '--out', f'{name}-scene{i + 1}', '--w', str(W), '--h', str(H), '--frames', str(FRAMES),
@@ -93,7 +91,8 @@ def main():
             if ci == 0 and k >= 6: caption(im, spec['title'], 'top', 52)
             if ci == len(clips) - 1 and k >= FRAMES // 3: caption(im, spec['punch'], 'bottom', 40)
             frames.append(im)
-    end = last_clean.filter(ImageFilter.GaussianBlur(6))  # the end card starts from a frame with no words on it; caption(end, spec['title'], 'top', 52); caption(end, 'A WOLF HALL PRODUCTION', 'bottom', 30)
+    end = last_clean.filter(ImageFilter.GaussianBlur(6))  # the end card starts from a frame with no words on it
+    caption(end, spec['title'], 'top', 52); caption(end, 'A WOLF HALL PRODUCTION', 'bottom', 30)
     frames += [end] * (FPS * 2)
     secs = len(frames) / FPS
     # 3. Voice-over lines (generated before the picture steps by the caller, or here if missing) and music.
