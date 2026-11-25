@@ -25,7 +25,7 @@ def words(path, p):
     im.save(path)
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--first', type=int); ap.add_argument('--only'); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument('--first', type=int); ap.add_argument('--only'); ap.add_argument('--fast', action='store_true'); a = ap.parse_args()
     plan = json.load(open(os.path.join(ROOT, 'data/commercials/plan.json')))
     if a.only: plan = [p for p in plan if p['name'] in a.only.split(',')]
     if a.first: plan = plan[:a.first]
@@ -35,7 +35,7 @@ def main():
         if os.path.exists(out): continue
         t0 = time.time()
         r = subprocess.run([sys.executable, os.path.join(ROOT, 'scripts/commercials/slide.py'), '--out', p['name'], '--prompt', p['prompt'],
-                            '--seed', str(p['seed']), '--steps', '20', '--cfg', '2.5', *[os.path.join(ROOT, f) for f in p['photos']]], capture_output=True, text=True)
+                            '--seed', str(p['seed']), *(['--fast'] if a.fast else ['--steps', '20', '--cfg', '2.5']), *[os.path.join(ROOT, f) for f in p['photos']]], capture_output=True, text=True)
         if r.returncode == 0: words(out, p)
         msg = f"{time.strftime('%H:%M')} {p['name']} {'ok' if r.returncode == 0 else 'FAILED ' + (r.stderr or r.stdout)[-300:]} {round(time.time() - t0)}s"
         print(msg, flush=True); log.write(msg + '\n'); log.flush()

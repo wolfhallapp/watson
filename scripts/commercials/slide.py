@@ -11,13 +11,20 @@ SLIDES = "/mnt/c/Users/Owner/Documents/watson/data/commercials/slides"
 NEG = "blurry, deformed face, extra fingers, distorted text, watermark, low quality"
 
 
-def workflow(images, prompt, steps, cfg, seed, prefix):
+LIGHTNING = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"  # lightx2v, Apache-2.0: 4 steps instead of 20
+
+
+def workflow(images, prompt, steps, cfg, seed, prefix, fast=False):
     g = {
         "unet": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q4_K_S.gguf"}},
         "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default"}},
         "vae": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
-        "shift": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["unet", 0], "shift": 3.1}},
     }
+    model = ["unet", 0]
+    if fast:
+        g["lora"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": model, "lora_name": LIGHTNING, "strength_model": 1.0}}
+        model = ["lora", 0]
+    g["shift"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": model, "shift": 3.1}}
     pos = {"clip": ["clip", 0], "prompt": prompt, "vae": ["vae", 0]}
     neg = {"clip": ["clip", 0], "prompt": NEG, "vae": ["vae", 0]}
     for i, img in enumerate(images, 1):
@@ -49,13 +56,15 @@ def main():
     ap.add_argument("--steps", type=int, default=20)
     ap.add_argument("--cfg", type=float, default=2.5)
     ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--fast", action="store_true", help="Lightning add-on: 4 steps, cfg 1 (about 4x faster)")
     a = ap.parse_args()
+    if a.fast: a.steps, a.cfg = 4, 1.0
     os.makedirs(INPUT, exist_ok=True); os.makedirs(SLIDES, exist_ok=True)
     names = []
     for p in a.photos[:3]:
         n = os.path.basename(p); shutil.copy(p, os.path.join(INPUT, n)); names.append(n)
     seed = a.seed if a.seed is not None else random.randint(1, 2**31)
-    pid = post("/prompt", {"prompt": workflow(names, a.prompt, a.steps, a.cfg, seed, "slide-" + a.out)})["prompt_id"]
+    pid = post("/prompt", {"prompt": workflow(names, a.prompt, a.steps, a.cfg, seed, "slide-" + a.out, a.fast)})["prompt_id"]
     t0 = time.time()
     while True:
         time.sleep(5)
