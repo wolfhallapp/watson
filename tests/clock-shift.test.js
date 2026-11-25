@@ -11,12 +11,14 @@ const DAY = 86400000;
 const probe = (days, code) => JSON.parse(execFileSync(process.execPath, ['--import', PRELOAD, '--input-type=module', '-e', code],
   { env: { ...process.env, NODE_OPTIONS: '', CLOCK_SHIFT_DAYS: String(days) }, encoding: 'utf8' }));
 
+// The child's real clock is performance.timeOrigin + performance.now() (the preload doesn't touch it), so these
+// checks hold even when the sweep itself runs this file shifted.
+const REAL = 'Math.round(performance.timeOrigin + performance.now())';
+
 test('a shift moves now (Date.now, new Date(), Date()) ahead by whole days', () => {
-  const before = Date.now();
-  const r = probe(30, 'console.log(JSON.stringify({ now: Date.now(), nd: new Date().getTime(), str: Date.parse(Date()) }))');
-  const after = Date.now();
-  for (const v of [r.now, r.nd]) assert.ok(v >= before + 30 * DAY && v <= after + 30 * DAY + 1000, String(v));
-  assert.ok(r.str >= before + 30 * DAY - 1000 && r.str <= after + 30 * DAY + 1000); // Date() as a string has whole seconds
+  const r = probe(30, `console.log(JSON.stringify({ real: ${REAL}, now: Date.now(), nd: new Date().getTime(), str: Date.parse(Date()) }))`);
+  for (const v of [r.now, r.nd]) assert.ok(Math.abs(v - r.real - 30 * DAY) < 5000, String(v - r.real));
+  assert.ok(Math.abs(r.str - r.real - 30 * DAY) < 6000); // Date() as a string has whole seconds
 });
 
 test('dates built from a value stay put, and instanceof, UTC and parse still work', () => {
@@ -31,12 +33,12 @@ test('dates built from a value stay put, and instanceof, UTC and parse still wor
 
 test('code run in a fresh vm context sees the same shift', () => {
   const r = probe(60, `import vm from 'node:vm';
-    console.log(JSON.stringify({ a: vm.runInNewContext('Date.now()'), b: vm.runInContext('new Date().getTime()', vm.createContext({})) }))`);
-  for (const v of [r.a, r.b]) assert.ok(Math.abs(v - (Date.now() + 60 * DAY)) < 60000, String(v));
+    console.log(JSON.stringify({ real: ${REAL}, a: vm.runInNewContext('Date.now()'), b: vm.runInContext('new Date().getTime()', vm.createContext({})) }))`);
+  for (const v of [r.a, r.b]) assert.ok(Math.abs(v - r.real - 60 * DAY) < 5000, String(v - r.real));
 });
 
 test('no shift (0 or unset) leaves Date alone', () => {
-  const r = probe(0, 'console.log(JSON.stringify({ now: Date.now(), shifted: !!Date.__shifted }))');
-  assert.ok(Math.abs(r.now - Date.now()) < 60000);
+  const r = probe(0, `console.log(JSON.stringify({ real: ${REAL}, now: Date.now(), shifted: !!Date.__shifted }))`);
+  assert.ok(Math.abs(r.now - r.real) < 5000);
   assert.equal(r.shifted, false);
 });
