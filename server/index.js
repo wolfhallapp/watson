@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { DATA_DIR, ROOT, config } from './config.js';
-import { WatsonAgent, NIGHT, ROUTINE } from './agent.js';
+import { WatsonAgent, NIGHT, ROUTINE, APP_WALK } from './agent.js';
 import { answerApproval, onApprovalEvent, pendingApprovals } from './approvals.js';
 import { startReminderLoop } from './tools.js';
 import { history, reminders, state, screens, SCREEN_LIMIT } from './store.js';
@@ -522,7 +522,9 @@ const nightAgent = new WatsonAgent((event) => { if (event.type === 'usage') retu
 const routineAgent = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'error') console.warn('  Routine:', event.message); }, ROUTINE);
 // Persephone's casino email checks run in their own fresh session; her page refreshes when they change something.
 const persephoneRoutine = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'casino_changed') broadcastTo(channels.persephone, event); if (event.type === 'error') console.warn('  Persephone routine:', event.message); }, PERSEPHONE_ROUTINE);
-startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster, persephone, persephoneRoutine });
+// The weekly app walk (11/24): its own fresh session with Claude in Chrome, read-only by appwalk.js's allowlist.
+const appWalkAgent = new WatsonAgent((event) => { if (event.type === 'usage') return noteUsage(event.info); if (event.type === 'error') console.warn('  App walk:', event.message); }, APP_WALK);
+startRoutines({ main: agent, night: nightAgent, routine: routineAgent, trinity, morpheus, keymaster, persephone, persephoneRoutine, appWalk: appWalkAgent });
 startUptimeWatch(); // 11/23: worker + site every 15 min, no AI; pushes Horace after 2 misses and when it's back
 const heartbeat = startHeartbeat(); // 11/24 (#114): a beat to the worker every 5 min; it pushes Horace if the PC goes quiet 20 min (Wolf Hall v362)
 startNotionBackup(); // 11/23: private nightly copy of every Wolf Hall database after 3 AM, 14 days (needs Wolf Hall v300)
@@ -553,6 +555,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     persephoneRoutine.shutdown();
     nightAgent.shutdown();
     routineAgent.shutdown();
+    appWalkAgent.shutdown();
     server.close();
     // Tell the worker this is a clean stop (not a power or internet outage) before exiting; at most 3 s.
     heartbeat.stop().finally(() => setTimeout(() => process.exit(0), 500).unref());

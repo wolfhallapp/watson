@@ -12,6 +12,7 @@ import { takeSandboxNote } from './sandbox.js';
 import { changesSince, knowledgeForPrompt, knowledgeSignature, memoriesForPrompt, projectSnapshot } from './knowledge.js';
 import { morpheusForOracle } from './morpheus.js';
 import { describeConnection } from './starlink.js';
+import { appWalkBlock } from './appwalk.js';
 
 // Claude's engine reports a dropped or stalled connection with text like these.
 const CONNECTION_ERROR = /connection error|ECONNRESET|socket|No response from API|fetch failed|network|timed? ?out|ETIMEDOUT|EAI_AGAIN|overloaded/i;
@@ -201,6 +202,10 @@ export const NIGHT = { ...ORACLE, key: 'night', label: 'The Night Shift', sessio
 // fresh each run, so their Gmail reading never piles up in the Oracle's own conversation (2026-10-30).
 export const ROUTINE = { ...ORACLE, key: 'routine', label: 'The Oracle (routine)', sessionKey: 'routineSessionId', history: makeHistory('routine-history.jsonl'), knowledgeNotes: false, pendingNote: null };
 
+// The weekly app walk (11/24): the routine session plus Claude in Chrome, held to appWalkBlock's allowlist
+// (look, scroll and tap on the Wolf Hall site only; writes only its own notes) in every path, hook and permission.
+export const APP_WALK = { ...ROUTINE, key: 'appWalk', label: 'The Oracle (app walk)', sessionKey: 'appWalkSessionId', history: makeHistory('appwalk-history.jsonl'), chrome: true, blockTool: appWalkBlock };
+
 const tokensKey = (persona) => `${persona.sessionKey}Tokens`;
 /** How big a conversation is: everything the model read for its latest reply. */
 const contextSize = (u) => (u?.input_tokens || 0) + (u?.cache_read_input_tokens || 0) + (u?.cache_creation_input_tokens || 0);
@@ -297,6 +302,7 @@ export class WatsonAgent {
       systemPrompt: { type: 'preset', preset: 'claude_code', append: this.p.prompt() },
       mcpServers: { [this.p.mcpName]: this.tools },
       disallowedTools: ['AskUserQuestion'],
+      ...(this.p.chrome ? { extraArgs: { chrome: null } } : {}), // Claude in Chrome (the app walk only)
       hooks: { PreToolUse: [{ hooks: [gate], timeout: Math.ceil(config.approvalTimeoutMs / 1000) + 60 }] },
       canUseTool: async (toolName, input, { signal, suggestions }) => {
         // The Oracle's own tools are safe to run; the PreToolUse hook above still gates wolf_hall's writing paths.
