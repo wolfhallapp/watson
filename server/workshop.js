@@ -557,6 +557,8 @@ export function startWorkshopHelper({ every = 30000 } = {}) { // 11/24: 15 s -> 
     try { await maybeRunPlan(); } catch (e) { console.warn('[workshop] plan:', e.message); }
     // 11/22: the Accountant (Jake's own agent) answers on the same tick; loaded here to avoid a circular import.
     try { const { processAccountant } = await import('./accountant.js'); await processAccountant(); } catch (e) { if (!limited(e) && !/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[accountant]', e.message); }
+    // 11/24 (Wolf Hall v368): Taylor's own Trinity answers on the same tick (every 30 s at most; master key, her routes only).
+    try { const { processTaylorTrinity } = await import('./taylor-trinity.js'); await processTaylorTrinity(); } catch (e) { if (!/fetch failed|aborted|timeout/i.test(e.message)) console.warn('[taylor-trinity]', e.message); }
     finally { busy = false; }
   };
   setTimeout(tick, 5000);

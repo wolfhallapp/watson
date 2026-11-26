@@ -146,6 +146,8 @@ export const ROUTINES = [
       'Announcements; Daily readings and sermon notes; Members (name, email, role if stated: elder, deacon, minister, teacher; family ties mentioned).',
       'Keep two formats exactly, because the church reminders on Horace\'s phone are read from them in code: under Upcoming events, start each dated event with its date (and time if known) in bold, then the event name in bold and where it is,',
       'like "- **Sat Dec 5, 10:30 AM**: **Ladies Cookie Exchange** at the building."; under Prayer requests, start each with the name in bold and the date in brackets, like "- **Brian Hatherly** (Nov 21): what to pray for."',
+      'Under Daily readings, start each day like "- **Nov 23**: Acts 27-28. Jim\'s devo: ..." (the date in bold, then the passage, then a period), because Taylor\'s Trinity in Wolf Hall reads the readings from it.',
+      'Taylor\'s Trinity also sees Announcements, Daily readings and any section starting with "Shared" (never Prayer requests or Members). Horace marks a line (and everything under it) or a heading private with "(private)" or 🔒: keep every such mark exactly as it is, and never move a private line out from under its mark.',
       'Read only, never reply or change email. Keep it factual and kind; this is private to Horace. Then reply with one line: what was added.',
     ].join(' '),
   },
