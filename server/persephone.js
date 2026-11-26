@@ -75,7 +75,7 @@ export function patterns({ items = activityItems(), emails = readJsonl('emails.j
     if (it.type === 'Play Run') { s.plays++; s.wagered += it.wagered || 0; s.won += it.won || 0; continue; }
     s.claims++; s.days.add(it.day);
     if (typeof it.sc === 'number') { s.scClaimed += it.sc; s.scKnown++; }
-    if (it.at) { const z = zoned(it.at); s.hours[z.h]++; s.weekdays[z.wd]++; if (!s.last || it.at > s.last) s.last = it.at; }
+    if (it.at && !Number.isNaN(Date.parse(it.at))) { const z = zoned(it.at); s.hours[z.h]++; s.weekdays[z.wd]++; if (!s.last || it.at > s.last) s.last = it.at; }
   }
   const emailHours = Array(24).fill(0), emailWd = Object.fromEntries(WD.map((d) => [d, 0])), kinds = {};
   for (const e of emails) {
@@ -84,7 +84,7 @@ export function patterns({ items = activityItems(), emails = readJsonl('emails.j
     if (e.category === 'free_sc' || e.category === 'free_spins') { s.freeEmails++; s.emailSc += Number(e.freeSc) || 0; }
     if (e.category === 'deal') s.deals++;
     kinds[e.category || 'other'] = (kinds[e.category || 'other'] || 0) + 1;
-    if (e.receivedAt) { const z = zoned(e.receivedAt); emailHours[z.h]++; emailWd[z.wd]++; }
+    if (e.receivedAt && !Number.isNaN(Date.parse(e.receivedAt))) { const z = zoned(e.receivedAt); emailHours[z.h]++; emailWd[z.wd]++; }
   }
   const growth = {};
   for (const b of balances) (growth[b.site] ||= []).push(b);
@@ -123,6 +123,37 @@ export function patternsText(p = patterns()) {
   return [`Claims: ${p.claims.total} · Emails read: ${p.emails.total} (${Object.entries(p.emails.kinds).map(([k, v]) => `${k} ${v}`).join(', ') || 'none yet'})`,
     p.emails.total ? `Emails arrive most around ${hr(peak)}; by weekday: ${Object.entries(p.emails.byWeekday).map(([d, n]) => `${d} ${n}`).join(', ')}` : '',
     `Play runs overall: wagered ${p.playRuns.wagered} SC, won ${p.playRuns.won} SC, net ${p.playRuns.net} SC`, ...lines].filter(Boolean).join('\n');
+}
+
+// ── Wolf Hall v378 (queue #85, Horace round 5 14B): her books on the app's Gambling screen ──
+// The pattern numbers and the newest casino emails, sent to POST /gambling/persephone (master key) after every
+// history_sync and every few hours by a small timer (code only, no AI). The worker keeps only the fields the screen
+// draws; the claim ledger itself is read live in the app from /gambling/activity, so it isn't copied.
+export const BOOKS_EMAILS = 40;
+const EMAIL_FIELDS = ['emailId', 'receivedAt', 'site', 'subject', 'category', 'summary', 'freeSc', 'freeSpins', 'upTo', 'dealPrice', 'dealSc', 'expiresAt', 'addedToApp', 'rejectReason', 'siteOnList'];
+export function booksSnapshot({ items = activityItems(), emails = readJsonl('emails.jsonl'), balances = readJsonl('balances.jsonl'), syncedAt = readJson('activity.json', {}).syncedAt } = {}) {
+  const newest = emails.filter((e) => e.receivedAt && !Number.isNaN(Date.parse(e.receivedAt)))
+    .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt)).slice(0, BOOKS_EMAILS)
+    .map((e) => Object.fromEntries(EMAIL_FIELDS.filter((k) => e[k] !== undefined && e[k] !== null).map((k) => [k, e[k]])));
+  const checkedAt = emails.reduce((m, e) => (e.recordedAt && (!m || e.recordedAt > m) ? e.recordedAt : m), null);
+  return { patterns: patterns({ items, emails, balances }), emails: newest, ...(syncedAt ? { syncedAt } : {}), ...(checkedAt ? { checkedAt } : {}) };
+}
+export async function publishBooks({ postImpl = workerPostGambling, snapshot = booksSnapshot } = {}) {
+  const r = await postImpl('/gambling/persephone', snapshot());
+  if (!r.json?.ok) throw new Error(r.json?.error || `HTTP ${r.status}`);
+  return r.json;
+}
+let booksTimer = null;
+/** Every 6 hours (first a minute after start): sync the claims, then send the books. Off with WATSON_PS_BOOKS=off. */
+export function startPersephoneBooks({ everyMs = 6 * 3600000 } = {}) {
+  if (booksTimer || process.env.WATSON_PS_BOOKS === 'off') return false;
+  const run = async () => {
+    try { await syncActivity(); await publishBooks(); }
+    catch (e) { if (!/fetch failed|aborted|timeout|404/i.test(e.message)) console.warn('[persephone books]', e.message); }
+  };
+  setTimeout(run, 60000);
+  booksTimer = setInterval(run, everyMs);
+  return true;
 }
 
 // ── Talking to the app ──
@@ -296,8 +327,13 @@ export function createPersephoneTools(send, currentSessionId) {
           addedToApp: z.boolean().optional(), rejectReason: z.string().max(300).optional(), siteOnList: z.boolean().optional(),
         })).min(1).max(100) },
         act(async ({ emails }) => { const r = recordEmails(emails); changed(); return text(`Ledger: ${r.added} new, ${r.updated} updated, ${r.total} emails on file.`); })),
-      tool('history_sync', "Copy every claim and play run from the app into your own history (up to 400 days back). Run it before looking for patterns.", {},
-        act(async () => { const r = await syncActivity(); changed(); return text(`History synced: ${r.fresh} new, ${r.total} on file.`); })),
+      tool('history_sync', "Copy every claim and play run from the app into your own history (up to 400 days back), then send your books (patterns and the newest casino emails) to the app's Gambling screen. Run it before looking for patterns.", {},
+        act(async () => {
+          const r = await syncActivity(); changed();
+          // v378: then her books go to the app's Gambling screen (a failure there doesn't undo the sync).
+          let books; try { const b = await publishBooks(); books = `Books sent to the app (${b.sites} sites, ${b.emails} emails).`; } catch (e) { books = `Books not sent to the app: ${e.message}.`; }
+          return text(`History synced: ${r.fresh} new, ${r.total} on file. ${books}`);
+        })),
       tool('patterns', 'Pattern stats from your ledger: per site claims, days, average SC a claim, usual hour and weekday, balance growth per day, email counts by kind and SC from emails, play-run net; plus when emails arrive. Real numbers only.', {},
         act(async () => text(patternsText()))),
       tool('show_on_screen', "Show something in your salon's display (tables, comparisons, schedules, pattern findings) instead of reading it aloud.",
@@ -340,12 +376,12 @@ You are Persephone, keeper of Horace's casino: the sixth of his assistants on th
 - Removing a site pauses or closes it (its history stays). Say what you'll do and confirm before you remove one.
 
 ## What you run
-- The Wolf Hall app's Gambling screen is now slim: each site's link, when it's time to collect, its SC balance, a Collected button and the email bonuses. You are the brains: everything else lives with you.
+- The Wolf Hall app's Gambling screen: each site's link, when it's time to collect, its SC balance, a Collected button, the email bonuses and deals, and (Wolf Hall v378, Horace 11/23) YOUR BOOKS under your name: the ledger of claims and play runs, each site's alert times (Horace can set them there now), your pattern numbers and the newest casino emails you read. history_sync sends your books there. You are still the brains: sites and balances are changed with you.
 - Sites: add, edit, pause or close them (add_site, edit_site, remove_site, restore_site). Balances: Horace reads them off each site and tells you, or types them on your screen (set_balance). Only SC: he doesn't track GC.
 - Alert times: each site can have its own "time to collect" times (set_alerts). His phone gets a push at those times, on the quarter hour, Central, only when that site is ready. He wants to set them all once and then let them run. When he does, walk him through every site in one go: ask for all the times as a list, not one question at a time.
 - Collected: when he taps Collected in the app, it asks for that site's SC balance now (from v237; it used to ask what the bonus gave), and the claim and that balance land in Notion and you see them (casino_state, history_sync). Claims from the app no longer carry an SC amount. He can also tell you ("got Chumba").
 - Play runs: once about 10 sites have 10+ SC, he does 10 spins at 1 SC on each and tells you what each paid back (log_play_run).
-- Casino email: four times a day (7 AM, noon, 4 PM, 8 PM) you read his casino email (a routine), add only truly free bonuses to the app (add_offers), and record every email in detail in your ledger (record_emails). Horace wants as much data as possible so he can find patterns.
+- Casino email: twice a day (7 AM and 8 PM, Horace 11/23) you read his casino email (a routine), add only truly free bonuses to the app (add_offers), and record every email in detail in your ledger (record_emails). Horace wants as much data as possible so he can find patterns.
 - Patterns: history_sync, then patterns. Look for real patterns: which sites pay the most free SC per claim, when emails arrive, which sites send free SC vs deals, how balances grow, whether play runs come out ahead. Say what the numbers show and how sure you are; with little data, say it's early.
 
 ## Your parameters (from Horace; follow them)
