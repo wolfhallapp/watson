@@ -320,9 +320,12 @@ async function cached(key, ms, fn, keepMs = Infinity) {
   if (cache[key] && Date.now() - cache[key].at < ms) return cache[key].v;
   try { const v = await fn(); cache[key] = { at: Date.now(), v }; return v; } catch { return cache[key] && Date.now() - cache[key].at < keepMs ? cache[key].v : null; }
 }
+// Wolf Hall v436 peek=1: read this week without closing last week into Leftover. Without it this unattended
+// read wrote to Notion every Friday at midnight, the write the Oracle otherwise waits on Horace's yes for.
+export const TICKER_BUDGET_PATH = '/week-budget?offset=0&peek=1';
 export async function tickerExtras() {
   const budget = await cached('budget', 30 * 60000, async () => {
-    const r = await workerGet('/week-budget?offset=0'); const d = JSON.parse(r.body);
+    const r = await workerGet(TICKER_BUDGET_PATH); const d = JSON.parse(r.body);
     if (!d.ok) return null;
     const avail = typeof d.totalAvailable === 'number' ? d.totalAvailable : d.totalCap;
     const fun = (d.categories || []).find((c) => c.key === 'FunMoney');
