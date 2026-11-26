@@ -3,6 +3,8 @@
 // (/property, /vehicles, /accountant) plus the local git branches; nothing is written anywhere except the
 // small data/briefing-extras.json that remembers what the Accountant line last said.
 //  - 🌤️ Weather at the house (#63): today's high and tonight's low from the NWS forecast in /property (server/weather.js).
+//  - 🌤️ Weather in the trip town (self-chosen, 11/26): while Wolf Hall's Away mode (GET /away) says the family is away,
+//    or leaving today, the same NWS line for TRIP_TOWN (Taylor's folks in Hugo), right under the house line.
 //  - 🌳 The Land: weather guard warnings, the fire picture (burn ban / red flag, once Wolf Hall v304 ships),
 //    and care jobs that came due again (jobs never ticked are left out, or the line would say the same 10 every day).
 //  - 🛻 Taylor's Ram: the v293 owner's-manual schedule (logged items overdue or within 1,000 mi / 30 days) and an oil change due.
@@ -13,7 +15,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DATA_DIR, ROOT, config } from './config.js';
 import { workerGet } from './knowledge.js';
-import { weatherLine, WEATHER_UNAVAILABLE } from './weather.js';
+import { weatherLine, WEATHER_UNAVAILABLE, placeWeather } from './weather.js';
 
 export const EXTRAS_STATE = path.join(DATA_DIR, 'briefing-extras.json');
 const TZ = 'America/Chicago';
@@ -108,6 +110,17 @@ export function accountantLine(acct, prev) {
   return { line: "💼 Jake's Accountant: " + s.charAt(0).toUpperCase() + s.slice(1) + '.', seen };
 }
 
+// ── The trip town ──
+// Away mode has dates but no place; the trips so far go to Taylor's folks in Hugo. WATSON_TRIP_TOWN changes it.
+export const TRIP_TOWN = process.env.WATSON_TRIP_TOWN || 'Hugo, OK';
+/** GET /away -> true while the family is away, and on the leaving day before they go. today = 'YYYY-MM-DD' Central. */
+export function tripWeatherDue(away, today) {
+  if (!away?.ok || !away.on) return false;
+  if (away.phase === 'away') return true;
+  return away.phase === 'before' && String(away.leave || '').slice(0, 10) === today;
+}
+export const tripWeatherUnavailable = (town) => `🌤️ Weather in ${town}: the National Weather Service didn't answer this morning; check the weather app.`;
+
 // ── Red pill: night branches waiting ──
 /** [{ repo, branch, date }] -> one line, or null. */
 export function redPillLine(branches, today) {
@@ -134,7 +147,7 @@ async function getJson(get, p) {
   if (r.status !== 200) throw new Error(`${p} answered ${r.status}`);
   return JSON.parse(r.body);
 }
-export async function prepareBriefingExtras({ get = workerGet, branches = waitingBranches, statePath = EXTRAS_STATE, now = new Date(), log = console.log } = {}) {
+export async function prepareBriefingExtras({ get = workerGet, branches = waitingBranches, statePath = EXTRAS_STATE, now = new Date(), log = console.log, place = placeWeather } = {}) {
   const today = centralDay(now), lines = [];
   let st = {}; try { st = JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch { st = {}; }
   const tryIt = async (name, fn) => { try { const l = await fn(); if (l) lines.push(l); } catch (e) { log(`  Briefing extras: ${name} skipped (${e.message})`); } };
@@ -143,6 +156,11 @@ export async function prepareBriefingExtras({ get = workerGet, branches = waitin
   let prop = null;
   try { prop = await getJson(get, '/property'); } catch (e) { log(`  Briefing extras: /property skipped (${e.message})`); }
   lines.push((prop?.ok && prop.weather?.ok && weatherLine(prop.weather.periods, prop.weather.alerts, now)) || WEATHER_UNAVAILABLE);
+  await tryIt('trip weather', async () => {
+    if (!tripWeatherDue(await getJson(get, '/away'), today)) return null;
+    // Once it's due, a miss says so plainly (like the house line) so the briefing never fills it with a web guess.
+    try { return (await place(TRIP_TOWN, { now })).line; } catch (e) { log(`  Briefing extras: trip weather (${e.message})`); return tripWeatherUnavailable(TRIP_TOWN); }
+  });
   await tryIt('land', async () => landLine(prop, today));
   await tryIt('ram', async () => ramLine((await getJson(get, '/vehicles')).vehicles, today));
   await tryIt('accountant', async () => {
