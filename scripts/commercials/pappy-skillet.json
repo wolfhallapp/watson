@@ -1,0 +1,54 @@
+{
+  "id": "pappy-skillet",
+  "title": "Pappy's Kitchen",
+  "style": "80s infomercial",
+  "voice": {
+    "who": "Pappy Skillet",
+    "pitch": 0.84,
+    "exaggeration": 0.7,
+    "cfg": 0.35
+  },
+  "look": "1980s TV infomercial still, warm VHS colors, soft film grain, cheerful, family friendly, illustrated",
+  "scenes": [
+    {
+      "seconds": 4.5,
+      "prompt": "a sad soggy grey TV dinner on a plastic tray, gloomy kitchen table, rain on the window",
+      "say": "Are y'all tired of sad, soggy suppers?",
+      "text": "TIRED OF SOGGY SUPPERS?",
+      "zoom": "in",
+      "take": 2
+    },
+    {
+      "seconds": 5.5,
+      "prompt": "a jolly old Southern grandpa cook with a white mustache, overalls and an apron, holding up a big cast iron skillet, cozy country kitchen, cartoon illustration",
+      "say": "Well, howdy! I'm Pappy Skillet, and this here's my cast iron secret.",
+      "text": "PAPPY SKILLET",
+      "zoom": "out",
+      "take": 2
+    },
+    {
+      "seconds": 5.5,
+      "prompt": "golden fluffy buttermilk biscuits with peppery sausage gravy and a pan of cornbread on a rustic wooden table, steam rising",
+      "say": "Biscuits! Gravy! Cornbread so good it'll make the dogs sing!",
+      "text": "BISCUITS! GRAVY! CORNBREAD!",
+      "zoom": "in",
+      "take": 2
+    },
+    {
+      "seconds": 4.5,
+      "prompt": "two happy dogs, a fluffy white little dog and a German shepherd puppy, howling joyfully beside a farmhouse kitchen table, cartoon illustration",
+      "say": "Even Leia and Snowball agree.",
+      "text": "DOG APPROVED",
+      "zoom": "pan",
+      "take": 2
+    },
+    {
+      "seconds": 6,
+      "prompt": "a warm farmhouse kitchen at sunset in the Texas countryside, a big family supper table set and waiting, glowing lights, cartoon illustration",
+      "say": "Pappy's Kitchen. Supper's on, so come and get it! Operators are standing by.",
+      "text": "PAPPY'S KITCHEN|OPERATORS ARE STANDING BY",
+      "zoom": "out",
+      "take": 3
+    }
+  ]
+}
