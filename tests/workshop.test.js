@@ -83,6 +83,39 @@ test('processPending: Working, then Answered with the changes; a failure is mark
   assert.deepEqual(calls.filter((c) => c[1] === '/workshop/c2').map((c) => c[2].status), ['Working', 'Failed']);
 });
 
+test('11/26: a lapsed Claude sign-in leaves the question Working (Wolf Hall hands it back in 10 minutes); other errors still fail', async () => {
+  const { retryLater, RETRY_HOURS } = await import('../server/workshop.js');
+  const now = Date.parse('2026-11-26T13:00:00Z'), asked = '2026-11-26T12:30:00Z';
+  const auth = new Error('Claude Code returned an error result: Failed to authenticate: OAuth session expired and could not be refreshed');
+  assert.equal(retryLater(auth, asked, now), true);
+  assert.equal(retryLater(new Error("Claude AI usage limit reached|1764200000"), asked, now), true);
+  assert.equal(retryLater(new Error('the helper stopped (error_during_execution)'), asked, now), false, 'a failure mid-answer still fails (the helper may have changed things)');
+  assert.equal(retryLater(new Error('boom'), asked, now), false);
+  assert.equal(retryLater(auth, new Date(now - (RETRY_HOURS * 3600e3 + 1000)).toISOString(), now), false, 'after the cap it fails as before');
+  assert.equal(retryLater(auth, null, now), false, 'no Asked At: no retry');
+
+  const calls = [], warns = [];
+  const fetcher = async (method, p, body) => {
+    calls.push([method, p, body]);
+    if (p === '/workshop/pending') return { status: 200, json: { pending: [{ id: 'c1', askedAt: asked }, { id: 'c2', askedAt: asked }] }, body: '' };
+    return { status: 200, json: { ok: true }, body: '' };
+  };
+  let ran = 0;
+  const run = async () => { ran++; throw auth; };
+  const n = await processPending({ fetcher, run, log: { warn: (m) => warns.push(m) }, now: () => now });
+  assert.equal(n, 0);
+  assert.equal(ran, 1, 'stops after the first: the rest would fail the same way');
+  assert.deepEqual(calls.filter((c) => c[0] === 'PATCH').map((c) => [c[1], c[2].status]), [['/workshop/c1', 'Working']], 'no Failed, and c2 is left Waiting');
+  assert.match(warns[0], /c1 waits: Claude isn't available/);
+
+  // Six hours on, the same error marks it Failed with the reason, as before.
+  calls.length = 0;
+  const late = Date.parse(asked) + RETRY_HOURS * 3600e3 + 60e3;
+  await processPending({ fetcher, run, log: { warn() {} }, now: () => late });
+  assert.deepEqual(calls.filter((c) => c[0] === 'PATCH').map((c) => [c[1], c[2].status]), [['/workshop/c1', 'Working'], ['/workshop/c1', 'Failed'], ['/workshop/c2', 'Working'], ['/workshop/c2', 'Failed']]);
+  assert.match(calls.find((c) => c[2]?.status === 'Failed')[2].changes, /^Error: Claude Code returned an error result: Failed to authenticate/);
+});
+
 test('answers are saved as plain text (no ** or # marks on Jake\'s phone)', async () => {
   const { plainAnswer } = await import('../server/workshop.js');
   assert.equal(plainAnswer('## Plan\n- **Shower diverter (Critical):** check the `cartridge`\n* Sand'), 'Plan\n- Shower diverter (Critical): check the cartridge\n- Sand');
