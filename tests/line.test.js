@@ -60,6 +60,32 @@ test('a failed answer is marked Failed', async () => {
   assert.deepEqual(calls.at(-1), ['/line/Taylor/aaaaaaaa02', 'Failed']);
 });
 
+test('a lapsed sign-in leaves the question Working (handed back in 15 minutes) until 6 hours, then Failed', async () => {
+  const askedAt = '2026-11-26T12:00:00.000Z', t0 = Date.parse(askedAt);
+  const pass = async (nowMs, err) => {
+    const calls = [], warns = [];
+    const fetcher = async (method, p, body) => { calls.push([p, body?.status]); return p === '/line/pending' ? { status: 200, body: '', json: { pending: [
+      { person: 'Horace', id: 'aaaaaaaa01', agent: 'oracle', question: 'good morning', askedAt },
+      { person: 'Taylor', id: 'aaaaaaaa02', agent: 'trinity', question: 'hi', askedAt },
+    ] } } : { status: 200, body: '{}', json: {} }; };
+    const n = await processLine({ agents: { oracle: {} }, fetcher, live: async () => { throw new Error(err); }, taylor: async () => { throw new Error(err); }, log: { warn: (m) => warns.push(m) }, now: () => nowMs });
+    return { n, calls, warns };
+  };
+  const oauth = 'Claude Code returned an error result: Failed to authenticate: OAuth session expired and could not be refreshed';
+  // Within 6 hours: Working only, no Failed, and the pass stops so Taylor's stays Waiting.
+  let r = await pass(t0 + 60e3, oauth);
+  assert.equal(r.n, 0);
+  assert.deepEqual(r.calls.slice(1), [['/line/Horace/aaaaaaaa01', 'Working']]);
+  assert.match(r.warns[0], /waits/);
+  r = await pass(t0 + 3600e3, 'You have hit your usage limit');
+  assert.ok(!r.calls.some((c) => c[1] === 'Failed'));
+  // After 6 hours, or any other error, or no askedAt: Failed as before.
+  r = await pass(t0 + 6 * 3600e3 + 1, oauth);
+  assert.deepEqual(r.calls.filter((c) => c[1] === 'Failed').map((c) => c[0]), ['/line/Horace/aaaaaaaa01', '/line/Taylor/aaaaaaaa02']);
+  r = await pass(t0 + 60e3, 'took too long');
+  assert.equal(r.calls.filter((c) => c[1] === 'Failed').length, 2);
+});
+
 test('askLiveAgent waits its turn and returns the reply text', async () => {
   const agent = { busy: true, onceDone: null, ask(p, origin) { assert.equal(origin, 'app'); setTimeout(() => this.onceDone(true, '', 'Here you go'), 5); } };
   setTimeout(() => { agent.busy = false; }, 20);
