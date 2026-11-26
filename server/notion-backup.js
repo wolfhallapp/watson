@@ -1,5 +1,6 @@
 // Nightly Notion backup (11/23, Night Shift queue #22). Every night after 3 AM Central the Oracle copies every
 // Wolf Hall database to C:\Users\Owner\Documents\Wolf Hall backups\YYYY-MM-DD\<name>.json and keeps 14 days.
+// The first complete backup of each month is also copied to monthly\YYYY-MM and kept 12 months (#120, for Google Drive).
 // It reads through the worker's GET /system/backup (Wolf Hall v300: master key only, read-only, 100 rows a call),
 // so there is no Notion token on the PC. The folder is private: never in git, never uploaded anywhere.
 // No AI call. Until v300 is deployed the route answers 404/403, and the backup waits quietly.
@@ -77,7 +78,42 @@ export async function runBackup({ fetchFn = fetch, workerUrl = WORKER_URL, key =
   const ok = Object.keys(errors).length === 0;
   fs.writeFileSync(path.join(out, '_summary.json'), JSON.stringify({ day, at: now.toISOString(), ok, counts, errors }, null, 2));
   const pruned = prune(dir, day, keepDays);
-  return { ok, day, counts, errors, pruned };
+  let monthly = null; // a locked file (Drive syncing it) must not lose the night's backup, so a copy error is only reported
+  if (ok) try { monthly = keepMonthly(dir, day); } catch (e) { monthly = { copied: null, pruned: [], error: String(e.message || e) }; }
+  return { ok, day, counts, errors, pruned, monthly };
+}
+
+export const MONTHLY_DIR = 'monthly';
+export const KEEP_MONTHS = 12;
+
+/**
+ * Monthly copy (11/24, Night Shift #120): the first complete backup of each month (normally the 1st) is also copied
+ * to monthly/YYYY-MM/, and month folders older than keepMonths are removed. Horace can point Google Drive for desktop
+ * at the monthly folder so one copy a month lives off the PC. Copies to YYYY-MM.part first, then renames.
+ * Returns { copied: 'YYYY-MM' | null, pruned: [...] }.
+ */
+export function keepMonthly(dir, day, keepMonths = KEEP_MONTHS) {
+  const month = day.slice(0, 7);
+  const mdir = path.join(dir, MONTHLY_DIR);
+  fs.mkdirSync(mdir, { recursive: true });
+  let copied = null;
+  const dest = path.join(mdir, month);
+  if (!fs.existsSync(dest)) {
+    fs.rmSync(dest + '.part', { recursive: true, force: true });
+    fs.cpSync(path.join(dir, day), dest + '.part', { recursive: true });
+    fs.renameSync(dest + '.part', dest);
+    copied = month;
+  }
+  const [y, m] = month.split('-').map(Number);
+  const cutoff = new Date(Date.UTC(y, m - 1 - keepMonths, 1)).toISOString().slice(0, 7);
+  const pruned = [];
+  for (const name of fs.readdirSync(mdir)) {
+    if (/^\d{4}-\d{2}$/.test(name) && name <= cutoff && fs.statSync(path.join(mdir, name)).isDirectory()) {
+      fs.rmSync(path.join(mdir, name), { recursive: true, force: true });
+      pruned.push(name);
+    }
+  }
+  return { copied, pruned };
 }
 
 export function doneToday(dir = BACKUP_DIR, now = new Date()) {
@@ -87,8 +123,12 @@ export function doneToday(dir = BACKUP_DIR, now = new Date()) {
 export const README = `# Wolf Hall backups (private)
 
 The Oracle copies every Wolf Hall Notion database here each night after 3 AM and keeps the last 14 days.
-Nothing here is in git or uploaded anywhere. Each day folder has one JSON file per database plus _summary.json
+Nothing here is in git. Each day folder has one JSON file per database plus _summary.json
 (row counts and any table that failed). It reads through the worker's /system/backup, master key only.
+
+The first complete backup of each month (normally the 1st) is also copied to monthly\\YYYY-MM and kept 12 months.
+Only that monthly folder is meant for Google Drive (Horace's choice, 11/23): Google Drive for desktop syncs it to
+his own Drive. The day folders stay on the PC.
 
 Left out on purpose: the Jake-Taylor private chat thread, and push-subscription keys (phones re-subscribe by themselves).
 
@@ -128,7 +168,7 @@ export function startNotionBackup({ every = CHECK_MS } = {}) {
       if (!r.waiting) tries.set(day, (tries.get(day) || 0) + 1);
       if (r.waiting) { if (!waitingLogged) console.log(`  Notion backup: waiting for Wolf Hall v300 (/system/backup answered ${r.status})`); waitingLogged = true; return; }
       const total = Object.values(r.counts).reduce((a, b) => a + b, 0);
-      console.log(`  Notion backup ${r.day}: ${Object.keys(r.counts).length} tables, ${total} rows${r.ok ? '' : `, ${Object.keys(r.errors).length} failed`}`);
+      console.log(`  Notion backup ${r.day}: ${Object.keys(r.counts).length} tables, ${total} rows${r.ok ? '' : `, ${Object.keys(r.errors).length} failed`}${r.monthly?.copied ? `; monthly copy ${r.monthly.copied}` : ''}${r.monthly?.error ? `; monthly copy failed: ${r.monthly.error}` : ''}`);
       if (!r.ok && tries.get(day) >= TRIES_PER_DAY) windowsNotify(`Wolf Hall backup: ${Object.keys(r.errors).length} table(s) failed tonight after ${TRIES_PER_DAY} tries (${Object.keys(r.errors).join(', ')}). The rest are saved; it runs again tomorrow night.`);
     } catch (e) { tries.set(day, (tries.get(day) || 0) + 1); console.warn('  Notion backup:', e.message); }
     finally { running = false; }
