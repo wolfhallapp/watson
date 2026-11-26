@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { landLine, ramLine, ramDue, accountantLine, redPillLine, prepareBriefingExtras, extrasPrompt, centralDay } from '../server/briefing-extras.js';
+import { landLine, ramLine, ramDue, accountantLine, redPillLine, prepareBriefingExtras, extrasPrompt, centralDay, tripWeatherDue, tripWeatherUnavailable, TRIP_TOWN } from '../server/briefing-extras.js';
 import { ROUTINES } from '../server/routines.js';
 import { WEATHER_UNAVAILABLE } from '../server/weather.js';
 
@@ -96,7 +96,7 @@ test('prepareBriefingExtras: read-only GETs only, a failed source is skipped, st
   };
   const now = new Date('2026-11-23T12:40:00Z');
   const lines = await prepareBriefingExtras({ construct: () => null, get, branches: () => [{ repo: 'oracle', branch: 'b', date: '2026-11-20' }], statePath, now, log: (m) => logs.push(m) });
-  assert.deepEqual(asked, ['/property', '/vehicles', '/accountant']);
+  assert.deepEqual(asked, ['/property', '/away', '/vehicles', '/accountant']);
   // #63: the weather line is always first; with /property down it says NWS didn't answer instead of leaving a gap.
   assert.equal(lines.length, 4);
   assert.equal(lines[0], WEATHER_UNAVAILABLE);
@@ -108,6 +108,56 @@ test('prepareBriefingExtras: read-only GETs only, a failed source is skipped, st
   assert.deepEqual(next.slice(1).map((l) => l.slice(0, 2)), ['🛻']);
   // Everything failing still never throws.
   assert.deepEqual(await prepareBriefingExtras({ construct: () => null, get: async () => { throw new Error('offline'); }, branches: () => { throw new Error('no git'); }, statePath, now, log: () => {} }), [WEATHER_UNAVAILABLE]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('trip town weather: due while away and on the leaving day, never when Away mode is off or done', () => {
+  const away = (o) => ({ ok: true, on: true, phase: 'away', leave: '2026-11-25T12:00', back: '2026-11-29T19:00', ...o });
+  assert.equal(tripWeatherDue(away(), '2026-11-26'), true);
+  assert.equal(tripWeatherDue(away({ phase: 'before' }), '2026-11-25'), true); // leaving today, before noon
+  assert.equal(tripWeatherDue(away({ phase: 'before' }), '2026-11-24'), false); // the day before
+  assert.equal(tripWeatherDue(away({ phase: 'home' }), '2026-11-29'), false); // back home Sunday evening
+  assert.equal(tripWeatherDue(away({ on: false, phase: 'off' }), '2026-11-26'), false);
+  assert.equal(tripWeatherDue({ ok: false, error: 'x' }, '2026-11-26'), false);
+  assert.equal(tripWeatherDue(null, '2026-11-26'), false);
+  assert.equal(TRIP_TOWN, process.env.WATSON_TRIP_TOWN || 'Hugo, OK');
+});
+
+test('prepareBriefingExtras: the trip town line sits under the house line, and a miss says NWS did not answer', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brief-')), statePath = path.join(dir, 'state.json');
+  const prop = { ok: true, guard: [], care: [], weather: { ok: true, alerts: [], periods: [
+    { name: 'Today', startTime: '2026-11-26T06:00:00-06:00', isDaytime: true, temperature: 58, shortForecast: 'Sunny', probabilityOfPrecipitation: { value: 0 } },
+    { name: 'Tonight', startTime: '2026-11-26T18:00:00-06:00', isDaytime: false, temperature: 35, shortForecast: 'Clear', probabilityOfPrecipitation: { value: 0 } }] } };
+  const mk = (awayBody) => { const asked = []; return { asked, get: async (p) => {
+    asked.push(p);
+    if (p === '/property') return { status: 200, body: JSON.stringify(prop) };
+    if (p === '/away') return { status: 200, body: JSON.stringify(awayBody) };
+    throw new Error('offline');
+  } }; };
+  const now = new Date('2026-11-26T12:40:00Z'), towns = [];
+  const place = async (town, o) => { towns.push(town); assert.equal(o.now, now); return { line: `🌤️ Weather in ${town} (National Weather Service): Today high 49, sunny.` }; };
+  // Away: house line first, then the town, both before everything else; only GETs were asked.
+  const a = mk({ ok: true, on: true, phase: 'away', leave: '2026-11-25T12:00' });
+  const lines = await prepareBriefingExtras({ get: a.get, branches: () => [], statePath, now, log: () => {}, place });
+  assert.match(lines[0], /^\S+ Weather at the house/);
+  assert.equal(lines[1], `🌤️ Weather in ${TRIP_TOWN} (National Weather Service): Today high 49, sunny.`);
+  assert.equal(lines.length, 2);
+  assert.deepEqual(towns, [TRIP_TOWN]);
+  assert.ok(a.asked.includes('/away'));
+  // Away mode off: no town line and the town isn't looked up at all.
+  towns.length = 0;
+  const off = await prepareBriefingExtras({ get: mk({ ok: true, on: false, phase: 'off' }).get, branches: () => [], statePath, now, log: () => {}, place });
+  assert.equal(off.length, 1); assert.deepEqual(towns, []);
+  // Due, but NWS (or the geocoder) failed: a plain line, never a gap.
+  const logs = [];
+  const miss = await prepareBriefingExtras({ get: mk({ ok: true, on: true, phase: 'away' }).get, branches: () => [], statePath, now, log: (m) => logs.push(m),
+    place: async () => { throw new Error('api.weather.gov HTTP 503'); } });
+  assert.equal(miss[1], tripWeatherUnavailable(TRIP_TOWN));
+  assert.match(logs.join('\n'), /trip weather \(api\.weather\.gov HTTP 503\)/);
+  // /away itself down: just skipped, like any other extra.
+  const down = await prepareBriefingExtras({ get: async (p) => { if (p === '/property') return { status: 200, body: JSON.stringify(prop) }; return { status: 500, body: '{}' }; },
+    branches: () => [], statePath, now, log: () => {}, place });
+  assert.equal(down.length, 1);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

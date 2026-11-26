@@ -341,7 +341,8 @@ export const ROUTINES = [
       'and upcoming reminders. For the Architect\'s moves use only the "🏗️" line given below (Horace took some strategies off',
       'his briefing on 11/23); if there is no such line, leave the moves out. Never list the unclaimed-property search, Prolific or Respondent.',
       // 11/23 (Night Shift #63): the weather line is worked out in code (NWS for the house, via /property) and comes with the extras below.
-      'For the weather use only the "Weather" line given below, word for word; never search the web or call the weather service yourself for it.',
+      // 11/26: on a trip a second "Weather in <town>" line comes too (Wolf Hall's Away mode); give both.
+      'For the weather use only the "Weather" lines given below, word for word; never search the web or call the weather service yourself for it.',
       'Leave out anything about casinos or gambling (no Bonus Run, no casino deals); Horace turned that off on 11/19.',
       'If Trinity\'s church digest ran last night (Documents/Trinity study/Church notes.md changed since yesterday), add a line starting "⛪ Church:" with the next event and anything new; if it did not run, say so in that line.',
       `On Fridays, if ${LEDGER_DIR}/<today>.md exists, add its first line (it starts "📊 Ledger:") as is.`,

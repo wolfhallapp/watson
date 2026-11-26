@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { query, createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { DATA_DIR, config } from './config.js';
 import { WORKER_URL, workerKey } from './knowledge.js';
-import { plainAnswer } from './workshop.js';
+import { plainAnswer, retryLater } from './workshop.js';
 
 export const LINE_DIR = path.join(DATA_DIR, 'line');
 const MODEL = process.env.WATSON_LINE_MODEL || 'claude-sonnet-5-5';
@@ -145,8 +145,11 @@ export async function runTaylor(chat, ctx = {}, { queryImpl = query } = {}) {
   return answer;
 }
 
-/** One pass over waiting questions. agents = { oracle, trinity } (Horace's live ones). */
-export async function processLine({ agents, fetcher = lineFetch, taylor = runTaylor, live = askLiveAgent, log = console } = {}) {
+/** One pass over waiting questions. agents = { oracle, trinity } (Horace's live ones).
+ *  11/26 (Night Shift): a lapsed Claude sign-in or the usage limit leaves the question Working, like the Workshop
+ *  Helper's (retryLater): Wolf Hall hands a Working question back after 15 minutes (lnPending), so it's answered once the
+ *  sign-in works; after RETRY_HOURS it's Failed as before. */
+export async function processLine({ agents, fetcher = lineFetch, taylor = runTaylor, live = askLiveAgent, log = console, now = Date.now } = {}) {
   const r = await fetcher('GET', '/line/pending');
   if (r.status >= 400) throw new Error(`pending: HTTP ${r.status} ${r.body.slice(0, 200)}`);
   const pending = r.json?.pending || [], ctx = r.json?.taylor || {};
@@ -165,6 +168,10 @@ export async function processLine({ agents, fetcher = lineFetch, taylor = runTay
       await fetcher('PATCH', where, { status: 'Answered', answer: plainAnswer(answer).slice(0, 4000) });
       done++;
     } catch (e) {
+      if (retryLater(e, chat.askedAt, now())) {
+        log.warn?.(`[line] ${chat.person}'s ${chat.agent} question waits: Claude isn't available on this PC (${e.message.slice(0, 120)}); trying again in about 15 minutes`);
+        break; // the rest would fail the same way; they stay Waiting for the next pass
+      }
       log.warn?.(`[line] could not answer ${chat.person}'s ${chat.agent} question: ${e.message}`);
       await fetcher('PATCH', where, { status: 'Failed' });
     }

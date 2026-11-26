@@ -361,8 +361,20 @@ export function plainAnswer(s) {
     .trim();
 }
 
+// 11/26 (Night Shift): Claude's sign-in on this PC lapsing (or the plan's usage limit) isn't the question's fault, and
+// it fails before the helper does any work. Such a question stays Working instead of Failed: Wolf Hall hands a Working
+// question back after 10 minutes (GET /workshop/pending), so it's answered once the sign-in works again. After
+// RETRY_HOURS it's marked Failed as before, so Jake isn't left waiting forever.
+export const RETRY_HOURS = 6;
+export function retryLater(err, askedAt, now = Date.now()) {
+  const msg = String(err?.message || err || '');
+  if (!/failed to authenticate|oauth (token|session)|session expired|not logged in|run \/login|usage limit|hit your (usage )?limit/i.test(msg)) return false;
+  const t = Date.parse(askedAt || '');
+  return Number.isFinite(t) && now - t < RETRY_HOURS * 3600e3;
+}
+
 /** One pass over waiting questions. */
-export async function processPending({ fetcher = helperFetch, run = runHelper, log = console } = {}) {
+export async function processPending({ fetcher = helperFetch, run = runHelper, log = console, now = Date.now } = {}) {
   const r = await fetcher('GET', '/workshop/pending');
   if (r.status >= 400) throw new Error(`pending: HTTP ${r.status} ${r.body.slice(0, 200)}`);
   let done = 0;
@@ -373,6 +385,10 @@ export async function processPending({ fetcher = helperFetch, run = runHelper, l
       await fetcher('PATCH', `/workshop/${chat.id}`, { status: 'Answered', answer: plainAnswer(out.answer), changes: out.changes.join('\n') });
       done++;
     } catch (e) {
+      if (retryLater(e, chat.askedAt, now())) {
+        log.warn?.(`[workshop] ${chat.id} waits: Claude isn't available on this PC (${e.message.slice(0, 120)}); trying again in about 10 minutes`);
+        break; // the rest would fail the same way; they stay Waiting for the next pass
+      }
       log.warn?.(`[workshop] could not answer ${chat.id}: ${e.message}`);
       await fetcher('PATCH', `/workshop/${chat.id}`, { status: 'Failed', answer: '', changes: `Error: ${e.message}`.slice(0, 500) });
     }

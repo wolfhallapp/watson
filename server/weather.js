@@ -6,7 +6,7 @@
 import { workerGet } from './knowledge.js';
 
 const TZ = 'America/Chicago';
-const centralDay = (d) => d.toLocaleDateString('en-CA', { timeZone: TZ });
+const localDay = (d, tz = TZ) => d.toLocaleDateString('en-CA', { timeZone: tz });
 // NWS period times carry their own Central offset ("2026-11-23T18:00:00-06:00"), so the first 10 characters are the local day.
 const dayOf = (p) => String(p?.startTime || '').slice(0, 10);
 const pop = (p) => { const v = p?.probabilityOfPrecipitation?.value; return Number.isFinite(Number(v)) && v !== null ? Number(v) : 0; };
@@ -26,10 +26,10 @@ function icon(text, wet) {
  * Today's HIGH is always the daytime period that starts today and its LOW the night after it, so a 4 AM read
  * (first period "Overnight") or a 7 PM read (first period "Tonight") never passes a low off as the day's weather.
  */
-export function weatherLine(periods, alerts = [], now = new Date()) {
+export function weatherLine(periods, alerts = [], now = new Date(), { label = 'Weather at the house', tz = TZ } = {}) {
   const ps = (periods || []).filter((p) => p && Number.isFinite(Number(p.temperature)) && dayOf(p));
   if (!ps.length) return null;
-  const today = centralDay(now);
+  const today = localDay(now, tz);
   const dayIdx = ps.findIndex((p) => p.isDaytime && dayOf(p) === today);
   const bits = [];
   let lead, nextDay;
@@ -49,7 +49,7 @@ export function weatherLine(periods, alerts = [], now = new Date()) {
   if (nextDay) bits.push(`${nextDay.name} high ${nextDay.temperature}${pop(nextDay) >= 20 ? `, ${rain(nextDay)}` : ''}`);
   const events = [...new Set((alerts || []).map((a) => String(a?.event || '').trim()).filter(Boolean))];
   bits.push(events.length ? `NWS alert: ${events.join(', ')}` : 'No alerts');
-  return `${icon(String(lead.shortForecast || ''), pop(lead))} Weather at the house (National Weather Service): ${bits.join('. ')}.`;
+  return `${icon(String(lead.shortForecast || ''), pop(lead))} ${label} (National Weather Service): ${bits.join('. ')}.`;
 }
 
 /** The short ticker form: the current period, named, as before ("Tonight: 41°, Partly Cloudy, 20% rain"). */
@@ -72,3 +72,78 @@ export async function houseWeather({ get = workerGet, now = new Date() } = {}) {
 
 /** Said instead when NWS (or the worker) didn't answer, so the briefing never fills the gap with a web guess. */
 export const WEATHER_UNAVAILABLE = '🌤️ Weather: the National Weather Service didn\'t answer this morning; check the weather app.';
+
+// Weather in a named town (self-chosen Night Shift, 11/26): the Oklahoma trip, Sunday's drive home, church in
+// Pflugerville, the Tuesday office. Same NWS forecast and the same line as the house; only public town points.
+// The town's point comes from Open-Meteo's free geocoder (no key); the house is never looked up this way.
+const STATES = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut',
+  DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',
+  IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana',
+  NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York',
+  NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah',
+  VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+};
+const HOME_STATES = ['Texas', 'Oklahoma']; // with no state given, a Texas or Oklahoma town wins (home and Taylor's folks)
+const NWS_HEADERS = { 'User-Agent': '(the-oracle home assistant)', Accept: 'application/geo+json' };
+
+/** "Hugo, OK" / "Hugo Oklahoma" / "hugo" -> { town, state|null } (state is the full name). */
+export function parsePlace(place) {
+  const s = String(place || '').trim().replace(/\s+/g, ' ');
+  if (!s) return { town: '', state: null };
+  const lower = s.toLowerCase().replace(/[,.]+$/, '');
+  // The state is the last word (an abbreviation) or the end of the text (a full name, "New Mexico" included).
+  for (const [ab, full] of Object.entries(STATES)) {
+    for (const tail of [ab.toLowerCase(), full.toLowerCase()]) {
+      if (lower.length > tail.length + 1 && lower.endsWith(tail) && /[,\s]/.test(lower[lower.length - tail.length - 1])) {
+        const town = s.slice(0, lower.length - tail.length).replace(/[,\s]+$/, '').trim();
+        if (town) return { town, state: full };
+      }
+    }
+  }
+  return { town: s.replace(/,$/, ''), state: null };
+}
+
+/** Picks the geocoder result: exact town name, in the state if one was given, else Texas/Oklahoma first, then the biggest. */
+export function pickPlace(results, { town, state }) {
+  const same = (results || []).filter((r) => r && r.country_code === 'US' && Number.isFinite(r.latitude) && Number.isFinite(r.longitude)
+    && String(r.name || '').toLowerCase() === town.toLowerCase());
+  const pool = state ? same.filter((r) => r.admin1 === state) : same;
+  if (!pool.length) return null;
+  const rank = (r) => (state ? 0 : (HOME_STATES.indexOf(r.admin1) + 1 || 9));
+  return [...pool].sort((a, b) => rank(a) - rank(b) || (b.population || 0) - (a.population || 0))[0];
+}
+
+async function getJson(fetchImpl, url, headers) {
+  const r = await fetchImpl(url, { headers, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`${new URL(url).host} HTTP ${r.status}`);
+  return r.json();
+}
+
+/** Weather in a named US town -> { line, short, where }; throws with a plain reason when it can't. */
+export async function placeWeather(place, { fetchImpl = fetch, now = new Date() } = {}) {
+  const want = parsePlace(place);
+  if (!want.town) throw new Error('no town given');
+  const q = new URLSearchParams({ name: want.town, count: '20', language: 'en', format: 'json', countryCode: 'US' });
+  const geo = await getJson(fetchImpl, `https://geocoding-api.open-meteo.com/v1/search?${q}`);
+  const hit = pickPlace(geo.results, want);
+  if (!hit) throw new Error(`couldn't find ${want.town}${want.state ? `, ${want.state}` : ''}`);
+  const pt = await getJson(fetchImpl, `https://api.weather.gov/points/${hit.latitude.toFixed(4)},${hit.longitude.toFixed(4)}`, NWS_HEADERS);
+  const props = pt.properties || {};
+  if (!props.forecast) throw new Error('no NWS forecast for that spot');
+  const [fc, al] = await Promise.all([
+    getJson(fetchImpl, props.forecast, NWS_HEADERS),
+    getJson(fetchImpl, `https://api.weather.gov/alerts/active?point=${hit.latitude.toFixed(4)},${hit.longitude.toFixed(4)}`, NWS_HEADERS)
+      .catch(() => null), // alerts are extra; a miss says so below instead of claiming "No alerts"
+  ]);
+  const periods = fc.properties?.periods || [];
+  const abbr = Object.keys(STATES).find((k) => STATES[k] === hit.admin1) || hit.admin1;
+  const where = `${hit.name}, ${abbr}`;
+  let line = weatherLine(periods, (al?.features || []).map((f) => f.properties || {}), now,
+    { label: `Weather in ${where}`, tz: props.timeZone || TZ });
+  if (!line) throw new Error('no forecast periods');
+  if (!al) line = line.replace(/ No alerts\.$/, ' (Alerts didn\'t load.)');
+  return { line, short: weatherShort(periods), where };
+}

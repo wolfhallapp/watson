@@ -10,12 +10,17 @@ mkdir -p data
 if git remote get-url origin >/dev/null 2>&1; then
   timeout 20 git pull --ff-only --quiet 2>&1 | tee -a data/server.log || echo "  (git pull skipped)" | tee -a data/server.log
 fi
+. scripts/run-lib.sh
 stopping=0
 trap 'stopping=1' INT TERM
 while true; do
   node server/index.js 2>&1 | tee -a data/server.log
   code=${PIPESTATUS[0]}
-  [ "$stopping" = 1 ] || [ "$code" = 0 ] || [ "$code" = 130 ] && break
+  [ "$stopping" = 1 ] && break
+  if ! oracle_should_restart "$code"; then
+    [ "$code" = 0 ] || [ "$code" = 130 ] || echo "  Another Oracle is already running on port $(oracle_port), so this window stops instead of restarting." | tee -a data/server.log
+    break
+  fi
   echo "  The Oracle stopped unexpectedly (exit $code). Restarting in 5 seconds..." | tee -a data/server.log
   sleep 5
 done

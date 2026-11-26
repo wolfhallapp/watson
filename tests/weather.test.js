@@ -83,3 +83,77 @@ test('the briefing routine no longer asks for a web search for Thrall weather', 
   assert.doesNotMatch(r.prompt, /weather for Thrall/);
   assert.match(r.prompt, /never search the web/);
 });
+
+// Weather in a named town (self-chosen Night Shift, 11/26).
+import { parsePlace, pickPlace, placeWeather } from '../server/weather.js';
+
+test('parsePlace: "Town, ST", "Town State", two-word towns and states, no state', () => {
+  assert.deepEqual(parsePlace('Hugo, OK'), { town: 'Hugo', state: 'Oklahoma' });
+  assert.deepEqual(parsePlace('Hugo Oklahoma'), { town: 'Hugo', state: 'Oklahoma' });
+  assert.deepEqual(parsePlace('Round Rock TX'), { town: 'Round Rock', state: 'Texas' });
+  assert.deepEqual(parsePlace('Santa Fe New Mexico'), { town: 'Santa Fe', state: 'New Mexico' });
+  assert.deepEqual(parsePlace('Pflugerville, Texas.'), { town: 'Pflugerville', state: 'Texas' });
+  assert.deepEqual(parsePlace('Oklahoma City'), { town: 'Oklahoma City', state: null });
+  assert.deepEqual(parsePlace('Texas City'), { town: 'Texas City', state: null });
+  assert.deepEqual(parsePlace('  '), { town: '', state: null });
+});
+
+const GEO = [
+  { name: 'Hugo', admin1: 'Minnesota', country_code: 'US', latitude: 45.16, longitude: -92.99, population: 14388 },
+  { name: 'Hugo', admin1: 'Oklahoma', country_code: 'US', latitude: 34.01066, longitude: -95.50968, population: 5224 },
+  { name: 'Hugoton', admin1: 'Kansas', country_code: 'US', latitude: 37.17, longitude: -101.35, population: 3964 },
+];
+test('pickPlace: the named state wins; with none, Oklahoma or Texas beats a bigger town elsewhere; exact names only', () => {
+  assert.equal(pickPlace(GEO, { town: 'Hugo', state: 'Minnesota' }).admin1, 'Minnesota');
+  assert.equal(pickPlace(GEO, { town: 'hugo', state: null }).admin1, 'Oklahoma');
+  assert.equal(pickPlace(GEO, { town: 'Hugo', state: 'Kansas' }), null); // Hugoton isn't Hugo
+  assert.equal(pickPlace([], { town: 'Hugo', state: null }), null);
+});
+
+function fakeFetch({ alertsFail = false, features = [] } = {}) {
+  const calls = [];
+  const fn = async (url, opts) => {
+    calls.push({ url, ua: opts?.headers?.['User-Agent'] });
+    const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+    if (url.startsWith('https://geocoding-api.open-meteo.com/')) return ok({ results: GEO });
+    if (url.startsWith('https://api.weather.gov/points/')) return ok({ properties: { forecast: 'https://api.weather.gov/gridpoints/TSA/58,9/forecast', timeZone: 'America/Chicago' } });
+    if (url.endsWith('/forecast')) return ok({ properties: { periods: MORNING } });
+    if (url.startsWith('https://api.weather.gov/alerts/')) return alertsFail ? { ok: false, status: 503, json: async () => ({}) } : ok({ features });
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('placeWeather: Hugo, OK gets the same NWS line, named for the town, from the town\'s own point', async () => {
+  const f = fakeFetch();
+  const r = await placeWeather('Hugo, OK', { fetchImpl: f, now: at('2026-11-23T12:40:00Z') });
+  assert.equal(r.line, '☀️ Weather in Hugo, OK (National Weather Service): Today high 58, mostly sunny, 0% rain. Tonight low 41. Tuesday high 53, 20% rain. No alerts.');
+  assert.equal(r.where, 'Hugo, OK');
+  assert.match(f.calls[0].url, /name=Hugo&/);
+  assert.match(f.calls[1].url, /points\/34\.0107,-95\.5097$/);
+  assert.ok(f.calls.filter((c) => c.url.includes('weather.gov')).every((c) => c.ua), 'NWS calls carry a User-Agent');
+  assert.ok(f.calls.every((c) => !/gmail|@/.test(c.ua || '')), 'no email address goes out');
+  assert.ok(!f.calls.some((c) => c.url.includes('/property')), 'never touches the house lookup');
+});
+
+test('placeWeather: alerts are named; a failed alerts read says so instead of "No alerts"', async () => {
+  const w = await placeWeather('Hugo', { fetchImpl: fakeFetch({ features: [{ properties: { event: 'Wind Advisory' } }] }), now: at('2026-11-23T12:40:00Z') });
+  assert.match(w.line, /NWS alert: Wind Advisory\.$/);
+  const miss = await placeWeather('Hugo', { fetchImpl: fakeFetch({ alertsFail: true }), now: at('2026-11-23T12:40:00Z') });
+  assert.match(miss.line, /Tuesday high 53, 20% rain\. \(Alerts didn't load\.\)$/);
+  assert.doesNotMatch(miss.line, /No alerts/);
+});
+
+test('placeWeather: an unknown town, an empty place and an NWS outage throw plain reasons', async () => {
+  await assert.rejects(placeWeather('Nowhereville, TX', { fetchImpl: fakeFetch() }), /couldn't find Nowhereville, Texas/);
+  await assert.rejects(placeWeather('', { fetchImpl: fakeFetch() }), /no town given/);
+  const down = async (url) => (url.includes('open-meteo') ? { ok: true, status: 200, json: async () => ({ results: GEO }) } : { ok: false, status: 500, json: async () => ({}) });
+  await assert.rejects(placeWeather('Hugo, OK', { fetchImpl: down }), /api\.weather\.gov HTTP 500/);
+});
+
+test('weatherLine: the town\'s own time zone decides "today" (a Mountain town at 11:30 PM Central is still on its evening)', () => {
+  const mt = [per('Tonight', '2026-11-23T18:00:00-07:00', false, 30, 'Clear', 0), per('Tuesday', '2026-11-24T06:00:00-07:00', true, 50, 'Sunny', 0)];
+  const line = weatherLine(mt, [], at('2026-11-24T05:30:00Z'), { label: 'Weather in Santa Fe, NM', tz: 'America/Denver' });
+  assert.match(line, /^☀️ Weather in Santa Fe, NM \(National Weather Service\): Tonight low 30, clear\. Tuesday high 50\. No alerts\.$/);
+});

@@ -41,6 +41,29 @@ test('processAccountant: Working, then Answered with plain text and the change l
   assert.equal(patches[1][2].answer, 'Start with this'); assert.equal(patches[1][2].changes, 'Planted: Dresser flips');
 });
 
+// 11/26 (Night Shift): a lapsed Claude sign-in or the usage limit leaves Jake's request Working (Wolf Hall v516 hands it
+// back after 30 minutes) and stops the pass; after 6 hours, or for any other error, it's Failed as before.
+test('processAccountant: a lapsed sign-in waits (Working, pass stops); old or other errors still fail', async () => {
+  const now = Date.parse('2026-11-26T12:00:00Z'), asked = new Date(now - 3600e3).toISOString(), old = new Date(now - 7 * 3600e3).toISOString();
+  const pass = async (pending, err) => {
+    const calls = [];
+    const fetcher = async (m, p, b) => { calls.push([m, p, b]); if (p === '/accountant/pending') return { status: 200, json: { pending, profile: null }, body: '' }; return { status: 200, json: { ok: true }, body: '' }; };
+    const run = async () => { throw err; };
+    const done = await processAccountant({ fetcher, run, log: {}, now: () => now });
+    return { done, patches: calls.filter((c) => c[0] === 'PATCH').map((c) => [c[1], c[2].status]) };
+  };
+  const auth = new Error('Failed to authenticate. API Error: 401 OAuth session expired');
+  let r = await pass([{ id: 'aaa', askedAt: asked }, { id: 'bbb', askedAt: asked }], auth);
+  assert.equal(r.done, 0);
+  assert.deepEqual(r.patches, [['/accountant/chat/aaa', 'Working']]); // stays Working; bbb stays Waiting
+  r = await pass([{ id: 'aaa', askedAt: asked }], new Error('Claude AI usage limit reached|1764200000'));
+  assert.deepEqual(r.patches, [['/accountant/chat/aaa', 'Working']]);
+  r = await pass([{ id: 'aaa', askedAt: old }], auth);
+  assert.deepEqual(r.patches, [['/accountant/chat/aaa', 'Working'], ['/accountant/chat/aaa', 'Failed']]);
+  r = await pass([{ id: 'aaa', askedAt: asked }, { id: 'bbb', askedAt: asked }], new Error('boom'));
+  assert.deepEqual(r.patches, [['/accountant/chat/aaa', 'Working'], ['/accountant/chat/aaa', 'Failed'], ['/accountant/chat/bbb', 'Working'], ['/accountant/chat/bbb', 'Failed']]);
+});
+
 test('the plant tool posts one strategy to /accountant/tree and notes the change', async () => {
   const sent = [], changes = [];
   const server = createAccountantTools(changes, async (m, p, b) => { sent.push([m, p, b]); return { status: 200, json: { ok: true, strategy: { id: 'id1', name: b.name } }, body: '' }; });
