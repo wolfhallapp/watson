@@ -10,7 +10,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { query, createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { config } from './config.js';
-import { WORK_DIR, helperKey, plainAnswer } from './workshop.js';
+import { WORK_DIR, helperKey, plainAnswer, retryLater } from './workshop.js';
 
 const WORKER_URL = process.env.WOLF_HALL_WORKER_URL || 'https://wolf-hall.hall-horace.workers.dev';
 const MODEL = process.env.WATSON_ACCOUNTANT_MODEL || 'claude-sonnet-5-5';
@@ -175,8 +175,11 @@ export async function runAccountant(req, profile, { queryImpl = query, fetcher =
   return { answer, changes };
 }
 
-/** One pass over Jake's waiting requests (called from the Workshop Helper's tick). */
-export async function processAccountant({ fetcher = accountantFetch, run = runAccountant, log = console } = {}) {
+/** One pass over Jake's waiting requests (called from the Workshop Helper's tick).
+ *  11/26 (Night Shift): a lapsed Claude sign-in or the usage limit leaves the request Working, like the Workshop Helper's
+ *  (retryLater): Wolf Hall v516 hands a Working request back after 30 minutes (acctPending), so it's answered once the
+ *  sign-in works; after RETRY_HOURS it's Failed as before. */
+export async function processAccountant({ fetcher = accountantFetch, run = runAccountant, log = console, now = Date.now } = {}) {
   if (process.env.WATSON_ACCOUNTANT === 'off') return 0;
   const r = await fetcher('GET', '/accountant/pending');
   if (r.status === 404) return 0; // the Wolf Hall side isn't deployed yet (v287)
@@ -189,6 +192,10 @@ export async function processAccountant({ fetcher = accountantFetch, run = runAc
       await fetcher('PATCH', `/accountant/chat/${req.id}`, { status: 'Answered', answer: plainAnswer(out.answer), changes: out.changes.join('\n') });
       done++;
     } catch (e) {
+      if (retryLater(e, req.askedAt, now())) {
+        log.warn?.(`[accountant] ${req.id} waits: Claude isn't available on this PC (${e.message.slice(0, 120)}); trying again in about 30 minutes`);
+        break; // the rest would fail the same way; they stay Waiting for the next pass
+      }
       log.warn?.(`[accountant] could not answer ${req.id}: ${e.message}`);
       await fetcher('PATCH', `/accountant/chat/${req.id}`, { status: 'Failed', answer: '', changes: `Error: ${e.message}`.slice(0, 500) });
     }
