@@ -102,6 +102,11 @@ export class Construct {
       }
       s[k] = v;
     }
+    // #92 (Horace 11/23): briefing false keeps a strategy on the tree but off his morning briefing's moves.
+    if (a.briefing !== undefined) {
+      if (typeof a.briefing !== 'boolean') throw new Error('briefing must be true or false');
+      if (a.briefing) delete s.briefing; else s.briefing = false;
+    }
     s.updated = new Date().toISOString();
   }
 
@@ -223,7 +228,7 @@ export class Construct {
       }),
       strategies,
       // Today's moves: the next open step on everything being worked on.
-      moves: strategies.filter((s) => ['Researching', 'Started', 'Earning'].includes(s.status) && s.nextStep)
+      moves: strategies.filter((s) => ['Researching', 'Started', 'Earning'].includes(s.status) && s.nextStep && s.briefing !== false)
         .map((s) => ({ strategyId: s.id, strategy: s.name, step: s.nextStep })),
       recentPayouts: pays.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 30),
     };
@@ -239,7 +244,7 @@ export class Construct {
     const head = `The tree: ${t.strategies} of ${sum.goal} ways · ${t.live} running · earned $${t.earnedAll.toFixed(2)} all time, $${t.earnedMonth.toFixed(2)} this month.\nBranches: ${sum.branches.map((b) => `${b.name} (${b.count})`).join(', ')}`;
     const rows = list.map((s) => {
       const steps = s.steps.length ? ` · steps ${s.stepsDone}/${s.steps.length}${s.nextStep ? ` (next: ${s.nextStep.text} [${s.nextStep.id}])` : ''}` : '';
-      return `- [${s.id}] ${s.name} · ${s.branch} · ${s.status}${s.estMonthly != null ? ` · est $${s.estMonthly}/mo` : ''}${s.earned ? ` · earned $${s.earned.toFixed(2)}` : ''}${steps}`;
+      return `- [${s.id}] ${s.name} · ${s.branch} · ${s.status}${s.briefing === false ? ' · off the briefing' : ''}${s.estMonthly != null ? ` · est $${s.estMonthly}/mo` : ''}${s.earned ? ` · earned $${s.earned.toFixed(2)}` : ''}${steps}`;
     });
     return head + '\n' + (rows.join('\n') || '(no strategies match)');
   }

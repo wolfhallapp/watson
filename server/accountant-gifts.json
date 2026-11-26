@@ -1,0 +1,100 @@
+{
+ "about": "Cards Horace sends to Jake's Accountant tree (Night Shift #92, Horace 11/23: these came off Horace's own briefing because Jake is 18 and can do them himself). The Accountant's tick plants each one once, after Jake's Initiation is done. If Jake already has a matching card, only the note and the missing step are added; his card and his ticks are kept.",
+ "gifts": [
+  {
+   "key": "unclaimed-2026-11-23",
+   "match": "unclaimed|claimit|missing ?money",
+   "ifThere": {
+    "step": "Search Kai Wolf, Tatiyana Hall and Katana Hall too, and tell your dad or Horace about any hit",
+    "note": "From Horace (11/23): search the younger kids too: Kai Wolf, Tatiyana Hall and Katana Hall. A parent files the claim for anyone under 18, so just pass on what you find. It's free on the official site; never pay a 'finder' service."
+   },
+   "plant": {
+    "name": "Unclaimed money search (ClaimItTexas)",
+    "branch": "10 Found money & saving",
+    "status": "Idea",
+    "estMonthly": 0,
+    "setup": "Minutes",
+    "dailyTime": "None",
+    "risk": "Low",
+    "priority": 2,
+    "how": "Texas holds money that businesses couldn't return to people: old deposits, refunds, final paychecks. Anyone can search the state's free site and claim what's theirs. It's a one-time find, not monthly income.",
+    "why": "It takes a few minutes, costs nothing and needs no ride. You're 18, so you can file your own claim.",
+    "watch": "Only use the official .gov site. Never pay a 'finder' service, and never share your ID anywhere but the claim form.",
+    "needs": "$0 to start: phone, your photo ID for a claim",
+    "link": "https://claimittexas.gov",
+    "notes": "Sent by Horace on 11/23 from his own tree.",
+    "steps": [
+     "Open claimittexas.gov (the official Texas site)",
+     "Search your full name, then name variations and initials",
+     "If you've lived in another state, search missingmoney.com too (also free)",
+     "Search Kai Wolf, Tatiyana Hall and Katana Hall too, and tell your dad or Horace about any hit",
+     "For your own hit, start the claim and upload your ID yourself",
+     "Log the money here as a payout when it arrives"
+    ]
+   }
+  },
+  {
+   "key": "prolific-2026-11-23",
+   "match": "prolific",
+   "ifThere": {
+    "note": "From Horace (11/23): he's handing Prolific to you; it was on his own list."
+   },
+   "plant": {
+    "name": "Prolific research studies",
+    "branch": "5 Online gigs",
+    "status": "Idea",
+    "estMonthly": 20,
+    "setup": "An hour",
+    "dailyTime": "15-30 min",
+    "risk": "Low",
+    "priority": 5,
+    "how": "Universities and companies pay people to take part in research studies (surveys and short tasks) on a phone or computer. You take the studies you match, and the pay goes to PayPal.",
+    "why": "You're 18, the minimum age. It costs nothing, needs no ride and fits around your free hours.",
+    "watch": "One account, your real details, truthful answers: studies check, and mismatches get accounts closed. Never let AI do a study for you. New sign-ups may wait on a waitlist first.",
+    "needs": "$0 to start: phone or computer, PayPal, your photo ID for the ID check",
+    "link": "https://www.prolific.com",
+    "notes": "Sent by Horace on 11/23 from his own tree. Check the current pay and waitlist on the site before you start.",
+    "steps": [
+     "Join as a participant at prolific.com with your own email (a few minutes)",
+     "Watch your email for the invite if there's a waitlist",
+     "Accept it and do the ID check yourself",
+     "Do the short practice study",
+     "Answer every About You question truthfully (more studies match you)",
+     "Link PayPal for cashouts",
+     "Check for new studies a few times a day, or turn on alerts"
+    ]
+   }
+  },
+  {
+   "key": "respondent-2026-11-23",
+   "match": "respondent",
+   "ifThere": {
+    "note": "From Horace (11/23): he's handing Respondent to you; it was on his own list."
+   },
+   "plant": {
+    "name": "Respondent paid interviews and studies",
+    "branch": "5 Online gigs",
+    "status": "Idea",
+    "estMonthly": 0,
+    "setup": "An hour",
+    "dailyTime": "Under 5 min",
+    "risk": "Low",
+    "priority": 10,
+    "how": "Researchers pay people for interviews, focus groups and short online tasks about the things they use and buy. Many studies want certain jobs, but consumer studies (gamers, phone users, shoppers) take anyone 18+ who fits. Each study pays once; there's no steady monthly amount.",
+    "why": "No cost and no ride, and one accepted study can pay more than a week of surveys.",
+    "watch": "Answer screeners truthfully: they verify, and a false answer gets you removed. Expect lots of 'not selected'; that's normal. Pay comes after the session.",
+    "needs": "$0 to start: phone or computer with a camera for video calls, PayPal",
+    "link": "https://www.respondent.io",
+    "notes": "Sent by Horace on 11/23 from his own tree. Check the current pay on each study before you apply.",
+    "steps": [
+     "Sign up at respondent.io as a participant with your own email",
+     "Fill in your profile honestly: interests, devices, what you buy and use",
+     "Add a PayPal email for payouts",
+     "Apply to 3-5 studies that truly fit, answering screeners honestly",
+     "Check for invites every day or two",
+     "For a booked session: on time, a quiet room, camera on"
+    ]
+   }
+  }
+ ]
+}

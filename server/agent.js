@@ -131,7 +131,7 @@ Briefing contents:
 - Bills due in the next 7 days (/upcoming) and the Pool (/pool).
 - Spend Today (/spend-today, read-only, v219): one line with today's number ("Today you can spend $X", or "hold off" when short), the tightest day, and anything under Pay today.
 - The casino Bonus Run (/gambling/bonus-run): one short line on how many free bonuses are ready and any streak at risk. Never a nudge to buy.
-- The Architect's moves for today: the next open step on each strategy that is Researching, Started or Earning, from ${ROOT}/data/construct.json.
+- The Architect's moves for today: the next open step on each strategy that is Researching, Started or Earning, from ${ROOT}/data/construct.json, skipping any marked "briefing": false (Horace took those off his briefing; on 11/23 the unclaimed-property search, Prolific and Respondent went to Jake's Accountant instead). The prepared briefing's "🏗️" line already does this.
 - Upcoming reminders.
 - Weather at the house: call the weather tool (National Weather Service for The Land itself, not a web search) and say its line. If it fails, say so; don't guess from a web search.
 

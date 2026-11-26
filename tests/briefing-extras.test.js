@@ -95,7 +95,7 @@ test('prepareBriefingExtras: read-only GETs only, a failed source is skipped, st
     throw new Error('unexpected ' + p);
   };
   const now = new Date('2026-11-23T12:40:00Z');
-  const lines = await prepareBriefingExtras({ get, branches: () => [{ repo: 'oracle', branch: 'b', date: '2026-11-20' }], statePath, now, log: (m) => logs.push(m) });
+  const lines = await prepareBriefingExtras({ construct: () => null, get, branches: () => [{ repo: 'oracle', branch: 'b', date: '2026-11-20' }], statePath, now, log: (m) => logs.push(m) });
   assert.deepEqual(asked, ['/property', '/vehicles', '/accountant']);
   // #63: the weather line is always first; with /property down it says NWS didn't answer instead of leaving a gap.
   assert.equal(lines.length, 4);
@@ -104,10 +104,10 @@ test('prepareBriefingExtras: read-only GETs only, a failed source is skipped, st
   assert.match(logs.join('\n'), /\/property skipped/);
   assert.deepEqual(JSON.parse(fs.readFileSync(statePath, 'utf8')).accountant, { level: 10, finished: true, count: 34, earned: 0, on: '2026-11-23' });
   // The next morning: the Accountant has nothing new to say.
-  const next = await prepareBriefingExtras({ get, branches: () => [], statePath, now: new Date('2026-11-24T12:40:00Z'), log: () => {} });
+  const next = await prepareBriefingExtras({ construct: () => null, get, branches: () => [], statePath, now: new Date('2026-11-24T12:40:00Z'), log: () => {} });
   assert.deepEqual(next.slice(1).map((l) => l.slice(0, 2)), ['🛻']);
   // Everything failing still never throws.
-  assert.deepEqual(await prepareBriefingExtras({ get: async () => { throw new Error('offline'); }, branches: () => { throw new Error('no git'); }, statePath, now, log: () => {} }), [WEATHER_UNAVAILABLE]);
+  assert.deepEqual(await prepareBriefingExtras({ construct: () => null, get: async () => { throw new Error('offline'); }, branches: () => { throw new Error('no git'); }, statePath, now, log: () => {} }), [WEATHER_UNAVAILABLE]);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

@@ -72,9 +72,9 @@ test('houseWeather reads only GET /property and fails loudly when NWS didn\'t an
 
 test('the briefing extras always carry the weather line, or say plainly that NWS didn\'t answer', async () => {
   const opts = { branches: () => [], statePath: '/nonexistent/x.json', now: at('2026-11-23T12:40:00Z'), log: () => {} };
-  const ok = await prepareBriefingExtras({ ...opts, get: async (p) => ({ status: 200, body: JSON.stringify(p === '/property' ? { ok: true, guard: [], care: [], weather: { ok: true, periods: MORNING, alerts: [] } } : {}) }) });
+  const ok = await prepareBriefingExtras({ construct: () => null, ...opts, get: async (p) => ({ status: 200, body: JSON.stringify(p === '/property' ? { ok: true, guard: [], care: [], weather: { ok: true, periods: MORNING, alerts: [] } } : {}) }) });
   assert.equal(ok.filter((l) => /Weather at the house/.test(l)).length, 1);
-  const down = await prepareBriefingExtras({ ...opts, get: async () => ({ status: 502, body: '' }) });
+  const down = await prepareBriefingExtras({ construct: () => null, ...opts, get: async () => ({ status: 502, body: '' }) });
   assert.ok(down.includes(WEATHER_UNAVAILABLE));
 });
 

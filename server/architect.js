@@ -99,7 +99,7 @@ function createArchitectTools(send, currentSessionId) {
         'Read or change the Construct tree (it updates on Horace\'s screen at once). Actions: '
           + 'view {branch?, status?} = the tree as text with ids; '
           + 'add {strategies:[{name, branch, ...fields, steps?}]} = plant new ideas (duplicates by name are skipped); '
-          + 'update {strategy, ...fields} = change fields, e.g. status; '
+          + 'update {strategy, ...fields, briefing?} = change fields, e.g. status; briefing:false keeps it on the tree but off Horace\'s morning briefing (true puts it back); '
           + 'add_branch {name} = grow a new branch; '
           + 'add_steps {strategy, steps:[text], replace?} = setup steps (replace keeps finished ones); '
           + 'step {strategy, stepId or number, done?} = tick a step off (done:false reopens it); '
@@ -114,6 +114,7 @@ function createArchitectTools(send, currentSessionId) {
           ...fields,
           steps: z.array(z.string()).optional(),
           replace: z.boolean().optional(),
+          briefing: z.boolean().optional(),
           stepId: z.string().optional(),
           number: z.number().int().min(1).optional(),
           done: z.boolean().optional(),
@@ -130,6 +131,7 @@ function createArchitectTools(send, currentSessionId) {
             if (action === 'update') {
               const { strategy, ...rest } = a;
               const f = Object.fromEntries(Object.keys(fields).filter((k) => rest[k] !== undefined).map((k) => [k, rest[k]]));
+              if (rest.briefing !== undefined) f.briefing = rest.briefing; // #92: on or off Horace's morning briefing
               return ok(construct.apply('update', { strategy, fields: f }));
             }
             if (action === 'add_branch') return ok(construct.apply('add_branch', { name: a.name }));
