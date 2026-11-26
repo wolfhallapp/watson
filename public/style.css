@@ -270,3 +270,9 @@ button.ghost:hover { background: rgba(0, 255, 65, .08); }
   .peer-banner { margin: 8px 12px 0; flex-wrap: wrap; font-size: 13px; }
 }
 @media (min-width: 861px) { body:has(.peer-banner:not([hidden])) .layout { height: calc(100vh - 57px - 56px); } }
+
+/* Morpheus's evening journal prompt (Night Shift #115) */
+.jp-card { border: 1px solid rgba(0, 255, 65, .35); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; background: rgba(0, 20, 5, .75); text-align: left; }
+.jp-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.jp-text { margin: 6px 0 10px; font-size: 16px; line-height: 1.4; }
+.jp-actions { display: flex; gap: 8px; flex-wrap: wrap; }

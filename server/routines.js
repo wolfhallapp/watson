@@ -12,6 +12,8 @@ import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
 import { eveningNote } from './evening-note.js';
 import { schoolDayToday, schoolPrompt } from './school-watch.js';
+import { eveningJournalPrompt, horaceMorning, pushMorpheus } from './journal-prompt.js';
+import { windowsNotify } from './notify.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -208,6 +210,13 @@ export const ROUTINES = [
     key: 'eveningNote',
     hour: 20, minute: 0, untilHour: 23,
     run: () => eveningNote(),
+  },
+  {
+    // Morpheus's evening journaling prompt (Night Shift #115, 11/24; Horace 13A): code only. About 9 PM, one short
+    // prompt that fits his day, pushed to his phone and waiting on Morpheus's page ("Answer" or "Not tonight").
+    key: 'eveningJournal',
+    hour: 21, minute: 0, untilHour: 23,
+    run: async () => console.log('  Evening prompt: ' + await eveningJournalPrompt({ morning: () => horaceMorning(), push: pushMorpheus, toast: windowsNotify })),
   },
   {
     // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
