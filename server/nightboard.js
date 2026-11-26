@@ -38,7 +38,9 @@ export function reportSections(md, date) {
     // report that merely mentions other branches (a cleanup report) is not about any of them.
     const ls = body.split('\n'), bi = ls.findIndex((l) => /^\s*(-\s*)?\*\*Branch/i.test(l));
     const near = bi < 0 ? '' : ls.slice(bi, bi + 4).join('\n');
-    const branch = bi < 0 ? null : ((ls[bi].match(/oracle\/[\w./-]*\w/) || near.match(/oracle\/[\w./-]*\w/) || [null])[0]);
+    // "**Branch:** oracle/next (task branch oracle/night-...)" (the rolling release, 11/23): the task branch is the one.
+    const task = near.match(/task branch\s+`?(oracle\/[\w./-]*\w)/i);
+    const branch = bi < 0 ? null : task ? task[1] : ((ls[bi].match(/oracle\/[\w./-]*\w/) || near.match(/oracle\/[\w./-]*\w/) || [null])[0]);
     const shots = [...new Set(body.match(/[\w.-]+\.png/g) || [])];
     out.push({ heading, title: sectionTitle(heading), date, branch, shots, body });
   }

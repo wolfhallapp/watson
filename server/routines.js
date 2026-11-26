@@ -10,6 +10,7 @@ import { prepareWeeklyTrends, TRENDS_DIR } from './trends.js';
 import { prepareBriefingExtras, extrasPrompt } from './briefing-extras.js';
 import { checkSignins } from './signin-watch.js';
 import { uploadChurchFeed } from './church-feed.js';
+import { eveningNote } from './evening-note.js';
 
 // The Night Shift (2026-10-28, per Horace): one task a night from data/night-queue.md, worked on a
 // separate git worktree and branch, tested, committed locally and written up in data/night-reports/.
@@ -187,6 +188,14 @@ export const ROUTINES = [
     run: () => checkSignins(),
   },
   {
+    // The evening note (Night Shift #106, 11/23; 8 PM per Horace round 20): code only. One push to Horace with what
+    // the Night Shift finished, what's waiting for his "deploy" and the open Red Pill questions; the full release
+    // summary goes to data/release-summary.md for the day session.
+    key: 'eveningNote',
+    hour: 20, minute: 0, untilHour: 23,
+    run: () => eveningNote(),
+  },
+  {
     // 10/29 per Horace: use ALL the overnight usage. Runs one task at a time, again and again from 9:15 PM to
     // 6:30 AM, whenever the usage meter allows, so the 5-hour window is spent overnight and fresh by morning.
     key: 'nightShift',
@@ -212,7 +221,7 @@ export const ROUTINES = [
       'and when main has commits it lacks (a deploy or a PROGRESS note), first run `git -C ~/night/wolf-hall-next merge --no-edit main`.',
       'Then start each task on its own branch from it: `git -C ~/projects/wolf-hall-app worktree add -B oracle/night-$NIGHT-<short-name> ~/night/wolf-hall-<short-name> oracle/next`, and work there.',
       'Version: one more than oracle/next\'s WORKER_VERSION, set in all three places (worker, sw.js cache, splash); never vNEXT.',
-      'When the tests and agent-smith pass, move oracle/next onto it: `git -C ~/night/wolf-hall-next merge --ff-only oracle/night-$NIGHT-<short-name>`. A task that fails stays off oracle/next and the report says why.',
+      'When the tests and agent-smith pass, move oracle/next onto it: `git -C ~/night/wolf-hall-next merge --ff-only oracle/night-$NIGHT-<short-name>`. A task that fails stays off oracle/next and the report says why. Run that command exactly as written and on its own (no cd, no full path, no 2>&1, no && or ; after it): the night guard allows only that exact form.',
       'Report the branch as oracle/next (plus the task branch), so one red pill ships everything that passed.',
       `for the Oracle itself use \`git -C '${ROOT}' worktree add -B oracle/night-$NIGHT ~/night/watson main\` (reuse it if it exists).`,
       'Follow the repo rules: syntax checks, the tests in tests/, a new test for what you changed, and the agent-smith subagent for Wolf Hall changes. Commit on the night branch with a clear message.',

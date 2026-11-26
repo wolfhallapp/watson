@@ -38,10 +38,10 @@ export function signinMessage(out) {
 }
 
 /** POST /push/send to Horace's phones (the master key, the same route as scripts/notify-update.sh). */
-export async function pushHorace(body, { fetchImpl = fetch, key = workerKey } = {}) {
+export async function pushHorace(body, { fetchImpl = fetch, key = workerKey, title = 'Deploy sign-in' } = {}) {
   const r = await fetchImpl(WORKER_URL + '/push/send', {
     method: 'POST', headers: { 'X-Worker-Key': key(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ person: 'Horace', title: 'Deploy sign-in', body }), signal: AbortSignal.timeout(30000),
+    body: JSON.stringify({ person: 'Horace', title, body }), signal: AbortSignal.timeout(30000),
   });
   let j = null; try { j = await r.json(); } catch { /* not JSON */ }
   return { ok: r.ok && !!j?.ok, sent: j?.sent || 0, error: j?.error || (r.ok ? null : `HTTP ${r.status}`) };
