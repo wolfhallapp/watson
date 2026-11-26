@@ -12,7 +12,10 @@ all_idle() {
   [ -n "$out" ] && ! grep -qv ': idle$' <<<"$out"
 }
 
-# Sourced (tests/restart-idle.test.js): only the helper above.
+# server_pid: only the server running from this folder, never another checkout's (scripts/server-pid.sh).
+. "$(dirname "${BASH_SOURCE[0]}")/server-pid.sh"
+
+# Sourced (tests/restart-idle.test.js): only the helpers above.
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
 cd "$(dirname "$0")/.." || exit 1
@@ -21,8 +24,8 @@ idle=0
 for _ in $(seq 180); do
   if all_idle; then idle=$((idle + 1)); else idle=0; fi
   if [ "$idle" -ge 2 ]; then
-    pid=$(pgrep -f '^node server/index.js')
-    [ -n "$pid" ] || { echo "$(date '+%H:%M') all idle, but no server is running; nothing to restart."; exit 1; }
+    pid=$(server_pid)
+    [ -n "$pid" ] || { echo "$(date '+%H:%M') all idle, but no server is running from $(pwd -P); nothing to restart."; exit 1; }
     echo "$(date '+%H:%M') all idle; restarting (pid $pid)"
     kill -9 $pid; sleep 15; node scripts/status.mjs | head -1; exit 0
   fi
