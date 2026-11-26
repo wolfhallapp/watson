@@ -6,6 +6,7 @@ import { memory, reminders, state } from './store.js';
 import { describeConnection } from './starlink.js';
 import { houseWeather, WEATHER_UNAVAILABLE } from './weather.js';
 import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning, workerInboxWrite, workerProvisions } from './knowledge.js';
+import { postSchoolNotices } from './school-watch.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
@@ -256,6 +257,25 @@ export function createWatsonTools(send, currentSessionId = () => null) {
             if (!hit) return { ...text(`No site matched "${site}". Sites: ${all.map((x) => x.name).join(', ')}`), isError: true };
             if (action === 'claim') return post('/gambling/claim', { siteId: hit.id });
             return post('/gambling/site', { siteId: hit.id, tenPlus: on !== false });
+          } catch (e) {
+            return { ...text(`Could not reach the app: ${e.message}`), isError: true };
+          }
+        },
+      ),
+      tool(
+        'school_attendance',
+        'Hand Jarrell ISD emails to the Wolf Hall app (the school attendance check, Night Shift #110). The app reads each one itself: '
+          + 'an attendance notice (absent or tardy) about Tatiyana or Katana pushes Horace\'s phone once; repeats, newsletters and other students are skipped. '
+          + 'Give each email exactly as Gmail has it: emailId (the message id), from, subject, body (plain text), date (ISO), link (the viewUrl). Read only on Gmail.',
+        {
+          notices: z.array(z.object({
+            emailId: z.string(), from: z.string(), subject: z.string(), body: z.string(), date: z.string(), link: z.string().optional(),
+          })).min(1).max(30),
+        },
+        async ({ notices }) => {
+          try {
+            const r = await postSchoolNotices(notices);
+            return { ...text(`HTTP ${r.status}\n${r.text.slice(0, 2000)}`), ...(r.status >= 400 || !r.json?.ok ? { isError: true } : {}) };
           } catch (e) {
             return { ...text(`Could not reach the app: ${e.message}`), isError: true };
           }
