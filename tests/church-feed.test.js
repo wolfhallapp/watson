@@ -106,9 +106,9 @@ test('upload: posts the feed with the master key, then skips it when nothing cha
   const fetchFn = async (url, opts) => { calls.push({ url, opts }); return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
   const quiet = { log() {} };
   const r1 = await uploadChurchFeed({ file, fetchFn, key: () => 'K', store, now: NOW, log: quiet });
-  assert.equal(r1.ok, true); assert.equal(r1.events, 5); assert.equal(calls.length, 1);
+  assert.equal(r1.ok, true); assert.equal(r1.events, 7) /* 5 from the notes + the church week (Wed Nov 25, Sun Nov 29), #74 */; assert.equal(calls.length, 1);
   assert.ok(calls[0].url.endsWith('/church/feed')); assert.equal(calls[0].opts.method, 'POST'); assert.equal(calls[0].opts.headers['X-Worker-Key'], 'K');
-  const sent = JSON.parse(calls[0].opts.body); assert.equal(sent.events.length, 5); assert.equal(sent.prayers.length, 4);
+  const sent = JSON.parse(calls[0].opts.body); assert.equal(sent.events.length, 7); assert.equal(sent.prayers.length, 4);
   const r2 = await uploadChurchFeed({ file, fetchFn, key: () => 'K', store, now: NOW, log: quiet });
   assert.equal(r2.unchanged, true); assert.equal(calls.length, 1);
   const r3 = await uploadChurchFeed({ file, fetchFn, key: () => 'K', store, now: new Date('2026-11-24T12:00:00Z'), log: quiet });

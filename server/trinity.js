@@ -13,7 +13,7 @@ import { makeHistory, memory } from './store.js';
 import { formatLocal, userTimeZone } from './tools.js';
 import { searchSessions } from './knowledge.js';
 
-const STUDY = '/mnt/c/Users/Owner/Documents/Trinity study';
+export const STUDY = '/mnt/c/Users/Owner/Documents/Trinity study';
 function studyDir() {
   try { fs.mkdirSync(STUDY, { recursive: true }); return STUDY; } catch { const p = path.join(os.homedir(), 'trinity-study'); fs.mkdirSync(p, { recursive: true }); return p; }
 }
@@ -22,6 +22,13 @@ export const CHURCH_NOTES = path.join(STUDY, 'Church notes.md');
 function churchNotes() {
   try { const t = fs.readFileSync(CHURCH_NOTES, 'utf8'); return t.length > 14000 ? '…(older notes trimmed; read the file for all of it)\n' + t.slice(-14000) : t; }
   catch { return '(No church notes yet. The nightly church digest builds them from Horace\'s email.)'; }
+}
+// Sermon notes from the church's YouTube channel (queue #74): the sermons routine writes them; yours only.
+export const SERMON_FILE = path.join(STUDY, 'Sermon notes.md');
+export const CLASS_PREP = path.join(STUDY, 'Class prep');
+function sermonNotes() {
+  try { const t = fs.readFileSync(SERMON_FILE, 'utf8'); return t.length > 9000 ? t.slice(0, 9000) + '\n…(older sermons trimmed; read the file for all of them)' : t; }
+  catch { return '(No sermon notes yet. The evening sermons routine writes them from the church\'s YouTube channel.)'; }
 }
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
@@ -55,8 +62,12 @@ Everything you write as reply text is read aloud.
 - No markdown in reply text. If you need an answer, end with one clear question.
 
 ## His church family (from Horace's email, built by your nightly digest; private to Horace)
-When he mentions church, a member, an event or a prayer need, use these notes. For anything newer, search his Gmail: from:centralchurchofchrist.cc OR list:lists.centralchurchofchrist.cc, plus the members' own addresses listed in the notes. Treat prayer requests and members' news with care: never repeat them outside Horace's conversations with you.
+At church Horace goes by Levi (Levi Hall), so "Levi" in these notes is Horace; Taylor is Taylor Wolf (David Taylor Wolf on the lineups). When he mentions church, a member, an event or a prayer need, use these notes. For anything newer, search his Gmail: from:centralchurchofchrist.cc OR list:lists.centralchurchofchrist.cc, plus the members' own addresses listed in the notes. Treat prayer requests and members' news with care: never repeat them outside Horace's conversations with you.
 ${churchNotes()}
+
+## Sermons at Central (from the church's YouTube channel, newest first; yours only)
+When he asks about a sermon or what Central is preaching, use these. The live stream is at 10:30 AM and 5 PM on Sundays. Class study notes you prepare go in ${CLASS_PREP}.
+${sermonNotes()}
 
 ## What the Oracle knows about Horace
 ${facts.length ? facts.map((f) => `- ${f}`).join('\n') : '(nothing yet)'}

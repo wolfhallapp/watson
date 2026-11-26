@@ -129,10 +129,30 @@ export function parsePrayer(line, base) {
   return { date, name, text: cap(short) };
 }
 
+// Church meals where everyone brings food (Horace round 14: remind him to bring a dish).
+export const DISH_RE = /\bpot\s?-?lucks?\b|\bcovered[- ]dish\b|\bfellowship (?:meal|lunch|dinner|supper)\b|\bdinner on the grounds\b|\bbring (?:a|your) (?:dish|side|dessert|favorite)\b/i;
+
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 
-/** The whole notes file -> the feed the worker takes. Events already over are left out. */
-export function parseChurchNotes(text, now = new Date()) {
+// The church week (Horace round 10, 11/23; times from the church website 11/24). Added to the feed for the next
+// 8 days, so the evening-before and morning-of reminders (and the day-ahead) cover them like any other event.
+// Sunday morning says when to leave: to be there for Bible study they must be on the road by 8:30.
+export const WEEKLY = [
+  { dow: 0, slug: 'sunday-morning', time: '', title: 'Bible study 9:30 AM, worship 10:30 AM (leave by 8:30)', place: '' },
+  { dow: 3, slug: 'wednesday-night', time: '7 PM', title: 'Wednesday Bible study and devotional', place: '' },
+];
+export function weeklyEvents(today, days = 8) {
+  const out = [];
+  for (let i = 0; i < days; i++) {
+    const t = new Date(Date.parse(today + 'T12:00:00Z') + i * 86400000);
+    const date = t.toISOString().slice(0, 10);
+    for (const w of WEEKLY) if (t.getUTCDay() === w.dow) out.push({ id: `${date}-${w.slug}-weekly`, date, time: w.time, title: w.title, place: w.place });
+  }
+  return out;
+}
+
+/** The whole notes file -> the feed the worker takes. Events already over are left out. `weekly` adds the church week. */
+export function parseChurchNotes(text, now = new Date(), { weekly = false } = {}) {
   const upd = /Last updated:\s*(\d{4}-\d{2}-\d{2})/.exec(String(text || ''));
   const today = now.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const base = upd ? upd[1] : today;
@@ -142,6 +162,7 @@ export function parseChurchNotes(text, now = new Date()) {
     if (!e || (e.endDate || e.date) < today) continue;
     const id = slug(e.date + '-' + e.title);
     if (seen.has(id)) continue; seen.add(id);
+    if (DISH_RE.test(l) && !/\bdish\b/i.test(e.title)) e.title = e.title.slice(0, 74).trim() + ' (bring a dish)'; // after the id, so it isn't pushed twice
     events.push({ id, ...e });
   }
   for (const l of section(text, 'Prayer requests')) {
@@ -151,6 +172,10 @@ export function parseChurchNotes(text, now = new Date()) {
     const id = slug((p.name || p.text.slice(0, 30)) + '-' + p.date);
     if (seen.has(id)) continue; seen.add(id);
     prayers.push({ id, ...p });
+  }
+  if (weekly) {
+    // A dated note for the same day and service (a special worship, a gospel meeting) wins over the plain weekly line.
+    for (const w of weeklyEvents(today)) if (!events.some((e) => e.date === w.date && /worship|bible study|devotional/i.test(e.title))) events.push(w);
   }
   events.sort((a, b) => a.date.localeCompare(b.date));
   prayers.sort((a, b) => b.date.localeCompare(a.date));
@@ -164,7 +189,7 @@ export function parseChurchNotes(text, now = new Date()) {
 export async function uploadChurchFeed({ file = CHURCH_NOTES, fetchFn = fetch, key = workerKey, store = state, now = new Date(), log = console } = {}) {
   let text;
   try { text = fs.readFileSync(file, 'utf8'); } catch { log.log('  Church feed: no church notes yet'); return { ok: false, error: 'no church notes' }; }
-  const feed = parseChurchNotes(text, now);
+  const feed = parseChurchNotes(text, now, { weekly: true });
   const sig = JSON.stringify(feed), prev = store.get().churchFeed || {};
   const day = now.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   if (prev.sig === sig && prev.day === day) { log.log('  Church feed: unchanged'); return { ok: true, unchanged: true, events: feed.events.length, prayers: feed.prayers.length }; }
