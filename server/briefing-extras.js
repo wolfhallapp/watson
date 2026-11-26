@@ -17,6 +17,7 @@ import { DATA_DIR, ROOT, config } from './config.js';
 import { workerGet } from './knowledge.js';
 import { weatherLine, WEATHER_UNAVAILABLE } from './weather.js';
 import { Construct } from './construct.js';
+import { verseOfDay } from './tv.js';
 
 export const EXTRAS_STATE = path.join(DATA_DIR, 'briefing-extras.json');
 const TZ = 'America/Chicago';
@@ -172,4 +173,35 @@ export async function prepareBriefingExtras({ get = workerGet, branches = waitin
 export function extrasPrompt(lines) {
   if (!lines?.length) return '';
   return 'Also add these lines, already checked in code (keep each one as is, word for word; put them after the more urgent lines):\n' + lines.join('\n');
+}
+
+// 11/24 (Night Shift #124, Horace rounds 18-19): the briefing signs off with a short Matrix quote and an ESV verse.
+// The verse is the same one the kitchen TV shows that day (tv.js); the quote rotates on its own count, so the pairs vary.
+export const MATRIX_QUOTES = [
+  ['There is no spoon.', 'Spoon Boy, The Matrix'],
+  ['Free your mind.', 'Morpheus, The Matrix'],
+  ['Welcome to the real world.', 'Morpheus, The Matrix'],
+  ['I can only show you the door. You\'re the one that has to walk through it.', 'Morpheus, The Matrix'],
+  ['There\'s a difference between knowing the path and walking the path.', 'Morpheus, The Matrix'],
+  ['I know kung fu.', 'Neo, The Matrix'],
+  ['He\'s beginning to believe.', 'Morpheus, The Matrix'],
+  ['Know thyself.', 'The Oracle, The Matrix'],
+  ['Everything that has a beginning has an end.', 'The Oracle, The Matrix Revolutions'],
+  ['We can never see past the choices we don\'t understand.', 'The Oracle, The Matrix Reloaded'],
+  ['Choice. The problem is choice.', 'Neo, The Matrix Reloaded'],
+  ['Some things in this world never change. But some things do.', 'Morpheus, The Matrix Reloaded'],
+];
+export function matrixQuoteOfDay(now = new Date()) {
+  const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
+  const [text, who] = MATRIX_QUOTES[day % MATRIX_QUOTES.length];
+  return { text, who };
+}
+/** The two sign-off lines: a Matrix quote, then the ESV verse of the day. */
+export function signOffLines(now = new Date()) {
+  const q = matrixQuoteOfDay(now), v = verseOfDay(now);
+  return [`🕶️ "${q.text}" (${q.who})`, `📖 ${v.ref} (ESV): ${v.text}`];
+}
+/** The prompt text that makes those two lines the briefing's last lines. */
+export function signOffPrompt(now = new Date()) {
+  return 'End the briefing with these two sign-off lines, word for word, as its last two lines (they do not count toward the 5 to 10):\n' + signOffLines(now).join('\n');
 }
