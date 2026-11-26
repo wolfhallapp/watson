@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { memory, reminders, state } from './store.js';
 import { describeConnection } from './starlink.js';
-import { houseWeather, WEATHER_UNAVAILABLE } from './weather.js';
+import { houseWeather, placeWeather, WEATHER_UNAVAILABLE } from './weather.js';
 import { claudeMemories, searchSessions, workerGet, workerGetWrites, workerPostGambling, workerPostMorning, workerInboxWrite, workerProvisions } from './knowledge.js';
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
@@ -320,9 +320,13 @@ export function createWatsonTools(send, currentSessionId = () => null) {
       ),
       tool(
         'weather',
-        'The weather at the house (on The Land, not the town of Thrall): today\'s high and tonight\'s low, rain chance, tomorrow, and any NWS alert, from the National Weather Service through Wolf Hall\'s read-only GET /property. Use this for the morning briefing and whenever Horace asks about the weather at home. Don\'t search the web for home weather.',
-        {},
-        async () => {
+        'The weather at the house (on The Land, not the town of Thrall): today\'s high and tonight\'s low, rain chance, tomorrow, and any NWS alert, from the National Weather Service through Wolf Hall\'s read-only GET /property. Use this for the morning briefing and whenever Horace asks about the weather at home. Don\'t search the web for home weather. Give place (a US town, like "Hugo, OK" or "Pflugerville") for the weather somewhere else: a trip, the drive, church, the office. Leave place out for the house.',
+        { place: z.string().optional().describe('A US town, "Town, ST" if you know the state. Leave out for the house (never the house\'s own address).') },
+        async ({ place } = {}) => {
+          if (place && place.trim()) {
+            try { return text((await placeWeather(place)).line); }
+            catch (e) { return { ...text(`The National Weather Service didn't answer for ${place} (${e.message}). Say so; don't guess from a web search.`), isError: true }; }
+          }
           try { return text((await houseWeather()).line); } catch (e) { return { ...text(`${WEATHER_UNAVAILABLE} (${e.message})`), isError: true }; }
         },
       ),
